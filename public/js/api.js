@@ -1,0 +1,150 @@
+// All server endpoints in one place. Anything that talks to server.mjs goes here.
+
+import { TOKEN, TAB_SESSION_ID } from './state.js';
+
+const url = (path) => `${path}?token=${TOKEN}`;
+const json = { 'content-type': 'application/json' };
+
+// Helper: attach the tab's sessionId to a POST body if not already present.
+function withSid(body) {
+  if (!TAB_SESSION_ID) return body;
+  return { sessionId: TAB_SESSION_ID, ...body };
+}
+
+export async function getSettings() {
+  const r = await fetch(url('/settings'));
+  return r.json();
+}
+
+export async function setSettings(body) {
+  const r = await fetch(url('/settings'), {
+    method: 'POST', headers: json, body: JSON.stringify(withSid(body)),
+  });
+  return r.json();
+}
+
+export async function postPrompt(text) {
+  return fetch(url('/prompt'), {
+    method: 'POST', headers: json, body: JSON.stringify(withSid({ text })),
+  });
+}
+
+export async function cliOneshot(body) {
+  const r = await fetch(url('/cli/oneshot'), {
+    method: 'POST', headers: json, body: JSON.stringify(withSid(body)),
+  });
+  return r.json();
+}
+
+export async function postCancel() {
+  return fetch(url('/cancel'), {
+    method: 'POST', headers: json, body: JSON.stringify(withSid({})),
+  });
+}
+
+// Per-tab session management
+export async function postTabNew(cwd = null) {
+  const r = await fetch(url('/tab/new'), {
+    method: 'POST', headers: json, body: JSON.stringify(cwd ? { cwd } : {}),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function postTabLoad(sessionId, cwd = null) {
+  const r = await fetch(url('/tab/load'), {
+    method: 'POST', headers: json, body: JSON.stringify({ sessionId, cwd }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function postPermission(rpcId, optionId) {
+  return fetch(url('/permission'), {
+    method: 'POST', headers: json, body: JSON.stringify({ rpcId, optionId }),
+  });
+}
+
+export async function postElicitation(rpcId, action, content) {
+  const body = content === undefined ? { rpcId, action } : { rpcId, action, content };
+  return fetch(url('/elicitation'), {
+    method: 'POST', headers: json, body: JSON.stringify(body),
+  });
+}
+
+export async function listSessions() {
+  const u = new URL(url('/sessions'), location.origin);
+  if (TAB_SESSION_ID) u.searchParams.set('sessionId', TAB_SESSION_ID);
+  const r = await fetch(u.pathname + u.search);
+  return r.json();
+}
+
+export async function postNewSession(body = {}) {
+  const r = await fetch(url('/session/new'), {
+    method: 'POST', headers: json, body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function postLoadSession(sessionId, cwd) {
+  const r = await fetch(url('/session/load'), {
+    method: 'POST', headers: json, body: JSON.stringify({ sessionId, cwd }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function getSpawnOpts() {
+  const r = await fetch(url('/spawn-opts'));
+  return r.json();
+}
+
+export async function postRespawn(opts = {}) {
+  const r = await fetch(url('/session/respawn'), {
+    method: 'POST', headers: json, body: JSON.stringify(opts),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export function streamUrl() {
+  const u = new URL(`/stream?token=${TOKEN}`, location.origin);
+  if (TAB_SESSION_ID) u.searchParams.set('sessionId', TAB_SESSION_ID);
+  return u.pathname + u.search;
+}
+
+// ─── CLI shell-out wrappers ──────────────────────────────────────────────
+export async function cliShare(sessionId) {
+  const body = sessionId ? { sessionId } : {};
+  const r = await fetch(url('/cli/share'), {
+    method: 'POST', headers: json, body: JSON.stringify(body),
+  });
+  return r.json();
+}
+export async function cliTrace(sessionId) {
+  const r = await fetch(url('/cli/trace'), {
+    method: 'POST', headers: json, body: JSON.stringify({ sessionId }),
+  });
+  return r.json();
+}
+export async function cliInspect() {
+  const r = await fetch(url('/cli/inspect'));
+  return r.json();
+}
+export async function cliUpdateCheck() {
+  const r = await fetch(url('/cli/update-check'));
+  return r.json();
+}
+export async function cliMcp() {
+  const r = await fetch(url('/cli/mcp'));
+  return r.text();
+}
+export async function cliWorktree() {
+  const r = await fetch(url('/cli/worktree'));
+  return r.text();
+}
+export async function cliModels() {
+  const r = await fetch(url('/cli/models'));
+  return r.text();
+}

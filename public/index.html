@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>grok web</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles/main.css">
+  <link rel="stylesheet" href="/static/styles/cards.css">
+</head>
+<body>
+
+<aside id="sidebar">
+  <div class="brand">
+    <div>
+      <span class="name">Grok</span><span class="pill">web</span>
+    </div>
+    <div class="icons">
+      <button title="Search" aria-label="Search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="nav">
+    <button id="new-session-btn" title="Start a new session in the current cwd">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      New session
+    </button>
+    <button id="login-btn" title="Sign in to Grok">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      Sign in
+    </button>
+    <button id="customize-btn" title="Session settings">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </button>
+  </div>
+
+  <div class="section-head">
+    <span>Projects</span>
+    <button class="icon-btn" id="refresh-recents" title="Refresh">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+    </button>
+  </div>
+  <div class="recents-search">
+    <input id="recents-search" type="text" placeholder="Search projects…" />
+  </div>
+  <div class="recents" id="recents">
+    <div class="empty">Loading…</div>
+  </div>
+  <div class="sidebar-tools">
+    <div class="section-head"><span>Tools</span></div>
+    <div class="nav tools-nav">
+      <button id="tool-inspect"   title="grok inspect --json">Inspect config</button>
+      <button id="tool-mcp"       title="grok mcp list">MCP servers</button>
+      <button id="tool-worktrees" title="grok worktree list">Worktrees</button>
+      <button id="tool-models"    title="grok models">Models</button>
+      <button id="tool-hooks"     title="hooks help">Hooks</button>
+      <button id="tool-plugins"   title="plugins help">Plugins</button>
+      <button id="tool-trace"     title="Export current session trace">Export trace</button>
+      <button id="tool-import"    title="Import sessions from another grok install">Import sessions</button>
+    </div>
+  </div>
+  <div id="todo-panel" class="todo-panel" hidden>
+    <div class="todo-head">Todos</div>
+    <div class="todo-list" id="todo-list"></div>
+  </div>
+  <div id="bg-panel" class="todo-panel" hidden>
+    <div class="todo-head">Background tasks</div>
+    <div class="todo-list" id="bg-list"></div>
+  </div>
+
+  <div class="footer">
+    <div class="avatar">L</div>
+    <div class="who">lucas</div>
+    <div class="model">grok-build ▾</div>
+  </div>
+</aside>
+<div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
+
+<main>
+  <div class="topbar">
+    <button class="mobile-sidebar-toggle" id="mobile-sidebar-toggle" type="button" aria-label="Open sidebar" aria-controls="sidebar" aria-expanded="false">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <span class="cwd-icon">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12a10 10 0 1 1-3.5-7.6"/><path d="M22 4v6h-6"/></svg>
+    </span>
+    <span class="crumb" id="crumb">starting…</span>
+    <div class="usage" id="usage" hidden>
+      <div class="usage-bar" title="context usage"><span id="usage-fill"></span></div>
+      <span class="usage-num" id="usage-num"></span>
+    </div>
+    <div class="actions">
+      <button id="workspace-btn" title="Change workspace">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 12h6M15 9v6"/></svg>
+      </button>
+      <button title="Share">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="log" id="log">
+    <div class="log-inner" id="log-inner">
+      <div class="welcome" id="welcome">
+        <h2>What can I help with?</h2>
+        <p class="welcome-sub">Pick a starter or type your own prompt below.</p>
+        <div class="welcome-tiles">
+          <button class="welcome-tile" data-prompt="Give me a high-level tour of this codebase. What are the entry points and how do the pieces fit?">
+            <strong>Tour the codebase</strong>
+            <span>Map the structure and entry points</span>
+          </button>
+          <button class="welcome-tile" data-prompt="Find and explain any recent commits or uncommitted changes in this directory.">
+            <strong>Review recent changes</strong>
+            <span>Commits, diffs, work in progress</span>
+          </button>
+          <button class="welcome-tile" data-prompt="Run the project's tests and report what passes, what fails, and where to look.">
+            <strong>Run the tests</strong>
+            <span>See what's passing and what's broken</span>
+          </button>
+          <button class="welcome-tile" data-prompt="Audit the dependencies in this project for outdated or vulnerable packages.">
+            <strong>Audit dependencies</strong>
+            <span>Outdated or vulnerable packages</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status" id="status">connecting…</div>
+  <div class="composer">
+    <form id="form" class="composer-inner">
+      <div class="input-wrap">
+        <textarea id="input" rows="1" placeholder="Type / for commands"></textarea>
+        <div class="action-row">
+          <span class="mode-pill auto" id="mode-pill" title="Click to toggle. Auto = run tools without asking; Manual = ask before each tool">Auto-approve</span>
+          <button type="button" class="icon-btn" title="Attach (not yet wired)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button type="button" class="icon-btn" title="Voice input (not yet wired)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          </button>
+          <select class="send-mode" id="send-mode" title="How to dispatch this prompt">
+            <option value="agent">Interactive</option>
+            <option value="check">+ self-check (headless)</option>
+            <option value="best3">Best of 3 (headless)</option>
+            <option value="best5">Best of 5 (headless)</option>
+          </select>
+          <span class="model-tag" id="model-tag">grok-build</span>
+          <button class="send-btn" id="send" type="submit" disabled>Send</button>
+          <button class="stop-btn" id="stop" type="button" style="display:none" title="Cancel the running turn">Stop</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</main>
+
+<script>window.GROK_TOKEN = "__TOKEN__";</script>
+<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "grok-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Web UI for the grok CLI — speaks ACP over its agent stdio.",
+  "bin": {
+    "grok-web": "./server.mjs"
+  },
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}

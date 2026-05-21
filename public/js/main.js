@@ -1,0 +1,64 @@
+// Entry point. Ensures the tab has a sessionId, then wires subsystems and
+// starts the SSE stream filtered to that session.
+
+import { initComposer } from './composer.js';
+import { initSidebar } from './sidebar.js';
+import { initSSE } from './sse.js';
+import { initSlash } from './slashcommands.js';
+import { initTopbar } from './topbar.js';
+import { initSettings } from './settings.js';
+import { initToolsMenu } from './tools-menu.js';
+import { TAB_SESSION_ID, setTabSessionId } from './state.js';
+import { postTabNew, postTabLoad, listSessions } from './api.js';
+
+async function ensureTabSession() {
+  const params = new URLSearchParams(location.search);
+  // Explicit ?session=<sid>: load it on the bridge then adopt.
+  const wantSession = params.get('session');
+  if (wantSession) {
+    try {
+      const data = await listSessions();
+      const meta = (data.sessions ?? []).find(x => x.id === wantSession);
+      const cwd = params.get('cwd') ?? meta?.cwd;
+      await postTabLoad(wantSession, cwd);
+      setTabSessionId(wantSession);
+    } catch (e) { console.error('load session failed', e); }
+    return;
+  }
+  // ?continue=1: load the most-recent session into this tab.
+  if (params.get('continue')) {
+    try {
+      const data = await listSessions();
+      const s = (data.sessions ?? [])[0];
+      if (s) { await postTabLoad(s.id, s.cwd); setTabSessionId(s.id); return; }
+    } catch (e) { console.error('continue failed', e); }
+  }
+  // Already have one from URL or localStorage.
+  if (TAB_SESSION_ID) {
+    // Make sure the bridge has this session loaded (it may not, e.g. fresh server start).
+    try {
+      const data = await listSessions();
+      const meta = (data.sessions ?? []).find(x => x.id === TAB_SESSION_ID);
+      await postTabLoad(TAB_SESSION_ID, meta?.cwd);
+    } catch { /* may be fresh — ignore */ }
+    return;
+  }
+  // No session at all — create one on the bridge.
+  try {
+    const tab = await postTabNew();
+    setTabSessionId(tab.sessionId);
+  } catch (e) {
+    console.error('tab/new failed', e);
+  }
+}
+
+(async () => {
+  await ensureTabSession();
+  initComposer();
+  initSlash();
+  initSidebar();
+  initTopbar();
+  initSettings();
+  initToolsMenu();
+  initSSE();
+})();

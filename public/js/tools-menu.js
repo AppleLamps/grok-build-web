@@ -1,9 +1,9 @@
 // Wire the sidebar "Tools" buttons + Sign-in + Import.
 
 import { showInspect, showMcp, showWorktrees, showModels, showHooks, showPlugins, downloadTrace } from './panels.js';
+import { showRoutines } from './routines.js';
 import { modal } from './modal.js';
 import { toast } from './toast.js';
-import { TOKEN } from './state.js';
 import { loadRecents } from './sidebar.js';
 
 const wire = (id, fn) => {
@@ -14,7 +14,7 @@ const wire = (id, fn) => {
 async function showLogin() {
   const { body } = modal('Sign in to Grok', '<div class="panel-loading">Starting device-auth flow…</div>');
   try {
-    const r = await fetch(`/cli/login?token=${TOKEN}`, { method: 'POST' });
+    const r = await fetch('/cli/login', { method: 'POST' });
     const text = await r.text();
     body.innerHTML = `<pre class="panel-content">${text.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;
   } catch (e) {
@@ -36,7 +36,7 @@ async function showImport() {
   wrap.querySelector('.import-cancel').addEventListener('click', close);
   wrap.querySelector('.import-go').addEventListener('click', async () => {
     const lines = wrap.querySelector('.import-targets').value.split('\n').map(s => s.trim()).filter(Boolean);
-    const r = await fetch(`/cli/import?token=${TOKEN}`, {
+    const r = await fetch('/cli/import', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ targets: lines }),
     });
@@ -51,6 +51,7 @@ export function initToolsMenu() {
   wire('tool-mcp',       showMcp);
   wire('tool-worktrees', showWorktrees);
   wire('tool-models',    showModels);
+  wire('tool-routines',  showRoutines);
   wire('tool-hooks',     showHooks);
   wire('tool-plugins',   showPlugins);
   wire('tool-trace',     downloadTrace);

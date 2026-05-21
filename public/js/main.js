@@ -8,6 +8,9 @@ import { initSlash } from './slashcommands.js';
 import { initTopbar } from './topbar.js';
 import { initSettings } from './settings.js';
 import { initToolsMenu } from './tools-menu.js';
+import { initAttachments } from './attachments.js';
+import { initVoiceInput } from './voice.js';
+import { initModelPicker } from './modelpicker.js';
 import { TAB_SESSION_ID, setTabSessionId } from './state.js';
 import { postTabNew, postTabLoad, listSessions } from './api.js';
 
@@ -55,6 +58,9 @@ async function ensureTabSession() {
 (async () => {
   await ensureTabSession();
   initComposer();
+  initAttachments();
+  initVoiceInput();
+  initModelPicker();
   initSlash();
   initSidebar();
   initTopbar();

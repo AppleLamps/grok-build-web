@@ -167,6 +167,7 @@ aside {
 .footer .model {
   margin-left: auto; font-size: 12px; color: var(--mute);
   padding: 4px 8px; border-radius: 6px;
+  background: none; border: 0; font: inherit;
 }
 .footer .model:hover { background: var(--hover); cursor: pointer; }
 
@@ -397,10 +398,13 @@ textarea::placeholder { color: var(--faint); }
   color: var(--mute); font: inherit; display: inline-flex; align-items: center; gap: 4px;
 }
 .icon-btn:hover { background: var(--paper-3); color: var(--ink); }
+.icon-btn:disabled { opacity: .45; cursor: not-allowed; }
+.icon-btn.recording { background: #FCE9EE; color: var(--red); }
 .action-row .model-tag {
   margin-left: auto;
   color: var(--mute); font-size: 12px;
   padding: 3px 9px; border-radius: 6px; cursor: pointer;
+  background: none; border: 0; font: inherit;
 }
 .action-row .model-tag:hover { background: var(--paper-3); color: var(--ink); }
 .send-btn {
@@ -651,6 +655,66 @@ textarea::placeholder { color: var(--faint); }
 .workspace-actions .cancel {
   background: none; color: var(--mute); border: 1px solid var(--line);
 }
+.model-picker-form,
+.routines-panel {
+  display: flex; flex-direction: column; gap: 14px;
+}
+.model-current {
+  background: var(--paper-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--mute);
+}
+.model-picker-form label,
+.routines-panel label {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.model-picker-form label span,
+.routines-panel label span {
+  font-size: 12px; font-weight: 500; color: var(--ink-2);
+}
+.model-picker-form select,
+.routines-panel input,
+.routines-panel textarea,
+.share-fallback input {
+  width: 100%;
+  background: var(--paper-2); border: 1px solid var(--line);
+  border-radius: 7px; padding: 8px 10px;
+  font: inherit; color: var(--ink); outline: 0;
+}
+.model-picker-form select:focus,
+.routines-panel input:focus,
+.routines-panel textarea:focus,
+.share-fallback input:focus { border-color: #C9C0A7; }
+.routine-section,
+.routine-create,
+.routine-delete {
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  background: var(--paper-2);
+}
+.routine-section button,
+.routine-create button,
+.routine-delete button {
+  align-self: flex-start;
+  border: 0;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 7px 12px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.routine-section button:hover,
+.routine-create button:hover,
+.routine-delete button:hover { background: #111; }
+.share-fallback {
+  display: flex; flex-direction: column; gap: 12px;
+}
 .panel-content {
   background: var(--code-bg);
   padding: 10px 14px; border-radius: 8px;
@@ -715,7 +779,13 @@ textarea::placeholder { color: var(--faint); }
   .composer { padding: 10px 12px 12px; }
   .input-wrap { border-radius: 12px; padding: 9px 11px 6px; }
   .action-row { flex-wrap: wrap; }
-  .action-row .model-tag { display: none; }
+  .action-row .model-tag {
+    margin-left: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .send-mode { flex: 1; min-width: 150px; }
   .send-btn, .stop-btn { margin-left: auto; }
   .status { padding: 4px 14px 0; }

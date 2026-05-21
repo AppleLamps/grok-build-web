@@ -1,8 +1,8 @@
 // All server endpoints in one place. Anything that talks to server.mjs goes here.
 
-import { TOKEN, TAB_SESSION_ID } from './state.js';
+import { TAB_SESSION_ID } from './state.js';
 
-const url = (path) => `${path}?token=${TOKEN}`;
+const url = (path) => path;
 const json = { 'content-type': 'application/json' };
 
 // Helper: attach the tab's sessionId to a POST body if not already present.
@@ -79,6 +79,8 @@ export async function listSessions() {
   return r.json();
 }
 
+// Legacy single-default-session endpoints. The browser UI should use
+// postTabNew/postTabLoad so multi-tab session isolation is preserved.
 export async function postNewSession(body = {}) {
   const r = await fetch(url('/session/new'), {
     method: 'POST', headers: json, body: JSON.stringify(body),
@@ -109,7 +111,7 @@ export async function postRespawn(opts = {}) {
 }
 
 export function streamUrl() {
-  const u = new URL(`/stream?token=${TOKEN}`, location.origin);
+  const u = new URL('/stream', location.origin);
   if (TAB_SESSION_ID) u.searchParams.set('sessionId', TAB_SESSION_ID);
   return u.pathname + u.search;
 }

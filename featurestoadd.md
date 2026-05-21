@@ -8,6 +8,8 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 
 ## Turn lifecycle
 
+- **[done] Text file attachments** — `[plumbing]` Attach button inserts accepted text/code/markdown files into the composer as fenced code blocks. Unsupported or oversized files show a toast.
+- **[done] Browser voice input** — `[plumbing]` Mic button uses the browser Web Speech API when available and appends final transcripts to the composer without auto-sending.
 - **[done] Cancel running turn** — `[acp session/cancel]` Stop button in composer; `POST /cancel`.
 - **[done] Permission prompt UI** — `[acp session/request_permission]` Cards with per-option buttons; auto-deny after 5 min if forgotten. Active only when the pill is in Manual mode.
 - **[done] Always-approve toggle** — `[slash /always-approve]` `[flag --always-approve]` Composer pill toggles auto/manual; bridge mirrors state and best-effort syncs to the agent.
@@ -32,6 +34,7 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 ## Models & auth
 
 - **[done via Settings] Model switcher** — `[cli models]` `[flag --model]` Settings panel "Model" field. Sidebar Tools → "Models" shows available.
+- **[done] Footer / composer model picker** — `[cli models]` `[flag --model]` Footer model label and composer model tag open a compact picker that respawns the agent through the existing settings flow.
 - **[done] Login / auth methods** — `[cli login]` `[flag --device-auth]` Sidebar "Sign in" button triggers `grok login --device-auth` and shows the device URL/code in a modal.
 
 ## Slash commands (streamed via `available_commands_update`)
@@ -69,7 +72,7 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 - **[partial] Browser tool rendering** — `[tool browser_tab / browser_network_details]` Labels recognized. **Still missing:** rich URL / network table UI.
 - **[done] Web search / fetch rendering** — `[tool web_search / web_fetch]` Labels recognized.
 - **[done] Image / video gen rendering** — `[tool image_gen / video_gen]` Inline preview when `rawOutput.url` is present.
-- **[partial] Scheduler** — `[tool scheduler_create / scheduler_delete / scheduler_list]` Labels recognized. **Still missing:** dedicated scheduled-tasks panel.
+- **[done, partial] Scheduler / Routines UI** — `[tool scheduler_create / scheduler_delete / scheduler_list]` Sidebar Tools → "Routines" opens an agent-driven panel for list/create/delete prompts. **Still missing:** live scheduled-tasks status outside the normal turn output.
 - **[done] Tool call grouping** — When 3+ tool calls happen back-to-back, they collapse into a single "N tools ▾" line.
 - **[done, partial] Subagent nesting** — CSS class `.tool.subagent-child` exists for indentation; logic to apply it on `use_tool` spawns is still wiring-only (not auto-applied).
 
@@ -108,7 +111,7 @@ Dark-mode toggle, per-cwd pinned sessions, themes-per-project, generic toasts (n
 
 These weren't features in the original list but unlock most of the rest:
 
-- **Modular client** — 19 JS modules, 2 CSS files. Each module owns one domain.
+- **Modular client** — 23 JS modules, 2 CSS files. Each module owns one domain.
 - **CLI shell-out helper** — async `runGrokCli(args)` in `server.mjs` + ten `/cli/*` endpoints (inspect, update-check, models, share, trace, mcp, worktree, login, oneshot, import). Any new grok subcommand integration is ~10 lines.
 - **Respawn machinery** — serialized `GrokSession.respawn(newOpts)` + `POST /session/respawn`. Any new launch-time flag becomes a Settings field with no other code changes.
 - **Generic modal** — `modal(title, body)` in `modal.js`. Used by every Tools panel.

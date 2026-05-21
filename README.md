@@ -35,9 +35,9 @@ grok-web/
 │   ├── styles/
 │   │   ├── main.css          # Palette, layout, sidebar/mobile drawer, composer, chat
 │   │   └── cards.css         # Tool / plan / permission cards (active design area)
-│   └── js/                   # 19 ES modules — each owns one domain
+│   └── js/                   # 23 ES modules — each owns one domain
 │       ├── main.js           # Entry: bootstraps tab session, wires subsystems
-│       ├── state.js          # Shared state, DOM refs, TOKEN, TAB_SESSION_ID
+│       ├── state.js          # Shared state, DOM refs, TAB_SESSION_ID
 │       ├── api.js            # All fetch() wrappers
 │       ├── markdown.js       # Markdown renderer + escapeHTML
 │       ├── chat.js           # Turns, user/assistant messages, thinking, hooks, errors
@@ -45,6 +45,10 @@ grok-web/
 │       │                     #   browser, scheduler, plan card, grouping, subagent nesting
 │       ├── permissions.js    # Permission request cards
 │       ├── elicitation.js    # Elicitation request cards
+│       ├── attachments.js    # Text-file attachment insertion
+│       ├── voice.js          # Browser Web Speech input
+│       ├── modelpicker.js    # Compact footer/composer model picker
+│       ├── routines.js       # Agent-driven scheduler routines panel
 │       ├── sidebar.js        # Project drawer, mobile drawer wiring, new-session
 │       ├── composer.js       # Input, send/stop, mode pill, send-mode dropdown
 │       ├── dispatch.js       # SSE event router
@@ -67,6 +71,9 @@ The `probe/` scripts are optional protocol diagnostics. They default to `GROK_BI
 - New event type → `dispatch.js` + the relevant renderer
 - New permission UI → `permissions.js`
 - New elicitation UI → `elicitation.js`
+- New composer attachment behavior → `attachments.js`
+- New voice input behavior → `voice.js`
+- New scheduler/routines UI → `routines.js`
 - New launch flag → add a field in `settings.js` + arg in `server.mjs` `buildArgv()`
 - New CLI subcommand exposure → server route via `runGrokCli()` + wrapper in `api.js`
 - Style tweaks → usually `cards.css`
@@ -86,10 +93,10 @@ The `probe/` scripts are optional protocol diagnostics. They default to `GROK_BI
 | `/spawn-opts` | GET | Read current launch-time grok flags. |
 | `/session/respawn` | POST | Kill + restart the grok child with new launch flags. |
 | `/sessions` | GET | Recent sessions from `~/.grok/sessions/`, sorted by mtime. |
-| `/session/new` | POST | `{cwd?}` — cancels current, starts a fresh session. Legacy single-tab path. |
-| `/session/load` | POST | `{sessionId, cwd, restoreCode}` — resumes a stored session. |
-| `/tab/new` | POST | `{cwd?}` — per-tab: creates an ACP session and returns its id. |
-| `/tab/load` | POST | `{sessionId, cwd}` — loads an existing session for this tab. |
+| `/session/new` | POST | `{cwd?}` — legacy single-default-session path; changes the bridge default. |
+| `/session/load` | POST | `{sessionId, cwd, restoreCode}` — legacy single-default-session resume path. |
+| `/tab/new` | POST | `{cwd?}` — browser UI path: creates an isolated ACP session for the current tab. |
+| `/tab/load` | POST | `{sessionId, cwd}` — browser UI path: loads an existing session for the current tab. |
 | `/cli/inspect` | GET | `grok inspect --json` |
 | `/cli/update-check` | GET | `grok update --check --json` |
 | `/cli/models` | GET | `grok models` |
@@ -101,7 +108,7 @@ The `probe/` scripts are optional protocol diagnostics. They default to `GROK_BI
 | `/cli/import` | POST | `{targets:[]}` — `grok import --json -- <targets>`. |
 | `/cli/oneshot` | POST | `{text, check, bestOfN, cwd?}` — headless one-shot via `grok -p`. Used for `--check` and `--best-of-n` which aren't available through the interactive stdio. |
 
-All API endpoints require `?token=<token>` (auto-generated each launch, printed to stdout and embedded in the open URL). `/static/*` is the one exception.
+The printed launch URL includes a one-time `?token=<token>` bootstrap. The first valid browser request sets an HttpOnly `grok_web` session cookie, redirects to the same URL without `token`, and all API / SSE requests authenticate by cookie after that. `/static/*` is public because the static modules contain no secrets.
 
 ## Configuration
 
@@ -121,6 +128,8 @@ The PowerShell wrapper at `~/Documents/PowerShell/Microsoft.PowerShell_profile.p
 
 Most other knobs (effort, sandbox, allow/deny rules, model, etc.) are set through the **Settings panel** in the browser, which serializes respawns and restarts the agent child with the new flags.
 
+The footer model label and composer model tag open a compact model picker. It uses `grok models` plus known fallback IDs, then applies the selected model through the same respawn path as the Settings panel.
+
 ## Workspaces and sessions
 
 The left sidebar is a project drawer. Sessions are grouped by workspace (`cwd`), the current project opens automatically, and each expanded project shows only its four newest sessions while the badge keeps the total session count. The search box filters projects and matching sessions from the cached recents list.
@@ -128,6 +137,16 @@ The left sidebar is a project drawer. Sessions are grouped by workspace (`cwd`),
 Use the topbar folder button to change workspace. It opens a modal for a filesystem path, creates a new per-tab ACP session with that `cwd`, and reloads the tab with both `?session=` and `?cwd=` so refreshes keep the same workspace. The "New session" button starts another session in the current workspace.
 
 On narrow screens the sidebar becomes an off-canvas project drawer. The topbar menu button opens it, the backdrop or `Escape` closes it, and selecting a session, New session, Sign in, Settings, or a Tools item closes the drawer before navigation.
+
+## Composer extras
+
+The Attach button inserts text-like files into the prompt as fenced code blocks at the cursor. Supported extensions are `.txt`, `.md`, `.js`, `.mjs`, `.ts`, `.tsx`, `.json`, `.css`, `.html`, `.py`, `.sh`, `.ps1`, `.yml`, `.yaml`, `.toml`, `.csv`, `.xml`, and `.log`. Each attach action is capped at 5 files, and each file is capped at 256 KB. Images, PDFs, audio, video, binaries, and oversized files show a toast and are not inserted.
+
+The Mic button uses the browser Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`) when available. Final transcripts are appended to the composer and are never auto-sent. Browsers without Web Speech support disable the button or show an unsupported toast.
+
+## Routines
+
+Sidebar Tools → "Routines" opens an agent-driven scheduler panel. List, create, and delete actions send normal prompts to the active ACP session asking Grok to call `scheduler_list`, `scheduler_create`, or `scheduler_delete`. Results render through the usual turn lifecycle and scheduler tool renderer.
 
 ## Protocol notes
 

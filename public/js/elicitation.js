@@ -4,6 +4,7 @@
 import { state } from './state.js';
 import { newTurn, autoScroll, addError } from './chat.js';
 import { postElicitation } from './api.js';
+import { safeHttpUrl } from './markdown.js';
 
 function schemaFor(request) {
   return request?.requestedSchema ?? request?.schema ?? {};
@@ -141,6 +142,7 @@ function renderForm(card, body, rpcId, request) {
 
 function renderUrl(card, body, rpcId, request) {
   const url = request.url ?? request.uri ?? request.href;
+  const safeUrl = safeHttpUrl(url);
   const detail = document.createElement('div');
   detail.className = 'elicitation-detail';
   detail.textContent = url || 'Open the requested URL, then confirm when finished.';
@@ -154,8 +156,8 @@ function renderUrl(card, body, rpcId, request) {
     <button class="decline" type="button">Decline</button>
     <button class="cancel" type="button">Cancel</button>
   `;
-  actions.querySelector('.open').disabled = !url;
-  actions.querySelector('.open').addEventListener('click', () => window.open(url, '_blank', 'noopener'));
+  actions.querySelector('.open').disabled = !safeUrl;
+  actions.querySelector('.open').addEventListener('click', () => window.open(safeUrl, '_blank', 'noopener'));
   actions.querySelector('.accept').addEventListener('click', () => respond(card, rpcId, 'accept'));
   actions.querySelector('.decline').addEventListener('click', () => respond(card, rpcId, 'decline'));
   actions.querySelector('.cancel').addEventListener('click', () => respond(card, rpcId, 'cancel'));

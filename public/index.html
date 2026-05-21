@@ -58,6 +58,7 @@
       <button id="tool-mcp"       title="grok mcp list">MCP servers</button>
       <button id="tool-worktrees" title="grok worktree list">Worktrees</button>
       <button id="tool-models"    title="grok models">Models</button>
+      <button id="tool-routines"  title="Manage scheduled routines">Routines</button>
       <button id="tool-hooks"     title="hooks help">Hooks</button>
       <button id="tool-plugins"   title="plugins help">Plugins</button>
       <button id="tool-trace"     title="Export current session trace">Export trace</button>
@@ -76,7 +77,7 @@
   <div class="footer">
     <div class="avatar">L</div>
     <div class="who">lucas</div>
-    <div class="model">grok-build ▾</div>
+    <button class="model" id="footer-model" type="button" title="Change model">grok-build ▾</button>
   </div>
 </aside>
 <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
@@ -98,7 +99,7 @@
       <button id="workspace-btn" title="Change workspace">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 12h6M15 9v6"/></svg>
       </button>
-      <button title="Share">
+      <button id="share-btn" title="Share" aria-label="Share current session">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
       </button>
     </div>
@@ -138,10 +139,10 @@
         <textarea id="input" rows="1" placeholder="Type / for commands"></textarea>
         <div class="action-row">
           <span class="mode-pill auto" id="mode-pill" title="Click to toggle. Auto = run tools without asking; Manual = ask before each tool">Auto-approve</span>
-          <button type="button" class="icon-btn" title="Attach (not yet wired)">
+          <button type="button" class="icon-btn" id="attach-btn" title="Attach text files" aria-label="Attach text files">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
           </button>
-          <button type="button" class="icon-btn" title="Voice input (not yet wired)">
+          <button type="button" class="icon-btn" id="voice-btn" title="Voice input" aria-label="Voice input">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
           </button>
           <select class="send-mode" id="send-mode" title="How to dispatch this prompt">
@@ -150,7 +151,7 @@
             <option value="best3">Best of 3 (headless)</option>
             <option value="best5">Best of 5 (headless)</option>
           </select>
-          <span class="model-tag" id="model-tag">grok-build</span>
+          <button class="model-tag" id="model-tag" type="button" title="Change model">grok-build</button>
           <button class="send-btn" id="send" type="submit" disabled>Send</button>
           <button class="stop-btn" id="stop" type="button" style="display:none" title="Cancel the running turn">Stop</button>
         </div>
@@ -158,8 +159,6 @@
     </form>
   </div>
 </main>
-
-<script>window.GROK_TOKEN = "__TOKEN__";</script>
 <script type="module" src="/static/js/main.js"></script>
 </body>
 </html>

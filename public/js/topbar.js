@@ -2,7 +2,7 @@
 
 import { cliShare, cliUpdateCheck } from './api.js';
 import { toast } from './toast.js';
-import { escapeHTML } from './markdown.js';
+import { escapeAttr, escapeHTML, safeHttpUrl } from './markdown.js';
 import { modal } from './modal.js';
 import { state } from './state.js';
 import { newSessionAction } from './sidebar.js';
@@ -42,29 +42,71 @@ function openWorkspacePicker() {
   wrap.querySelector('input')?.focus();
 }
 
+async function copyShareUrl(url) {
+  if (!navigator.clipboard?.writeText) return false;
+  try {
+    await navigator.clipboard.writeText(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function showShareFallback(url) {
+  const wrap = document.createElement('div');
+  wrap.className = 'share-fallback';
+  wrap.innerHTML = `
+    <p>Copy this share link:</p>
+    <input type="text" readonly value="${escapeAttr(url)}" />
+    <div class="workspace-actions">
+      <button class="apply" type="button">Copy</button>
+      <button class="cancel" type="button">Close</button>
+    </div>
+  `;
+  const { close } = modal('Share link', wrap);
+  const input = wrap.querySelector('input');
+  wrap.querySelector('.cancel').addEventListener('click', close);
+  wrap.querySelector('.apply').addEventListener('click', async () => {
+    input.select();
+    const copied = await copyShareUrl(url);
+    if (!copied) document.execCommand?.('copy');
+    toast('Share link copied');
+  });
+  input.focus();
+  input.select();
+}
+
 export function initTopbar() {
   const workspaceBtn = document.getElementById('workspace-btn');
   if (workspaceBtn) workspaceBtn.addEventListener('click', openWorkspacePicker);
 
   // Share button
-  const shareBtn = document.querySelector('.topbar .actions button[title="Share"]');
+  const shareBtn = document.getElementById('share-btn');
   if (shareBtn) {
     shareBtn.addEventListener('click', async () => {
+      if (!state.currentSessionId) {
+        toast('No active session to share.');
+        return;
+      }
+      const prevTitle = shareBtn.title;
       shareBtn.disabled = true;
+      shareBtn.title = 'Sharing...';
       try {
         const r = await cliShare(state.currentSessionId);
         if (r.url) {
-          // r.url comes from a regex over grok stdout — escape before injecting.
+          // r.url comes from a regex over grok stdout, so validate before use.
           // Validate it's actually an http(s) URL too, in case the regex over-matched.
-          let safeUrl = r.url;
-          try { const u = new URL(r.url); if (!/^https?:$/.test(u.protocol)) safeUrl = ''; }
-          catch { safeUrl = ''; }
+          const safeUrl = safeHttpUrl(r.url);
           if (safeUrl) {
-            await navigator.clipboard?.writeText(safeUrl).catch(() => {});
+            const copied = await copyShareUrl(safeUrl);
             const e = escapeHTML(safeUrl);
-            toast(`Share link copied: <a href="${e}" target="_blank" rel="noopener">${e}</a>`, { html: true, duration: 8000 });
+            if (copied) {
+              toast(`Share link copied: <a href="${e}" target="_blank" rel="noopener">${e}</a>`, { html: true, duration: 8000 });
+            } else {
+              showShareFallback(safeUrl);
+            }
           } else {
-            toast('Share returned an unrecognized URL — check the output');
+            toast('Share returned an unrecognized URL. Check the output.');
           }
         } else if (r.ok) {
           toast(r.output?.trim() || 'Share completed');
@@ -73,7 +115,10 @@ export function initTopbar() {
         }
       } catch (e) {
         toast(`Share failed: ${e.message}`);
-      } finally { shareBtn.disabled = false; }
+      } finally {
+        shareBtn.disabled = false;
+        shareBtn.title = prevTitle;
+      }
     });
   }
 
@@ -82,9 +127,9 @@ export function initTopbar() {
     // Schema: { update_available: bool, current: "0.1.x", latest: "0.1.y", ... }
     // Some grok versions may return different keys; we read defensively.
     const available = data?.update_available ?? data?.updateAvailable ?? false;
-    const latest = data?.latest ?? data?.latest_version;
-    const current = data?.current ?? data?.current_version;
-    if (!available) return;
+    const latest = data?.latest ?? data?.latest_version ?? data?.latestVersion;
+    const current = data?.current ?? data?.current_version ?? data?.currentVersion;
+    if (!available || !latest || !current) return;
     const banner = document.createElement('div');
     banner.className = 'update-banner';
     banner.innerHTML = `

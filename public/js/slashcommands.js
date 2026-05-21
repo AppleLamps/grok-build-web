@@ -27,12 +27,20 @@ function render() {
   ensurePopup();
   if (!filtered.length) { popup.style.display = 'none'; return; }
   popup.style.display = '';
-  popup.innerHTML = filtered.map((c, i) => `
-    <div class="slash-item${i === selectedIdx ? ' selected' : ''}" data-idx="${i}">
-      <span class="slash-name">/${c.name}</span>
-      <span class="slash-desc">${(c.description ?? '').slice(0, 120).replace(/</g, '&lt;')}</span>
-    </div>
-  `).join('');
+  popup.innerHTML = '';
+  filtered.forEach((c, i) => {
+    const item = document.createElement('div');
+    item.className = `slash-item${i === selectedIdx ? ' selected' : ''}`;
+    item.dataset.idx = String(i);
+    const name = document.createElement('span');
+    name.className = 'slash-name';
+    name.textContent = `/${c.name ?? ''}`;
+    const desc = document.createElement('span');
+    desc.className = 'slash-desc';
+    desc.textContent = (c.description ?? '').slice(0, 120);
+    item.append(name, desc);
+    popup.appendChild(item);
+  });
   popup.querySelectorAll('.slash-item').forEach((el) => {
     el.addEventListener('mousedown', (e) => {
       e.preventDefault();

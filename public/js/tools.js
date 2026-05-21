@@ -7,7 +7,7 @@
 
 import { state, dom } from './state.js';
 import { newTurn, autoScroll, addError, setStatus } from './chat.js';
-import { renderMarkdown, escapeHTML } from './markdown.js';
+import { renderMarkdown, escapeHTML, escapeAttr, safeHttpUrl, safeImageSrc } from './markdown.js';
 import { postPrompt } from './api.js';
 import { setBusy } from './composer.js';
 
@@ -240,12 +240,13 @@ function renderImageDetails(update) {
   const out = update.rawOutput ?? {};
   const url = out.url ?? out.image_url ?? out.path;
   if (!url) return null;
+  const safeSrc = safeImageSrc(url);
   const prompt = raw.prompt ?? raw.description ?? '';
   return `
     <div class="label">prompt</div>
     <pre>${prompt.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</pre>
-    <div class="label">image</div>
-    <img class="tool-image" src="${url.startsWith('http') || url.startsWith('data:') ? url : ''}" alt="generated image" loading="lazy" />
+    ${safeSrc ? `<div class="label">image</div>
+    <img class="tool-image" src="${escapeAttr(safeSrc)}" alt="generated image" loading="lazy" />` : ''}
   `;
 }
 
@@ -337,10 +338,11 @@ function renderBrowserDetails(update) {
   }
 
   if (url) {
+    const safeLink = safeHttpUrl(url);
     parts.push(`<div class="label">url</div>
-      <a class="browser-link" href="${escapeHTML(url)}" target="_blank" rel="noopener">
-        ${escapeHTML(url)}
-      </a>`);
+      ${safeLink
+        ? `<a class="browser-link" href="${escapeAttr(safeLink)}" target="_blank" rel="noopener">${escapeHTML(url)}</a>`
+        : `<code class="browser-link">${escapeHTML(url)}</code>`}`);
   }
   if (tabId) parts.push(`<div class="label">tab</div><code class="browser-tabid">${escapeHTML(String(tabId))}</code>`);
   if (status) {
@@ -351,7 +353,8 @@ function renderBrowserDetails(update) {
 
   if (screenshot) {
     const src = typeof screenshot === 'string' ? screenshot : (screenshot.url ?? '');
-    if (src) parts.push(`<div class="label">screenshot</div><img class="browser-screenshot" src="${escapeHTML(src)}" alt="page screenshot" loading="lazy" />`);
+    const safeSrc = safeImageSrc(src);
+    if (safeSrc) parts.push(`<div class="label">screenshot</div><img class="browser-screenshot" src="${escapeAttr(safeSrc)}" alt="page screenshot" loading="lazy" />`);
   }
 
   if (errors && (Array.isArray(errors) ? errors.length : true)) {

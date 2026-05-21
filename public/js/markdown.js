@@ -3,9 +3,28 @@
 // Escapes HTML in everything else.
 
 export function escapeHTML(s) {
-  return s.replace(/[&<>"']/g, (c) => ({
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   })[c]);
+}
+
+export const escapeAttr = escapeHTML;
+
+export function safeHttpUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  try {
+    const url = new URL(value, location.origin);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
+export function safeImageSrc(value) {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  const data = value.match(/^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=\s]+$/i);
+  if (data) return value;
+  return safeHttpUrl(value);
 }
 
 function renderInline(s) {

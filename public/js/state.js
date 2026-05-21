@@ -1,8 +1,6 @@
 // Shared client state + DOM refs. Imported by every other module that
 // needs them. Keep this module dependency-free.
 
-export const TOKEN = window.GROK_TOKEN;
-
 // Per-tab session ID. Sourced from URL ?session= first, then localStorage.
 // May be null on first load — main.js creates one via /tab/new.
 const _params = new URLSearchParams(location.search);
@@ -56,6 +54,10 @@ export const dom = {
   bgPanel:            document.getElementById('bg-panel'),
   bgList:             document.getElementById('bg-list'),
   sendMode:           document.getElementById('send-mode'),
+  attachBtn:          document.getElementById('attach-btn'),
+  voiceBtn:           document.getElementById('voice-btn'),
+  modelTag:           document.getElementById('model-tag'),
+  footerModel:        document.getElementById('footer-model'),
   welcome:            document.getElementById('welcome'),
   usage:              document.getElementById('usage'),
   usageFill:          document.getElementById('usage-fill'),

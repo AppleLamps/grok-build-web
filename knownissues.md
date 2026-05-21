@@ -8,15 +8,6 @@ Live list. Items that get fixed are removed; items get added as they're discover
 - **Loading a session whose original cwd was deleted fails.** Agent returns `Path not found.` and the error renders in the log. There's no fallback to "load anyway in current cwd."
 - **`/cli/oneshot` (headless `--check` / Best-of-N) requires xAI credits.** Returns a structured error if the account is rate-limited or out of credits. The endpoint's parser surfaces the error to the chat log, but the underlying need to pay is on the user.
 
-## UI placeholders
-
-These exist in the chrome but aren't wired:
-
-- "Routines" sidebar button (scheduler tasks DO render when the agent calls `scheduler_list`, but there's no top-level button)
-- The footer model selector (`grok-build ▾`) — model is set via Settings panel instead
-- The composer's attach / mic icons
-- The composer's `grok-build` model tag (decorative)
-
 ## Visual / data quirks
 
 - **Empty-titled sessions** show the folder name instead of a title. Grok generates `generated_title` after a few turns, so freshly-created sessions look bare until they have enough content to summarize.
@@ -29,12 +20,11 @@ These exist in the chrome but aren't wired:
 - **History replay on SSE connect.** New SSE subscribers receive the full in-memory event history filtered by their sessionId. With long sessions and many tabs the replay cost grows linearly. Cap is 10000 events; older ones are dropped.
 - **Process cleanup on Ctrl-C is best-effort.** SIGINT kills the child agent, but on Windows orphaned `grok.exe` instances have occasionally been observed if the server crashes. Check `Get-Process grok` if launch fails ("Address already in use" suggests something is squatting the port).
 - **No graceful shutdown of in-flight turns.** Stopping the server mid-prompt drops the response on the floor — the session is persisted by grok itself but the UI never sees the completion.
-- **Token is in the URL.** Convenient (one-click launch) but it leaks into shell history if you copy-paste the URL, and into the browser tab title/history.
 - **Sessions watcher reliability.** `fs.watch` is best-effort across platforms; recursive mode isn't guaranteed on every OS. A silent watcher death stops sidebar auto-refresh — manual refresh still works.
 
 ## Edge cases not yet handled
 
-- **Image / audio inputs.** Agent advertises `promptCapabilities: {image:false, audio:false, embeddedContext:true}` for the current model, so no point wiring file attachments until that changes.
+- **Non-text attachments.** The Attach button supports text-like files only. Images, PDFs, audio, video, binaries, and oversized text files are rejected with a toast because current web prompt wiring sends text prompts only.
 - **`/cli/login` waits for OAuth confirmation.** The device-auth flow needs the user to visit a URL and approve. The current modal shows the prompt text from the CLI but doesn't poll completion — close the modal when done.
 
 ## Tests

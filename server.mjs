@@ -21,10 +21,13 @@ const PUBLIC_DIR = join(__dirname, 'public');
 const GROK_BIN = process.env.GROK_BIN ?? 'grok';
 const PORT = Number(process.env.PORT ?? 0); // 0 = pick a free port
 const CWD = process.env.GROK_CWD ?? process.cwd();
-const TOKEN = randomBytes(16).toString('hex');
+const BOOTSTRAP_TOKEN = randomBytes(16).toString('hex');
+const SESSION_COOKIE = 'grok_web';
+const SESSION_TOKEN = randomBytes(32).toString('hex');
 const HISTORY_LIMIT = 10000;
 const DEFAULT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_RPC_TIMEOUT_MS ?? 2 * 60 * 1000);
 const PROMPT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_PROMPT_TIMEOUT_MS ?? 30 * 60 * 1000);
+let bootstrapUsed = false;
 
 // ─── ACP client over grok stdio ─────────────────────────────────────────────
 class GrokSession {
@@ -587,9 +590,40 @@ const MIME = {
   '.svg': 'image/svg+xml',
 };
 
+function parseCookies(header = '') {
+  const cookies = {};
+  for (const part of header.split(';')) {
+    const i = part.indexOf('=');
+    if (i < 0) continue;
+    const key = part.slice(0, i).trim();
+    const value = part.slice(i + 1).trim();
+    if (key) cookies[key] = decodeURIComponent(value);
+  }
+  return cookies;
+}
+
 function auth(req) {
-  const url = new URL(req.url, 'http://localhost');
-  return url.searchParams.get('token') === TOKEN;
+  return parseCookies(req.headers.cookie)[SESSION_COOKIE] === SESSION_TOKEN;
+}
+
+function bootstrap(req, res, url) {
+  if (bootstrapUsed || url.searchParams.get('token') !== BOOTSTRAP_TOKEN) return false;
+  bootstrapUsed = true;
+  redirectWithoutToken(res, url, {
+    'set-cookie': `${SESSION_COOKIE}=${encodeURIComponent(SESSION_TOKEN)}; HttpOnly; SameSite=Lax; Path=/`,
+  });
+  return true;
+}
+
+function redirectWithoutToken(res, url, headers = {}) {
+  url.searchParams.delete('token');
+  const location = url.pathname + url.search;
+  res.writeHead(302, {
+    ...headers,
+    location,
+    'cache-control': 'no-store',
+  });
+  res.end();
 }
 
 async function readBody(req) {
@@ -600,13 +634,25 @@ async function readBody(req) {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  // Static files (auth-gated — no point serving the UI to randos on the LAN)
+  res.setHeader('referrer-policy', 'no-referrer');
+  // HTML entrypoint is cookie-gated after the one-time launch URL bootstrap.
   if (req.method === 'GET' && url.pathname === '/') {
-    if (!auth(req)) { res.writeHead(401).end('missing or bad token'); return; }
+    if (auth(req) && url.searchParams.has('token')) {
+      redirectWithoutToken(res, url);
+      return;
+    }
+    if (!auth(req)) {
+      if (bootstrap(req, res, url)) return;
+      res.writeHead(401, { 'cache-control': 'no-store' }).end('missing or bad session');
+      return;
+    }
     try {
       const html = await readFile(join(PUBLIC_DIR, 'index.html'), 'utf8');
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      res.end(html.replace('__TOKEN__', TOKEN));
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+      });
+      res.end(html);
     } catch (e) { res.writeHead(500).end(String(e)); }
     return;
   }
@@ -983,7 +1029,7 @@ try {
   grok.start();
   server.listen(PORT, '127.0.0.1', async () => {
     const port = server.address().port;
-    const url = `http://127.0.0.1:${port}/?token=${TOKEN}`;
+    const url = `http://127.0.0.1:${port}/?token=${BOOTSTRAP_TOKEN}`;
     console.log(`\n  grok-web running\n  ${url}\n  cwd: ${CWD}\n`);
     if (!process.env.GROK_WEB_NO_OPEN) await openBrowser(url);
   });

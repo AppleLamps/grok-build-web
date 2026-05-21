@@ -34,3 +34,5 @@ Desktop.ini
 
 # Probe/runtime artifacts
 probe/server.log
+.playwright-cli/
+output/playwright/

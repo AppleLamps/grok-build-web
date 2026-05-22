@@ -14,7 +14,7 @@ import { watch as watchFs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve, extname, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { homedir } from 'node:os';
+import { homedir, userInfo } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, 'public');
@@ -28,6 +28,18 @@ const HISTORY_LIMIT = 10000;
 const DEFAULT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_RPC_TIMEOUT_MS ?? 2 * 60 * 1000);
 const PROMPT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_PROMPT_TIMEOUT_MS ?? 30 * 60 * 1000);
 let bootstrapUsed = false;
+
+function defaultUsername() {
+  return process.env.GROK_WEB_USER
+    ?? process.env.USERNAME
+    ?? process.env.USER
+    ?? userInfo().username
+    ?? 'local';
+}
+
+const bridgeSettings = {
+  displayName: defaultUsername(),
+};
 
 // ─── ACP client over grok stdio ─────────────────────────────────────────────
 class GrokSession {
@@ -785,20 +797,24 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  // Read/write bridge settings (auto-approve mode)
+  // Read/write bridge settings.
   if (url.pathname === '/settings') {
     if (!auth(req)) { res.writeHead(401).end(); return; }
     if (req.method === 'GET') {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ autoApprove: grok.autoApprove }));
+      res.end(JSON.stringify({ autoApprove: grok.autoApprove, ...bridgeSettings }));
       return;
     }
     if (req.method === 'POST') {
       try {
         const body = JSON.parse(await readBody(req));
         if (typeof body.autoApprove === 'boolean') grok.setAutoApprove(body.autoApprove, body.sessionId);
+        if (typeof body.displayName === 'string') {
+          const displayName = body.displayName.trim();
+          bridgeSettings.displayName = displayName || defaultUsername();
+        }
         res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ autoApprove: grok.autoApprove }));
+        res.end(JSON.stringify({ autoApprove: grok.autoApprove, ...bridgeSettings }));
       } catch (e) { res.writeHead(400).end(String(e)); }
       return;
     }
@@ -873,6 +889,17 @@ const server = createServer(async (req, res) => {
       _env: {
         XAI_API_KEY_set: !!process.env.XAI_API_KEY,
       },
+    }));
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/identity') {
+    if (!auth(req)) { res.writeHead(401).end(); return; }
+    const username = defaultUsername();
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({
+      username,
+      displayName: bridgeSettings.displayName || username,
     }));
     return;
   }

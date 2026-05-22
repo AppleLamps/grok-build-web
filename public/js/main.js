@@ -11,6 +11,7 @@ import { initToolsMenu } from './tools-menu.js';
 import { initAttachments } from './attachments.js';
 import { initVoiceInput } from './voice.js';
 import { initModelPicker } from './modelpicker.js';
+import { initIdentity } from './identity.js';
 import { TAB_SESSION_ID, setTabSessionId } from './state.js';
 import { postTabNew, postTabLoad, listSessions } from './api.js';
 
@@ -61,6 +62,7 @@ async function ensureTabSession() {
   initAttachments();
   initVoiceInput();
   initModelPicker();
+  initIdentity();
   initSlash();
   initSidebar();
   initTopbar();

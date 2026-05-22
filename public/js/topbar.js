@@ -16,7 +16,7 @@ function openWorkspacePicker() {
   wrap.innerHTML = `
     <label>
       <span>Workspace path</span>
-      <input type="text" name="cwd" value="${escapeHTML(current)}" placeholder="C:\\Users\\lucas\\project" />
+      <input type="text" name="cwd" value="${escapeHTML(current)}" placeholder="C:\\path\\to\\project" />
     </label>
     <div class="workspace-actions">
       <button class="apply" type="submit">Start session</button>
@@ -122,23 +122,35 @@ export function initTopbar() {
     });
   }
 
-  // Update banner — non-blocking, fail silently if grok update isn't available.
+  // Update banner: non-blocking, fail silently if grok update is unavailable.
   cliUpdateCheck().then((data) => {
     // Schema: { update_available: bool, current: "0.1.x", latest: "0.1.y", ... }
     // Some grok versions may return different keys; we read defensively.
     const available = data?.update_available ?? data?.updateAvailable ?? false;
     const latest = data?.latest ?? data?.latest_version ?? data?.latestVersion;
     const current = data?.current ?? data?.current_version ?? data?.currentVersion;
+    const releaseUrl = safeHttpUrl(
+      data?.release_notes_url ?? data?.releaseNotesUrl ?? data?.release_url ?? data?.releaseUrl ?? ''
+    );
     if (!available || !latest || !current) return;
+    const slot = document.getElementById('update-slot');
+    if (!slot) return;
     const banner = document.createElement('div');
     banner.className = 'update-banner';
+    const releaseLink = releaseUrl
+      ? `<a href="${escapeAttr(releaseUrl)}" target="_blank" rel="noopener">Release notes</a>`
+      : '';
     banner.innerHTML = `
-      <span>grok ${latest} available (you have ${current}).</span>
-      <a href="https://x.ai" target="_blank">See release notes</a>
-      <span>· Run <code>grok update</code> to install.</span>
-      <span class="close" title="Dismiss">×</span>
+      <span class="update-dot" aria-hidden="true"></span>
+      <span class="update-copy"><strong>grok ${escapeHTML(latest)} is available</strong><span>You have ${escapeHTML(current)}. Run <code>grok update</code> to install.</span></span>
+      ${releaseLink}
+      <button class="close" type="button" title="Dismiss update notice" aria-label="Dismiss update notice">×</button>
     `;
-    banner.querySelector('.close').addEventListener('click', () => banner.remove());
-    document.body.insertBefore(banner, document.querySelector('main'));
+    banner.querySelector('.close').addEventListener('click', () => {
+      banner.remove();
+      slot.hidden = true;
+    });
+    slot.replaceChildren(banner);
+    slot.hidden = false;
   }).catch(() => {});
 }

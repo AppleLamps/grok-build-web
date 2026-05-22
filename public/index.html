@@ -51,18 +51,48 @@
   <div class="recents" id="recents">
     <div class="empty">Loading…</div>
   </div>
-  <div class="sidebar-tools">
-    <div class="section-head"><span>Tools</span></div>
+  <div class="sidebar-tools" aria-label="Tools">
+    <div class="section-head">
+      <span>Tools</span>
+      <span class="tools-count">9</span>
+    </div>
     <div class="nav tools-nav">
-      <button id="tool-inspect"   title="grok inspect --json">Inspect config</button>
-      <button id="tool-mcp"       title="grok mcp list">MCP servers</button>
-      <button id="tool-worktrees" title="grok worktree list">Worktrees</button>
-      <button id="tool-models"    title="grok models">Models</button>
-      <button id="tool-routines"  title="Manage scheduled routines">Routines</button>
-      <button id="tool-hooks"     title="hooks help">Hooks</button>
-      <button id="tool-plugins"   title="plugins help">Plugins</button>
-      <button id="tool-trace"     title="Export current session trace">Export trace</button>
-      <button id="tool-import"    title="Import sessions from another grok install">Import sessions</button>
+      <button id="tool-inspect" title="grok inspect --json">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
+        <span>Inspect</span>
+      </button>
+      <button id="tool-mcp" title="grok mcp list">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8a4 4 0 0 1 4-4h2a4 4 0 0 1 0 8h-2a4 4 0 0 1-4-4z"/><path d="M17 16a4 4 0 0 1-4 4h-2a4 4 0 0 1 0-8h2a4 4 0 0 1 4 4z"/></svg>
+        <span>MCP</span>
+      </button>
+      <button id="tool-worktrees" title="grok worktree list">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v12"/><path d="M18 9v12"/><path d="M6 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M18 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M6 6h9"/></svg>
+        <span>Worktrees</span>
+      </button>
+      <button id="tool-models" title="grok models">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <span>Models</span>
+      </button>
+      <button id="tool-routines" title="Manage scheduled routines">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <span>Routines</span>
+      </button>
+      <button id="tool-hooks" title="hooks help">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10H7z"/><path d="M4 12h3M17 12h3M12 4v3M12 17v3"/></svg>
+        <span>Hooks</span>
+      </button>
+      <button id="tool-plugins" title="plugins help">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></svg>
+        <span>Plugins</span>
+      </button>
+      <button id="tool-trace" title="Export current session trace">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        <span>Trace</span>
+      </button>
+      <button id="tool-import" title="Import sessions from another grok install">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/></svg>
+        <span>Import</span>
+      </button>
     </div>
   </div>
   <div id="todo-panel" class="todo-panel" hidden>
@@ -75,8 +105,8 @@
   </div>
 
   <div class="footer">
-    <div class="avatar">L</div>
-    <div class="who">lucas</div>
+    <div class="avatar" id="user-avatar">?</div>
+    <div class="who" id="user-name">Local user</div>
     <button class="model" id="footer-model" type="button" title="Change model">grok-build ▾</button>
   </div>
 </aside>
@@ -104,6 +134,7 @@
       </button>
     </div>
   </div>
+  <div class="update-slot" id="update-slot" hidden></div>
 
   <div class="log" id="log">
     <div class="log-inner" id="log-inner">

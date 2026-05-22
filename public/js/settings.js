@@ -1,13 +1,15 @@
 // Settings panel: launch-time grok flags (effort, sandbox, rules, etc.).
 // Changing any of these respawns the agent child process.
 
-import { getSpawnOpts, postRespawn, cliModels } from './api.js';
+import { getSettings, setSettings, getSpawnOpts, postRespawn, cliModels } from './api.js';
 import { setBusy } from './composer.js';
 import { setStatus, addError } from './chat.js';
 import { toast } from './toast.js';
+import { refreshIdentity } from './identity.js';
 
 let panel = null;
 let current = {};
+let bridgeCurrent = {};
 
 const FIELDS = [
   { key: 'effort', label: 'Effort', type: 'select',
@@ -44,10 +46,17 @@ const FIELDS = [
     hint: 'ON by default. Strips XAI_API_KEY from the agent\'s env so it falls back to your grok.com login (~/.grok/auth.json) — billed against your subscription, not your API team. Uncheck to use the API key instead. Override at launch with GROK_WEB_USE_API_KEY=1.' },
 ];
 
+const BRIDGE_FIELDS = [
+  { key: 'displayName', label: 'Display name', type: 'text',
+    hint: 'Shown in the sidebar footer. Leave blank to use your OS username.' },
+];
+
 function fieldEl(f, value) {
   const wrap = document.createElement('div');
   wrap.className = 'setting-field';
   const lab = document.createElement('label');
+  const inputId = `setting-${f.key}`;
+  lab.htmlFor = inputId;
   lab.textContent = f.label;
   wrap.appendChild(lab);
   let input;
@@ -89,6 +98,7 @@ function fieldEl(f, value) {
     input.type = 'text';
     input.value = value ?? '';
   }
+  input.id = inputId;
   input.dataset.key = f.key;
   input.dataset.type = f.type;
   wrap.appendChild(input);
@@ -158,7 +168,9 @@ async function open() {
     panel.className = 'settings-panel';
     document.body.appendChild(panel);
   }
-  try { current = await getSpawnOpts(); } catch { current = {}; }
+  const results = await Promise.allSettled([getSpawnOpts(), getSettings()]);
+  current = results[0].status === 'fulfilled' ? results[0].value : {};
+  bridgeCurrent = results[1].status === 'fulfilled' ? results[1].value : {};
   // Banner copy depends on (a) whether XAI_API_KEY is set in env, and
   // (b) whether the current spawn is ignoring it. Default is "ignore on".
   const apiKeyEnv = current?._env?.XAI_API_KEY_set;
@@ -179,12 +191,21 @@ async function open() {
     ${envHint}
     <div class="settings-body"></div>
     <div class="settings-foot">
-      <button class="apply">Apply &amp; restart agent</button>
+      <button class="apply">Apply settings</button>
       <button class="cancel">Cancel</button>
-      <div class="settings-warn">Applying restarts the grok agent child. The current session ends; a new one starts.</div>
+      <div class="settings-warn">Launch flag changes restart the grok agent child. Display name changes apply immediately.</div>
     </div>
   `;
   const body = panel.querySelector('.settings-body');
+  const profileHead = document.createElement('div');
+  profileHead.className = 'settings-group-head';
+  profileHead.textContent = 'Profile';
+  body.appendChild(profileHead);
+  for (const f of BRIDGE_FIELDS) body.appendChild(fieldEl(f, bridgeCurrent[f.key]));
+  const launchHead = document.createElement('div');
+  launchHead.className = 'settings-group-head';
+  launchHead.textContent = 'Agent launch';
+  body.appendChild(launchHead);
   for (const f of FIELDS) body.appendChild(fieldEl(f, current[f.key]));
   panel.querySelector('.close').addEventListener('click', close);
   panel.querySelector('.cancel').addEventListener('click', close);
@@ -195,17 +216,39 @@ async function open() {
 function close() { panel?.classList.remove('open'); }
 
 async function apply() {
-  const opts = collectValues();
+  const values = collectValues();
+  const bridgeOpts = { displayName: values.displayName ?? null };
+  const opts = {};
+  for (const f of FIELDS) opts[f.key] = values[f.key];
   setBusy(true);
-  setStatus('respawning agent…', 'busy');
+  setStatus('applying settings…', 'busy');
   close();
   try {
-    await postRespawn(opts);
-    toast('Session restarted with new settings');
+    await setSettings(bridgeOpts);
+    await refreshIdentity();
+    if (hasLaunchChanges(opts)) {
+      setStatus('respawning agent…', 'busy');
+      await postRespawn(opts);
+      toast('Settings applied and agent restarted');
+    } else {
+      setBusy(false);
+      setStatus('ready', 'ready');
+      toast('Settings applied');
+    }
   } catch (e) {
-    addError(`respawn failed: ${e.message}`);
+    addError(`settings apply failed: ${e.message}`);
     setBusy(false);
   }
+}
+
+function hasLaunchChanges(next) {
+  return FIELDS.some((f) => !sameValue(next[f.key], current[f.key], f.type));
+}
+
+function sameValue(a, b, type) {
+  if (type === 'lines') return JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
+  if (type === 'number') return (a ?? null) === (b ?? null);
+  return (a ?? null) === (b ?? null);
 }
 
 export function initSettings() {

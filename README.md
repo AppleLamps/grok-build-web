@@ -1,179 +1,249 @@
-# grok-web
+# Grok Build Web
 
-A local browser chat UI for the [`grok`](https://x.ai) CLI. Built for people who'd rather drive Grok Build from a chat interface than the TUI.
+Professional local web UI for the `grok` CLI and Grok Build workflows.
+
+[Website](https://grokbuildweb.com/) | [xAI](https://x.ai) | [Agent Client Protocol](https://agentclientprotocol.com/)
+
+Grok Build Web runs on your machine, starts a Grok agent session, and gives you a browser-based workspace for chat, tools, projects, model switching, traces, routines, and session management. It is plain Node, static HTML, CSS, and browser JavaScript. There is no framework, build step, or runtime dependency tree.
+
+Created by [@lamps_apple](https://x.com/lamps_apple), creator of [grokify.ai](https://grokify.ai/) and [AppleLamps/grokify](https://github.com/AppleLamps/grokify).
+
+## Highlights
+
+- Browser chat UI for `grok agent stdio`
+- Project sidebar grouped by workspace
+- Per-tab sessions with `?session=` URLs
+- Tool rendering for terminal, edits, browser actions, images, todos, scheduler, and plan cards
+- Manual or auto approval mode
+- Settings panel for model, effort, sandbox, rules, tool allow-lists, and display name
+- Built-in panels for inspect, MCP servers, worktrees, models, hooks, plugins, traces, imports, and routines
+- Share link support through `grok share`
+- Update notice from `grok update --check --json`
+- Mobile sidebar drawer
+
+## Quick Start
+
+Requirements:
+
+- Node 24 or newer
+- `grok` CLI installed
+- Authenticated Grok account with `grok login`
+- Windows, macOS, or Linux
+
+Run from the repository:
+
+```powershell
+git clone https://github.com/AppleLamps/grok-build-web.git
+cd grok-build-web
+npm start
+```
+
+The server prints a local URL like:
+
+```text
+http://127.0.0.1:58991/?token=...
+```
+
+Open that URL in your browser. The token is used once to set a local session cookie, then the app redirects to a clean URL.
+
+If you have a wrapper command installed, you can also launch it as:
 
 ```powershell
 grok --web
 ```
 
-Spawns the agent, opens your default browser, lets you chat. Same agent, different skin.
+## Setup
 
-## How it works
+1. Install Node 24+
 
-```
-browser  ──POST /prompt──▶  server.mjs  ──stdin──▶  grok agent stdio
-browser  ◀──SSE /stream──   server.mjs  ◀──stdout── grok agent stdio
-```
+   Confirm Node is available:
 
-The `grok` CLI exposes [Agent Client Protocol (ACP)](https://agentclientprotocol.com/) over `grok agent stdio` — the same JSON-RPC protocol Zed, Claude Code, and Codex use. `server.mjs` spawns it as a child process and bridges it to the browser via plain HTTP + Server-Sent Events. No frameworks, no npm dependencies, no build step.
+   ```powershell
+   node --version
+   ```
 
-Multiple browser tabs are supported: each tab keeps its own ACP `sessionId` in the URL (`?session=`) and `localStorage`, and the bridge tags every event with its `sessionId` so SSE subscribers filter to one session. Tabs can also carry an explicit workspace path in `?cwd=`, which lets the web UI switch projects without relaunching `grok-web`.
+2. Install and authenticate the Grok CLI
 
-## Requirements
+   ```powershell
+   grok login
+   ```
 
-- Node 24+ (for native `WebSocket` / modern stdlib)
-- `grok` CLI installed and authenticated (`grok login`)
-- Windows / macOS / Linux
+3. Start Grok Build Web
 
-## Files
+   ```powershell
+   npm start
+   ```
 
-```
-grok-web/
-├── server.mjs                # Node bridge: HTTP server + ACP client + CLI shell-out
-├── public/
-│   ├── index.html            # Just the page shell
-│   ├── styles/
-│   │   ├── main.css          # Palette, layout, sidebar/mobile drawer, composer, chat
-│   │   └── cards.css         # Tool / plan / permission cards (active design area)
-│   └── js/                   # 23 ES modules — each owns one domain
-│       ├── main.js           # Entry: bootstraps tab session, wires subsystems
-│       ├── state.js          # Shared state, DOM refs, TAB_SESSION_ID
-│       ├── api.js            # All fetch() wrappers
-│       ├── markdown.js       # Markdown renderer + escapeHTML
-│       ├── chat.js           # Turns, user/assistant messages, thinking, hooks, errors
-│       ├── tools.js          # Tool disclosures: terminal/ANSI, diff, todos, image,
-│       │                     #   browser, scheduler, plan card, grouping, subagent nesting
-│       ├── permissions.js    # Permission request cards
-│       ├── elicitation.js    # Elicitation request cards
-│       ├── attachments.js    # Text-file attachment insertion
-│       ├── voice.js          # Browser Web Speech input
-│       ├── modelpicker.js    # Compact footer/composer model picker
-│       ├── routines.js       # Agent-driven scheduler routines panel
-│       ├── sidebar.js        # Project drawer, mobile drawer wiring, new-session
-│       ├── composer.js       # Input, send/stop, mode pill, send-mode dropdown
-│       ├── dispatch.js       # SSE event router
-│       ├── sse.js            # EventSource + exponential-backoff reconnect
-│       ├── slashcommands.js  # Slash-command autocomplete dropdown
-│       ├── toast.js          # Tiny toast helper
-│       ├── topbar.js         # Workspace picker, share button, update-available banner
-│       ├── settings.js       # Settings panel (launch-flag fields) → respawn
-│       ├── modal.js          # Generic modal helper
-│       ├── panels.js         # Inspect / MCP / Worktree / Models read-only panels
-│       └── tools-menu.js     # Sidebar Tools section + Sign-in + Import
-├── package.json              # type:module, no dependencies
-└── probe/                    # Protocol-discovery scripts (kept for reference)
-```
+4. Pick a workspace
 
-The `probe/` scripts are optional protocol diagnostics. They default to `GROK_BIN=grok`; the WebSocket probe also requires `GROK_PROBE_URL` because the server key is launch-specific and should not be committed.
+   Use the folder button in the topbar to choose a project path. New sessions start in the selected workspace.
 
-**Adding a feature?** Most additions touch one file:
-- New tool kind rendering → `tools.js` (extend `summarizeTool` + maybe a specialized renderer)
-- New event type → `dispatch.js` + the relevant renderer
-- New permission UI → `permissions.js`
-- New elicitation UI → `elicitation.js`
-- New composer attachment behavior → `attachments.js`
-- New voice input behavior → `voice.js`
-- New scheduler/routines UI → `routines.js`
-- New launch flag → add a field in `settings.js` + arg in `server.mjs` `buildArgv()`
-- New CLI subcommand exposure → server route via `runGrokCli()` + wrapper in `api.js`
-- Style tweaks → usually `cards.css`
+5. Configure the agent
 
-## Endpoints
+   Open Settings to choose model, effort, sandbox behavior, rules, approval mode, and the sidebar display name.
 
-| Route | Method | Purpose |
-|---|---|---|
-| `/` | GET | The HTML UI. Token-gated. |
-| `/static/*` | GET | CSS / JS modules. Unauthenticated (no secrets in static assets). |
-| `/stream` | GET | SSE stream of agent events. `?sessionId=` filters to one tab. |
-| `/prompt` | POST | `{text, sessionId}` — sends an ACP `session/prompt`. |
-| `/cancel` | POST | `{sessionId}` — aborts the running turn for that session. |
-| `/permission` | POST | `{rpcId, optionId}` — responds to a pending `session/request_permission`. |
-| `/elicitation` | POST | `{rpcId, action, content}` — responds to a pending `elicitation/create`. |
-| `/settings` | GET/POST | Read/update bridge settings (currently `{autoApprove}`). |
-| `/spawn-opts` | GET | Read current launch-time grok flags. |
-| `/session/respawn` | POST | Kill + restart the grok child with new launch flags. |
-| `/sessions` | GET | Recent sessions from `~/.grok/sessions/`, sorted by mtime. |
-| `/session/new` | POST | `{cwd?}` — legacy single-default-session path; changes the bridge default. |
-| `/session/load` | POST | `{sessionId, cwd, restoreCode}` — legacy single-default-session resume path. |
-| `/tab/new` | POST | `{cwd?}` — browser UI path: creates an isolated ACP session for the current tab. |
-| `/tab/load` | POST | `{sessionId, cwd}` — browser UI path: loads an existing session for the current tab. |
-| `/cli/inspect` | GET | `grok inspect --json` |
-| `/cli/update-check` | GET | `grok update --check --json` |
-| `/cli/models` | GET | `grok models` |
-| `/cli/mcp` | GET | `grok mcp list` |
-| `/cli/worktree` | GET | `grok worktree list` |
-| `/cli/share` | POST | `grok share <current sid>` — returns the share URL. |
-| `/cli/trace` | POST | `{sessionId}` — `grok trace --local --json`. |
-| `/cli/login` | POST | `grok login --device-auth` — surfaces the device URL/code. |
-| `/cli/import` | POST | `{targets:[]}` — `grok import --json -- <targets>`. |
-| `/cli/oneshot` | POST | `{text, check, bestOfN, cwd?}` — headless one-shot via `grok -p`. Used for `--check` and `--best-of-n` which aren't available through the interactive stdio. |
+## Daily Use
 
-The printed launch URL includes a one-time `?token=<token>` bootstrap. The first valid browser request sets an HttpOnly `grok_web` session cookie, redirects to the same URL without `token`, and all API / SSE requests authenticate by cookie after that. `/static/*` is public because the static modules contain no secrets.
+### Start or resume work
+
+The sidebar groups sessions by workspace. Expand a project to resume recent sessions, or use New session to start fresh in the current workspace.
+
+### Send prompts
+
+Use the composer at the bottom of the page. `Enter` sends, `Shift+Enter` inserts a newline.
+
+The send mode selector supports:
+
+- `Interactive`: normal ACP session
+- `+ self-check`: headless one-shot with `--check`
+- `Best of 3`: headless one-shot with `--best-of-n 3`
+- `Best of 5`: headless one-shot with `--best-of-n 5`
+
+Headless modes do not append to the interactive ACP session history.
+
+### Attach text files
+
+The attach button inserts text-like files into the prompt as fenced code blocks. Each attach action is capped at 5 files, and each file is capped at 256 KB.
+
+Supported extensions include `.txt`, `.md`, `.js`, `.mjs`, `.ts`, `.tsx`, `.json`, `.css`, `.html`, `.py`, `.sh`, `.ps1`, `.yml`, `.yaml`, `.toml`, `.csv`, `.xml`, and `.log`.
+
+### Control approvals
+
+Use the composer approval pill:
+
+- `Auto-approve`: the bridge accepts allowed tool requests automatically
+- `Manual approval`: tool requests render as permission cards
+
+### Use sidebar tools
+
+The Tools section exposes common Grok CLI actions:
+
+- Inspect config
+- MCP servers
+- Worktrees
+- Models
+- Routines
+- Hooks
+- Plugins
+- Export trace
+- Import sessions
+
+### Change display name
+
+Open Settings, edit Display name, then Apply settings. This changes the sidebar footer immediately and does not restart the agent.
 
 ## Configuration
 
 Environment variables read at startup:
 
-| Var | Default | Purpose |
-|---|---|---|
-| `PORT` | `0` (random free port) | HTTP port |
-| `GROK_BIN` | `grok` | Path to grok binary |
-| `GROK_CWD` | `process.cwd()` | Working directory passed to `session/new` |
-| `GROK_WEB_NO_OPEN` | unset | Set to skip auto-opening the browser |
-| `GROK_WEB_USE_API_KEY` | unset | Set to `1` to keep `XAI_API_KEY` in the agent's env. By default grok-web strips it so the agent uses your grok.com subscription token from `~/.grok/auth.json`. |
+| Variable | Default | Purpose |
+|---|---:|---|
+| `PORT` | `0` | HTTP port. `0` selects a random free port. |
+| `GROK_BIN` | `grok` | Path to the Grok CLI binary. |
+| `GROK_CWD` | `process.cwd()` | Initial workspace directory. |
+| `GROK_WEB_USER` | OS username | Default sidebar display name. |
+| `GROK_WEB_NO_OPEN` | unset | Set to skip opening the browser automatically. |
+| `GROK_WEB_USE_API_KEY` | unset | Set to `1` to keep `XAI_API_KEY` in the agent environment. |
 | `GROK_WEB_RPC_TIMEOUT_MS` | `120000` | JSON-RPC timeout for non-prompt ACP calls. |
-| `GROK_WEB_PROMPT_TIMEOUT_MS` | `1800000` | JSON-RPC timeout for `session/prompt`; timed-out prompts are cancelled. |
+| `GROK_WEB_PROMPT_TIMEOUT_MS` | `1800000` | JSON-RPC timeout for `session/prompt`. |
 
-The PowerShell wrapper at `~/Documents/PowerShell/Microsoft.PowerShell_profile.ps1` passes the launching directory as `GROK_CWD` so the agent runs where you invoked the command.
+By default, Grok Build Web strips `XAI_API_KEY` and `GROK_API_KEY` from the spawned agent process so the CLI uses the cached grok.com login from `~/.grok/auth.json`. Set `GROK_WEB_USE_API_KEY=1` to use API key billing instead.
 
-Most other knobs (effort, sandbox, allow/deny rules, model, etc.) are set through the **Settings panel** in the browser, which serializes respawns and restarts the agent child with the new flags.
+## Architecture
 
-The footer model label and composer model tag open a compact model picker. It uses `grok models` plus known fallback IDs, then applies the selected model through the same respawn path as the Settings panel.
+```text
+browser  -> POST /prompt -> server.mjs -> stdin  -> grok agent stdio
+browser  <- SSE /stream  <- server.mjs <- stdout <- grok agent stdio
+```
 
-## Workspaces and sessions
+The Grok CLI exposes Agent Client Protocol over `grok agent stdio`. `server.mjs` spawns the CLI as a child process and bridges ACP messages to the browser through HTTP and Server-Sent Events.
 
-The left sidebar is a project drawer. Sessions are grouped by workspace (`cwd`), the current project opens automatically, and each expanded project shows only its four newest sessions while the badge keeps the total session count. The search box filters projects and matching sessions from the cached recents list.
+Multiple browser tabs are supported. Each tab keeps its own ACP `sessionId` in the URL and localStorage. The bridge tags events with `sessionId`, so each tab receives only its own stream.
 
-Use the topbar folder button to change workspace. It opens a modal for a filesystem path, creates a new per-tab ACP session with that `cwd`, and reloads the tab with both `?session=` and `?cwd=` so refreshes keep the same workspace. The "New session" button starts another session in the current workspace.
+## Repository Map
 
-On narrow screens the sidebar becomes an off-canvas project drawer. The topbar menu button opens it, the backdrop or `Escape` closes it, and selecting a session, New session, Sign in, Settings, or a Tools item closes the drawer before navigation.
+```text
+grok-web/
+|-- server.mjs                 Node bridge, HTTP routes, ACP client, CLI shell-outs
+|-- public/
+|   |-- index.html             Page shell
+|   |-- styles/
+|   |   |-- main.css           Layout, sidebar, composer, settings, modals
+|   |   `-- cards.css          Tool, plan, permission, and elicitation cards
+|   `-- js/
+|       |-- main.js            Browser entry point
+|       |-- api.js             Fetch wrappers
+|       |-- state.js           Shared client state and DOM refs
+|       |-- chat.js            Turn rendering and assistant output
+|       |-- tools.js           Tool call rendering
+|       |-- settings.js        Settings panel
+|       |-- identity.js        Sidebar identity display
+|       |-- sidebar.js         Project drawer and recents
+|       |-- composer.js        Input, send, stop, approval mode
+|       |-- topbar.js          Workspace picker, share, update notice
+|       `-- tools-menu.js      Sidebar tool wiring
+|-- package.json
+`-- probe/                     Protocol discovery scripts
+```
 
-## Composer extras
+## HTTP Routes
 
-The Attach button inserts text-like files into the prompt as fenced code blocks at the cursor. Supported extensions are `.txt`, `.md`, `.js`, `.mjs`, `.ts`, `.tsx`, `.json`, `.css`, `.html`, `.py`, `.sh`, `.ps1`, `.yml`, `.yaml`, `.toml`, `.csv`, `.xml`, and `.log`. Each attach action is capped at 5 files, and each file is capped at 256 KB. Images, PDFs, audio, video, binaries, and oversized files show a toast and are not inserted.
+| Route | Method | Purpose |
+|---|---|---|
+| `/` | GET | Token-gated app shell |
+| `/static/*` | GET | Static CSS and JS |
+| `/stream` | GET | SSE stream of agent events |
+| `/prompt` | POST | Send an ACP prompt |
+| `/cancel` | POST | Cancel the running turn |
+| `/settings` | GET, POST | Bridge settings, including auto approve and display name |
+| `/identity` | GET | Current sidebar identity |
+| `/spawn-opts` | GET | Current launch flags |
+| `/session/respawn` | POST | Restart the agent with new launch flags |
+| `/sessions` | GET | Recent sessions from `~/.grok/sessions/` |
+| `/tab/new` | POST | Create a per-tab ACP session |
+| `/tab/load` | POST | Load a per-tab ACP session |
+| `/permission` | POST | Answer a pending permission request |
+| `/elicitation` | POST | Answer a pending elicitation request |
+| `/cli/inspect` | GET | `grok inspect --json` |
+| `/cli/update-check` | GET | `grok update --check --json` |
+| `/cli/models` | GET | `grok models` |
+| `/cli/mcp` | GET | `grok mcp list` |
+| `/cli/worktree` | GET | `grok worktree list` |
+| `/cli/share` | POST | `grok share <sessionId>` |
+| `/cli/trace` | POST | `grok trace --local --json` |
+| `/cli/login` | POST | `grok login --device-auth` |
+| `/cli/import` | POST | `grok import --json -- <targets>` |
+| `/cli/oneshot` | POST | Headless `grok -p` for check and best-of-N modes |
 
-The Mic button uses the browser Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`) when available. Final transcripts are appended to the composer and are never auto-sent. Browsers without Web Speech support disable the button or show an unsupported toast.
+## Development
 
-## Routines
+Run syntax checks:
 
-Sidebar Tools → "Routines" opens an agent-driven scheduler panel. List, create, and delete actions send normal prompts to the active ACP session asking Grok to call `scheduler_list`, `scheduler_create`, or `scheduler_delete`. Results render through the usual turn lifecycle and scheduler tool renderer.
+```powershell
+node --check server.mjs
+Get-ChildItem public\js -Filter *.js | ForEach-Object { node --check $_.FullName }
+```
 
-## Protocol notes
+Feature touch points:
 
-ACP methods used:
-- `initialize` (`protocolVersion: 1`, client fs + elicitation capabilities)
-- `session/new` (`cwd`, `mcpServers: []`)
-- `session/load` (`sessionId`, `cwd`, `mcpServers: []`)
-- `session/prompt` (`sessionId`, `prompt: [{type:"text",text}]`)
-- `session/cancel` (notification)
-- `fs/read_text_file` / `fs/write_text_file` (agent-to-client requests, confined to the session cwd)
-- `elicitation/create` (agent-to-client request, rendered as a form or URL confirmation card)
+- New tool renderer: `public/js/tools.js`
+- New event type: `public/js/dispatch.js`
+- New permission UI: `public/js/permissions.js`
+- New elicitation UI: `public/js/elicitation.js`
+- New launch flag: `public/js/settings.js` and `server.mjs`
+- New CLI panel: `server.mjs`, `public/js/api.js`, and `public/js/panels.js`
+- Sidebar or layout polish: `public/styles/main.css`
+- Tool card polish: `public/styles/cards.css`
 
-Agent `session/update` notifications handled by the UI:
-- `agent_thought_chunk` — streamed reasoning, rendered as faint italic gutter text
-- `agent_message_chunk` — streamed assistant text, rendered with inline markdown
-- `tool_call` / `tool_call_update` — rendered as inline disclosure lines, with specialized renderers for execute/edit/image/todo/browser/scheduler
-- `user_message_chunk` — turn boundary marker (mainly during replay of loaded sessions)
-- `available_commands_update` — feeds the slash-command autocomplete
-- `hook_execution` — small inline line "· hook <event> → <name> Nms"
+## Security Model
 
-The agent sends `session/request_permission` requests when a tool wants approval. When the composer pill is in **Manual approval** mode the bridge parks the request and renders a card with per-option buttons; in **Auto-approve** mode the bridge prefers an allow / accept / approve option, otherwise the first non-deny option, and best-effort sends `/always-approve on` to the active tab session to keep state in sync.
+Grok Build Web is designed for local use. The launch URL includes a one-time token that sets an HttpOnly cookie. API and SSE requests require that cookie. Static assets are public because they contain no secrets.
 
-The bridge answers every agent-to-client JSON-RPC request with an `id`. Known requests are handled directly (`session/request_permission`, fs, elicitation). Unknown request methods are logged once and answered with `{}` so `session/prompt` can finish and the browser receives `turn_complete`.
+The bridge can read and write files only through ACP requests from the agent, and those filesystem handlers are confined to the active session workspace.
 
-Headless composer modes (`+ self-check`, Best of 3, Best of 5) run through `/cli/oneshot`, so they do not append to the interactive ACP session history. The client still sends the active tab `cwd` so the one-shot runs in the selected workspace. Ignored ACP extension `meta` events are available to diagnostics through the `grok-web:meta` browser event, and setting `localStorage.grokweb.debugMeta = '1'` logs them to DevTools.
+## Related
 
-## See also
-
-- [knownissues.md](./knownissues.md)
-- [featurestoadd.md](./featurestoadd.md)
+- [grokify.ai](https://grokify.ai/)
+- [AppleLamps/grokify](https://github.com/AppleLamps/grokify)
+- [Known issues](./knownissues.md)
+- [Feature backlog](./featurestoadd.md)

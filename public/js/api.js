@@ -102,6 +102,11 @@ export async function getSpawnOpts() {
   return r.json();
 }
 
+export async function getIdentity() {
+  const r = await fetch(url('/identity'));
+  return r.json();
+}
+
 export async function postRespawn(opts = {}) {
   const r = await fetch(url('/session/respawn'), {
     method: 'POST', headers: json, body: JSON.stringify(opts),

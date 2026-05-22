@@ -7,6 +7,7 @@ import { listSessions, postTabNew, postTabLoad } from './api.js';
 import { setStatus, addError } from './chat.js';
 import { escapeHTML } from './markdown.js';
 import { setBusy } from './composer.js';
+import { toast } from './toast.js';
 
 function timeAgo(iso) {
   if (!iso) return '';
@@ -28,6 +29,12 @@ try { savedOpenProjects = JSON.parse(localStorage.getItem('grokweb.openProjects'
 catch { savedOpenProjects = []; }
 const openProjects = new Set(Array.isArray(savedOpenProjects) ? savedOpenProjects : []);
 let seededCurrentProject = openProjects.size > 0;
+let savedProjectAliases = {};
+try { savedProjectAliases = JSON.parse(localStorage.getItem('grokweb.projectAliases') ?? '{}'); }
+catch { savedProjectAliases = {}; }
+const projectAliases = savedProjectAliases && typeof savedProjectAliases === 'object' && !Array.isArray(savedProjectAliases)
+  ? savedProjectAliases
+  : {};
 
 function isMobileSidebar() {
   return window.matchMedia('(max-width: 760px)').matches;
@@ -70,12 +77,22 @@ function saveOpenProjects() {
   localStorage.setItem('grokweb.openProjects', JSON.stringify([...openProjects]));
 }
 
+function saveProjectAliases() {
+  localStorage.setItem('grokweb.projectAliases', JSON.stringify(projectAliases));
+}
+
+function projectAlias(cwd) {
+  const alias = projectAliases[cwd];
+  return typeof alias === 'string' ? alias.trim() : '';
+}
+
 function filteredRecents() {
   if (!searchQuery) return state.recentsCache;
   const q = searchQuery.toLowerCase();
   return state.recentsCache.filter(s =>
     (s.title ?? '').toLowerCase().includes(q) ||
-    (s.cwd ?? '').toLowerCase().includes(q)
+    (s.cwd ?? '').toLowerCase().includes(q) ||
+    projectAlias(s.cwd ?? '(unknown)').toLowerCase().includes(q)
   );
 }
 
@@ -105,6 +122,43 @@ function shortCwd(cwd) {
   return cwd.split(/[\\/]/).filter(Boolean).slice(-2).join(' / ');
 }
 
+function projectLabel(cwd) {
+  return projectAlias(cwd) || shortCwd(cwd) || '(unknown)';
+}
+
+function wireProjectRename(project, cwd) {
+  const editor = project.querySelector('.project-alias-editor');
+  const input = project.querySelector('.project-alias-input');
+  const open = () => {
+    input.value = projectAlias(cwd);
+    editor.hidden = false;
+    input.focus();
+    input.select();
+  };
+  const close = () => { editor.hidden = true; };
+  project.querySelector('.project-rename').addEventListener('click', (e) => {
+    e.stopPropagation();
+    open();
+  });
+  project.querySelector('.project-alias-save').addEventListener('click', () => {
+    const next = input.value.trim();
+    if (next) projectAliases[cwd] = next;
+    else delete projectAliases[cwd];
+    saveProjectAliases();
+    renderRecents();
+  });
+  project.querySelector('.project-alias-clear').addEventListener('click', () => {
+    delete projectAliases[cwd];
+    saveProjectAliases();
+    renderRecents();
+  });
+  project.querySelector('.project-alias-cancel').addEventListener('click', close);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') project.querySelector('.project-alias-save').click();
+    if (e.key === 'Escape') close();
+  });
+}
+
 export function renderRecents() {
   if (!state.recentsCache.length) {
     dom.recentsEl.innerHTML = '<div class="empty">No prior sessions</div>';
@@ -119,19 +173,34 @@ export function renderRecents() {
       seededCurrentProject = true;
     }
     const isOpen = !!searchQuery || openProjects.has(group.cwd);
+    const alias = projectAlias(group.cwd);
     const project = document.createElement('div');
     project.className = 'project' + (isOpen ? ' open' : '') + (isCurrent ? ' current' : '');
     project.innerHTML = `
-      <button class="project-head" title="${escapeHTML(group.cwd)}">
-        <span class="chev">›</span>
-        <span class="folder-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
-        <span class="project-name"></span>
-        <span class="project-count">${group.sessions.length}</span>
-      </button>
+      <div class="project-row">
+        <button class="project-head" type="button">
+          <span class="chev">›</span>
+          <span class="folder-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+          <span class="project-name"></span>
+          <span class="project-count">${group.sessions.length}</span>
+        </button>
+        <button class="project-rename" type="button" title="Rename display name" aria-label="Rename project display name">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+        </button>
+      </div>
+      <div class="project-alias-editor" hidden>
+        <input class="project-alias-input" type="text" placeholder="Private display name" />
+        <button class="project-alias-save" type="button">Save</button>
+        <button class="project-alias-clear" type="button">Clear</button>
+        <button class="project-alias-cancel" type="button">Cancel</button>
+      </div>
       <div class="project-sessions"></div>
     `;
-    project.querySelector('.project-name').textContent = shortCwd(group.cwd) || '(unknown)';
-    project.querySelector('.project-head').addEventListener('click', () => {
+    const projectHead = project.querySelector('.project-head');
+    projectHead.title = alias ? `${alias}\n${group.cwd}` : group.cwd;
+    project.querySelector('.project-name').textContent = projectLabel(group.cwd);
+    wireProjectRename(project, group.cwd);
+    projectHead.addEventListener('click', () => {
       if (openProjects.has(group.cwd)) openProjects.delete(group.cwd);
       else openProjects.add(group.cwd);
       saveOpenProjects();
@@ -160,11 +229,16 @@ export function renderRecents() {
 export async function loadRecents() {
   try {
     const data = await listSessions();
-    state.recentsCache = data.sessions ?? [];
+    state.recentsCache = Array.isArray(data.sessions) ? data.sessions : [];
     if (data.current) state.currentSessionId = data.current;
     renderRecents();
   } catch (e) {
-    dom.recentsEl.innerHTML = `<div class="empty">Failed to load: ${escapeHTML(String(e?.message ?? e))}</div>`;
+    const message = String(e?.message ?? e);
+    if (!state.recentsCache.length) {
+      dom.recentsEl.innerHTML = `<div class="empty">Failed to load: ${escapeHTML(message)}</div>`;
+    } else {
+      toast(`Session history refresh failed: ${message}`, { duration: 7000 });
+    }
   }
 }
 

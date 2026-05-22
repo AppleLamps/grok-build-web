@@ -29,6 +29,61 @@ const DEFAULT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_RPC_TIMEOUT_MS ?? 2 *
 const PROMPT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_PROMPT_TIMEOUT_MS ?? 30 * 60 * 1000);
 let bootstrapUsed = false;
 
+function normalizeStderrLine(line) {
+  return String(line)
+    .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, '<timestamp>')
+    .replace(/session_id=[0-9a-f-]+/gi, 'session_id=<session>')
+    .trim();
+}
+
+class StderrRateLimiter {
+  constructor({ prefix = '[grok] ', windowMs = 5000 } = {}) {
+    this.prefix = prefix;
+    this.windowMs = windowMs;
+    this.buf = '';
+    this.lines = new Map();
+  }
+
+  write(chunk) {
+    this.buf += chunk.toString();
+    let i;
+    while ((i = this.buf.indexOf('\n')) >= 0) {
+      const line = this.buf.slice(0, i).replace(/\r$/, '');
+      this.buf = this.buf.slice(i + 1);
+      this.writeLine(line);
+    }
+  }
+
+  writeLine(line) {
+    const key = normalizeStderrLine(line);
+    if (!key) return;
+    let entry = this.lines.get(key);
+    if (!entry) {
+      entry = { count: 0, timer: null };
+      this.lines.set(key, entry);
+      process.stderr.write(`${this.prefix}${line}\n`);
+      entry.timer = setTimeout(() => this.flush(key), this.windowMs);
+      return;
+    }
+    entry.count++;
+  }
+
+  flush(key) {
+    const entry = this.lines.get(key);
+    if (!entry) return;
+    if (entry.count > 0) {
+      process.stderr.write(`${this.prefix}suppressed ${entry.count} repeated stderr line${entry.count === 1 ? '' : 's'}: ${key}\n`);
+    }
+    this.lines.delete(key);
+  }
+
+  flushAll() {
+    if (this.buf.trim()) this.writeLine(this.buf.trim());
+    this.buf = '';
+    for (const key of Array.from(this.lines.keys())) this.flush(key);
+  }
+}
+
 function defaultUsername() {
   return process.env.GROK_WEB_USER
     ?? process.env.USERNAME
@@ -58,6 +113,8 @@ class GrokSession {
     this.pendingPermissions = new Map(); // rpcId -> {request, timeout}
     this.pendingElicitations = new Map(); // rpcId -> {request, timeout}
     this.unhandledClientRequests = new Set();
+    this.sessionCwds = new Map();
+    this.stderrLimiter = new StderrRateLimiter();
     // Launch-time grok flags. Changing any of these requires respawning the
     // child process — see respawn().
     this.spawnOpts = {
@@ -125,8 +182,9 @@ class GrokSession {
       env,
     });
     this.child.stdout.on('data', (c) => this.onStdout(c));
-    this.child.stderr.on('data', (c) => process.stderr.write(`[grok] ${c}`));
+    this.child.stderr.on('data', (c) => this.stderrLimiter.write(c));
     this.child.on('exit', (code) => {
+      this.stderrLimiter.flushAll();
       this.rejectPending(new Error(`agent exited (code ${code})`));
       this.broadcast({ kind: 'agent_exit', code });
       this.ready = false;
@@ -175,13 +233,13 @@ class GrokSession {
     await this.call('initialize', {
       protocolVersion: 1,
       clientCapabilities: {
-        fs: { readTextFile: true, writeTextFile: true },
         elicitation: { form: {}, url: {} },
       },
     });
     const res = await this.call('session/new', { cwd: this.cwd ?? CWD, mcpServers: [] });
     this.sessionId = res.sessionId;
     this.cwd = this.cwd ?? CWD;
+    this.rememberSessionCwd(this.sessionId, this.cwd);
     this.ready = true;
     this.broadcast({ kind: 'session_ready', sessionId: this.sessionId, cwd: this.cwd, spawnOpts: { ...this.spawnOpts } });
   }
@@ -193,6 +251,7 @@ class GrokSession {
     const res = await this.call('session/new', { cwd: targetCwd, mcpServers: [] });
     this.sessionId = res.sessionId;
     this.cwd = targetCwd;
+    this.rememberSessionCwd(this.sessionId, targetCwd);
     this.clearSessionHistory(previousSessionId);
     this.broadcast({ kind: 'session_replaced', sessionId: this.sessionId, cwd: targetCwd });
   }
@@ -215,6 +274,7 @@ class GrokSession {
     await this.call('session/load', { sessionId, cwd: targetCwd, mcpServers: [] });
     this.sessionId = sessionId;
     this.cwd = targetCwd;
+    this.rememberSessionCwd(sessionId, targetCwd);
     this.clearSessionHistory(previousSessionId, sessionId);
     this.broadcast({ kind: 'session_replaced', sessionId, cwd: targetCwd, loaded: true });
   }
@@ -338,7 +398,8 @@ class GrokSession {
   resolveClientPath(params = {}) {
     const raw = params.path ?? params.filePath ?? params.file_path;
     if (typeof raw !== 'string' || !raw) throw new Error('path required');
-    const root = resolve(this.cwd ?? CWD);
+    const sessionId = params.sessionId;
+    const root = resolve((sessionId && this.sessionCwds.get(sessionId)) || this.cwd || CWD);
     const file = resolve(root, raw);
     const rootCmp = process.platform === 'win32' ? root.toLowerCase() : root;
     const fileCmp = process.platform === 'win32' ? file.toLowerCase() : file;
@@ -346,6 +407,10 @@ class GrokSession {
       throw new Error('path outside session cwd');
     }
     return file;
+  }
+
+  rememberSessionCwd(sessionId, cwd) {
+    if (sessionId && cwd) this.sessionCwds.set(sessionId, cwd);
   }
 
   parkElicitation(msg) {
@@ -414,6 +479,7 @@ class GrokSession {
     const targetCwd = cwd ?? this.cwd ?? CWD;
     const res = await this.call('session/new', { cwd: targetCwd, mcpServers: [] });
     this.cwd = targetCwd;
+    this.rememberSessionCwd(res.sessionId, targetCwd);
     // Broadcast a per-tab session_ready event tagged with the new sid so the
     // browser tab subscribed to that sid can flip its UI out of "loading".
     this.broadcast({ kind: 'session_ready', sessionId: res.sessionId, cwd: targetCwd });
@@ -740,6 +806,8 @@ const server = createServer(async (req, res) => {
       const targetCwd = body.cwd ?? grok.cwd ?? CWD;
       await grok.call('session/load', { sessionId: body.sessionId, cwd: targetCwd, mcpServers: [] });
       grok.cwd = targetCwd;
+      grok.rememberSessionCwd(body.sessionId, targetCwd);
+      grok.broadcast({ kind: 'session_ready', sessionId: body.sessionId, cwd: targetCwd, loaded: true });
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ sessionId: body.sessionId, cwd: targetCwd }));
     } catch (e) {
@@ -822,13 +890,20 @@ const server = createServer(async (req, res) => {
 
   // List recent sessions
   if (req.method === 'GET' && url.pathname === '/sessions') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!auth(req)) {
+      res.writeHead(401, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'missing or bad session' }));
+      return;
+    }
     try {
       const sessions = await listSessions();
       const current = url.searchParams.get('sessionId') || grok.sessionId;
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ sessions, current }));
-    } catch (e) { res.writeHead(500).end(String(e)); }
+    } catch (e) {
+      res.writeHead(500, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: String(e?.message ?? e) }));
+    }
     return;
   }
 

@@ -138,7 +138,7 @@ function summarizeTool(toolUpdate) {
     case 'think':
       return { verb: '', target: title ?? 'Thinking' };
     default:
-      return { verb: 'Used', target: title ?? 'tool' };
+      return { verb: 'used tool', target: title ?? '' };
   }
 }
 
@@ -210,6 +210,7 @@ function getToolEl(id) {
   state.toolEls.set(id, el);
   const count = group.querySelector('.tool-group-items').children.length;
   group.querySelector('.tool-group-count').textContent = count === 1 ? '1 tool' : `${count} tools`;
+  group.classList.toggle('is-grouped', count > 2);
   // Only set the initial open state ONCE — don't fight a manual user toggle.
   // (Issue #14: previously every new tool re-applied open/closed, undoing clicks.)
   if (!group.dataset.userToggled) {

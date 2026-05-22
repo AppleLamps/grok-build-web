@@ -89,14 +89,23 @@ aside {
 }
 .recents::-webkit-scrollbar-thumb:hover { background: #BFB39D; }
 .project { display: flex; flex-direction: column; gap: 1px; margin: 1px 0; }
+.project-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 2px;
+}
 .project-head {
   width: 100%;
   display: flex; align-items: center; gap: 8px;
   padding: 6px 8px; border-radius: 7px; border: 0; background: none;
   cursor: pointer; color: var(--ink-2); font: inherit; text-align: left;
+  min-width: 0;
 }
-.project-head:hover { background: var(--hover); }
+.project-head:hover,
+.project-rename:hover { background: var(--hover); }
 .project.current > .project-head { color: var(--ink); font-weight: 500; }
+.project.current .project-head { color: var(--ink); font-weight: 500; }
 .project .chev {
   color: var(--faint); font-size: 14px; line-height: 1;
   transition: transform .12s; width: 10px; text-align: center;
@@ -112,6 +121,46 @@ aside {
   font-size: 11px; color: var(--faint);
   padding: 1px 5px; border-radius: 999px; background: rgba(0,0,0,.04);
 }
+.project-rename {
+  border: 0;
+  background: none;
+  border-radius: 6px;
+  color: var(--faint);
+  cursor: pointer;
+  display: grid;
+  height: 24px;
+  place-items: center;
+}
+.project-rename:hover { color: var(--ink-2); }
+.project-rename svg { stroke: currentColor; }
+.project-alias-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 4px;
+  margin: 1px 0 4px 25px;
+}
+.project-alias-editor[hidden] { display: none; }
+.project-alias-editor input {
+  min-width: 0;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 7px;
+}
+.project-alias-editor button {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 6px;
+  color: var(--ink-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+  padding: 5px 7px;
+}
+.project-alias-editor button:hover { background: var(--hover); }
 .project-sessions { display: none; flex-direction: column; gap: 1px; margin: 0 0 3px 25px; }
 .project.open .project-sessions { display: flex; }
 .recent {

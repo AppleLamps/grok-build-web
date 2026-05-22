@@ -5,6 +5,24 @@ import { TAB_SESSION_ID } from './state.js';
 const url = (path) => path;
 const json = { 'content-type': 'application/json' };
 
+async function readJsonResponse(r, label) {
+  const text = await r.text();
+  if (!r.ok) {
+    let detail = text.trim();
+    try {
+      const parsed = detail ? JSON.parse(detail) : null;
+      detail = parsed?.error ?? parsed?.message ?? detail;
+    } catch {}
+    throw new Error(`${label} request failed: ${r.status}${detail ? `: ${detail}` : ''}`);
+  }
+  if (!text.trim()) throw new Error(`${label} returned empty response`);
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error(`${label} returned invalid JSON: ${e.message}`);
+  }
+}
+
 // Helper: attach the tab's sessionId to a POST body if not already present.
 function withSid(body) {
   if (!TAB_SESSION_ID) return body;
@@ -76,7 +94,7 @@ export async function listSessions() {
   const u = new URL(url('/sessions'), location.origin);
   if (TAB_SESSION_ID) u.searchParams.set('sessionId', TAB_SESSION_ID);
   const r = await fetch(u.pathname + u.search);
-  return r.json();
+  return readJsonResponse(r, 'sessions');
 }
 
 // Legacy single-default-session endpoints. The browser UI should use

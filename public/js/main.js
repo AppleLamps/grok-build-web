@@ -26,8 +26,9 @@ async function ensureTabSession() {
       const cwd = params.get('cwd') ?? meta?.cwd;
       await postTabLoad(wantSession, cwd);
       setTabSessionId(wantSession);
+      return;
     } catch (e) { console.error('load session failed', e); }
-    return;
+    setTabSessionId(null);
   }
   // ?continue=1: load the most-recent session into this tab.
   if (params.get('continue')) {
@@ -44,8 +45,9 @@ async function ensureTabSession() {
       const data = await listSessions();
       const meta = (data.sessions ?? []).find(x => x.id === TAB_SESSION_ID);
       await postTabLoad(TAB_SESSION_ID, meta?.cwd);
+      return;
     } catch { /* may be fresh — ignore */ }
-    return;
+    setTabSessionId(null);
   }
   // No session at all — create one on the bridge.
   try {

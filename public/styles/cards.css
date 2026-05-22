@@ -170,10 +170,10 @@
 }
 .tool-group.open .tool-group-summary .chev { transform: rotate(90deg); }
 .tool-group-items > .tool { margin: 4px 0; }
-/* Show the group summary only when count > 2 (collapsed mode) */
-.tool-group:not(.open) .tool-group-summary { display: inline-flex; align-items: center; }
-.tool-group:not(.open) .tool-group-items { display: none; }
-.tool-group.open .tool-group-summary { display: none; }
+/* Show the group summary only when count > 2, and keep it available as
+   the collapse control after the group has been opened. */
+.tool-group.is-grouped .tool-group-summary { display: inline-flex; align-items: center; }
+.tool-group.is-grouped:not(.open) .tool-group-items { display: none; }
 
 /* ─── Diff view (used by edit tool details) ─────────────────────────────── */
 .tool .details pre.diff {

@@ -11,9 +11,10 @@ let assistantRenderPending = false;
 let assistantRenderHandle = null;
 let assistantRenderCancel = null;
 let assistantRenderGeneration = 0;
+const AUTO_SCROLL_NEAR_BOTTOM_PX = 120;
 
 export function autoScroll() {
-  const nearBottom = dom.log.scrollHeight - dom.log.scrollTop - dom.log.clientHeight < 120;
+  const nearBottom = dom.log.scrollHeight - dom.log.scrollTop - dom.log.clientHeight < AUTO_SCROLL_NEAR_BOTTOM_PX;
   if (nearBottom) dom.log.scrollTop = dom.log.scrollHeight;
 }
 

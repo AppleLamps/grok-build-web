@@ -6,6 +6,7 @@ import { setBusy } from './composer.js';
 import { setStatus, addError } from './chat.js';
 import { toast } from './toast.js';
 import { refreshIdentity } from './identity.js';
+import { mergeModelIds } from './model-ids.js';
 
 let panel = null;
 let current = {};
@@ -144,43 +145,19 @@ function collectValues() {
   return opts;
 }
 
-// Known xAI model IDs as a fallback. `grok models` only lists what your auth
-// method exposes (often just `grok-build`), so we union with known IDs that
-// the API itself accepts. Some require specific team entitlements — if the
-// agent 404s on one, try another.
-const KNOWN_MODEL_IDS = [
-  'grok-build',
-  'grok-build-0.1',
-  'grok-4.3',
-  'grok-4.20-0309-non-reasoning',
-  'grok-4.20-0309-reasoning',
-  'grok-4.20-multi-agent-0309',
-  'grok-imagine-image',
-  'grok-imagine-image-quality',
-  'grok-imagine-video',
-];
-
 async function populateModelSelect(selectEl) {
   let raw = '';
   try { raw = await cliModels(); } catch { /* fall through */ }
-  const cliIds = parseModelIds(raw);
-  const ids = Array.from(new Set([...cliIds, ...KNOWN_MODEL_IDS]));
   const current = selectEl.dataset.currentValue ?? '';
+  const ids = mergeModelIds(raw, current);
   selectEl.innerHTML = '';
   const opts = ['', ...ids];
-  if (current && !opts.includes(current)) opts.push(current);
   for (const id of opts) {
     const o = document.createElement('option');
     o.value = id; o.textContent = id || '(default)';
     if (id === current) o.selected = true;
     selectEl.appendChild(o);
   }
-}
-
-function parseModelIds(text) {
-  if (!text) return [];
-  const matches = text.match(/grok[-/][a-z0-9._-]+/gi) ?? [];
-  return Array.from(new Set(matches));
 }
 
 async function open() {

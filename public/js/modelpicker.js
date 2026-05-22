@@ -6,24 +6,7 @@ import { modal } from './modal.js';
 import { toast } from './toast.js';
 import { setBusy } from './composer.js';
 import { setStatus, addError } from './chat.js';
-
-const KNOWN_MODEL_IDS = [
-  'grok-build',
-  'grok-build-0.1',
-  'grok-4.3',
-  'grok-4.20-0309-non-reasoning',
-  'grok-4.20-0309-reasoning',
-  'grok-4.20-multi-agent-0309',
-  'grok-imagine-image',
-  'grok-imagine-image-quality',
-  'grok-imagine-video',
-];
-
-function parseModelIds(text) {
-  if (!text) return [];
-  const matches = text.match(/grok[-/][a-z0-9._-]+/gi) ?? [];
-  return Array.from(new Set(matches));
-}
+import { mergeModelIds, parseModelIds } from './model-ids.js';
 
 function labelFor(model) {
   return model || 'grok-build';
@@ -70,9 +53,8 @@ async function openModelPicker() {
   currentEl.textContent = labelFor(current.model);
   let raw = '';
   try { raw = await cliModels(); } catch { /* fallback list below */ }
-  const ids = Array.from(new Set([...parseModelIds(raw), ...KNOWN_MODEL_IDS]));
+  const ids = mergeModelIds(raw, current.model);
   const opts = ['', ...ids];
-  if (current.model && !opts.includes(current.model)) opts.push(current.model);
   select.innerHTML = '';
   for (const id of opts) {
     const option = document.createElement('option');

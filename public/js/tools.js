@@ -24,7 +24,11 @@ const ANSI_COLORS = {
   '30':'#000','31':'#c33','32':'#3a8','33':'#c80','34':'#36c','35':'#a4a','36':'#3aa','37':'#999',
   '90':'#666','91':'#e55','92':'#5d8','93':'#eb5','94':'#69e','95':'#c7c','96':'#5cc','97':'#ddd',
 };
-const ESC = String.fromCharCode(27);
+const SEARCH_RESULT_LIMIT = 25;
+const NETWORK_REQUEST_LIMIT = 100;
+const COOKIE_RENDER_LIMIT = 30;
+const BROWSER_TEXT_LIMIT = 4000;
+const BROWSER_HTML_LIMIT = 8000;
 
 const STATUS_ICONS = {
   in_progress: '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/></svg>',
@@ -427,7 +431,7 @@ function renderSearchDetails(update, mode = 'web') {
   const parts = [];
   if (query) parts.push(`<div class="label">query</div><pre>${escapeHTML(query)}</pre>`);
   if (items.length) {
-    const rows = items.slice(0, 25).map(item => {
+    const rows = items.slice(0, SEARCH_RESULT_LIMIT).map(item => {
       const title = item.title ?? item.text ?? item.snippet ?? item.content ?? item.handle ?? item.author ?? '';
       const handle = item.handle ?? item.username ?? item.author?.handle ?? item.author_username ?? '';
       const time = item.timestamp ?? item.created_at ?? item.createdAt ?? item.date ?? '';
@@ -490,7 +494,7 @@ function renderBrowserDetails(update) {
   // Network details (browser_network_details): structured request log.
   const requests = out.requests ?? out.network ?? null;
   if (Array.isArray(requests)) {
-    const rows = requests.slice(0, 100).map(r => {
+    const rows = requests.slice(0, NETWORK_REQUEST_LIMIT).map(r => {
       const s = r.status ?? r.statusCode ?? '—';
       const cls = (typeof s === 'number' && s >= 400) ? 'fail' : 'ok';
       const url = r.url ?? '';
@@ -509,7 +513,7 @@ function renderBrowserDetails(update) {
     }).join('');
     const tot = requests.length;
     return `
-      <div class="label">network · ${tot} request${tot === 1 ? '' : 's'}${tot > 100 ? ' (showing first 100)' : ''}</div>
+      <div class="label">network · ${tot} request${tot === 1 ? '' : 's'}${tot > NETWORK_REQUEST_LIMIT ? ` (showing first ${NETWORK_REQUEST_LIMIT})` : ''}</div>
       <table class="net-table">
         <thead><tr><th>Status</th><th>Method</th><th>URL</th><th>Size</th><th>Time</th></tr></thead>
         <tbody>${rows}</tbody>
@@ -576,7 +580,7 @@ function renderBrowserDetails(update) {
       <table class="net-table">
         <thead><tr><th>Name</th><th>Value</th><th>Domain</th></tr></thead>
         <tbody>
-        ${cookies.slice(0, 30).map(c => `
+        ${cookies.slice(0, COOKIE_RENDER_LIMIT).map(c => `
           <tr>
             <td>${escapeHTML(c.name ?? '')}</td>
             <td title="${escapeHTML(c.value ?? '')}">${escapeHTML(String(c.value ?? '').slice(0, 40))}</td>
@@ -588,14 +592,14 @@ function renderBrowserDetails(update) {
   }
 
   if (text) {
-    const truncated = String(text).length > 4000;
+    const truncated = String(text).length > BROWSER_TEXT_LIMIT;
     parts.push(`<div class="label">page text${truncated ? ' (truncated)' : ''}</div>
-      <div class="browser-text">${escapeHTML(String(text).slice(0, 4000))}${truncated ? '\n…' : ''}</div>`);
+      <div class="browser-text">${escapeHTML(String(text).slice(0, BROWSER_TEXT_LIMIT))}${truncated ? '\n…' : ''}</div>`);
   }
   if (html && !text) {
-    const truncated = String(html).length > 8000;
+    const truncated = String(html).length > BROWSER_HTML_LIMIT;
     parts.push(`<div class="label">HTML snapshot${truncated ? ' (truncated)' : ''}</div>
-      <pre class="browser-html">${escapeHTML(String(html).slice(0, 8000))}${truncated ? '\n…' : ''}</pre>`);
+      <pre class="browser-html">${escapeHTML(String(html).slice(0, BROWSER_HTML_LIMIT))}${truncated ? '\n…' : ''}</pre>`);
   }
 
   return parts.join('') || '<em style="color:var(--mute)">(waiting on browser output…)</em>';

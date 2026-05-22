@@ -36,6 +36,34 @@ test('sidebar hides empty sessions by default and persists the show-empty toggle
   assert.equal(sidebar.__testGetShowEmptySessions(), true);
 });
 
+test('sidebar skips unchanged recents renders and repaints changed visible state', async () => {
+  dom.recentsEl.children = [];
+  state.recentsCache = [
+    { id: 'active', cwd, title: 'Active', lastActive: '2026-05-22T01:00:00Z', numMessages: 2 },
+    { id: 'other', cwd, title: 'Other', lastActive: '2026-05-22T00:59:00Z', numMessages: 1 },
+  ];
+  state.currentSessionId = 'active';
+  state.currentCwd = cwd;
+  sidebar.__testSetShowEmptySessions(true);
+  sidebar.__testSetSearchQuery('');
+  sidebar.__testInvalidateRecentsRender();
+
+  sidebar.renderRecents();
+  const firstProject = dom.recentsEl.children[0];
+  sidebar.renderRecents();
+  assert.equal(dom.recentsEl.children[0], firstProject);
+
+  sidebar.__testSetSearchQuery('other');
+  sidebar.renderRecents();
+  const searchedProject = dom.recentsEl.children[0];
+  assert.notEqual(searchedProject, firstProject);
+  assert.equal(searchedProject.querySelector('.project-sessions').children.length, 1);
+
+  sidebar.__testSetProjectAlias(cwd, 'Alias After Render');
+  sidebar.renderRecents();
+  assert.equal(dom.recentsEl.children[0].querySelector('.project-name').textContent, 'Alias After Render');
+});
+
 test('settings disables permissionMode when the CLI does not support it', async () => {
   const field = settings.__testFields.find(f => f.key === 'permissionMode');
   const el = settings.__testFieldEl(field, null, { _capabilities: { permissionMode: false } });

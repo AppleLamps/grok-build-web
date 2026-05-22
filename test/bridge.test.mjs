@@ -143,3 +143,85 @@ test('auto-approve cancels permission requests that have no options', async () =
     }
   });
 });
+
+test('API bad requests return JSON error bodies', async () => {
+  await withTempDir('grok-web-json-errors-', async (temp) => {
+    const server = await startFakeServer({ sessionsRoot: join(temp, 'sessions') });
+    try {
+      const { base, cookie } = await bootstrap(server);
+
+      await assertJsonError(base, cookie, '/prompt', { text: '' }, 400, /empty prompt/);
+      await assertJsonError(base, cookie, '/permission', {}, 400, /rpcId \+ optionId required/);
+      await assertJsonError(base, cookie, '/elicitation', {}, 400, /rpcId \+ action required/);
+      await assertJsonError(base, cookie, '/session/load', {}, 400, /sessionId required/);
+      await assertJsonError(base, cookie, '/cli/oneshot', { text: 'x', bestOfN: 0 }, 400, /positive integer/);
+
+      const unauthorized = await fetch(makeUrl(base, '/prompt'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'x' }),
+      });
+      assert.equal(unauthorized.status, 401);
+      assert.equal(unauthorized.headers.get('content-type'), 'application/json');
+      assert.match((await unauthorized.json()).error, /missing or bad session/);
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+test('request body limit rejects oversized JSON and can be disabled', async () => {
+  await withTempDir('grok-web-body-limit-', async (temp) => {
+    const limited = await startFakeServer({
+      sessionsRoot: join(temp, 'limited-sessions'),
+      env: { GROK_WEB_MAX_REQUEST_BODY_BYTES: '80' },
+    });
+    try {
+      const { base, cookie } = await bootstrap(limited);
+      const tooLarge = await fetch(makeUrl(base, '/prompt'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'x'.repeat(200) }),
+      });
+      assert.equal(tooLarge.status, 400);
+      assert.equal(tooLarge.headers.get('content-type'), 'application/json');
+      assert.match((await tooLarge.json()).error, /request body exceeds 80 byte limit/);
+
+      const small = await fetch(makeUrl(base, '/prompt'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'small' }),
+      });
+      assert.equal(small.status, 202);
+    } finally {
+      await limited.stop();
+    }
+
+    const disabled = await startFakeServer({
+      sessionsRoot: join(temp, 'disabled-sessions'),
+      env: { GROK_WEB_MAX_REQUEST_BODY_BYTES: '0' },
+    });
+    try {
+      const { base, cookie } = await bootstrap(disabled);
+      const accepted = await fetch(makeUrl(base, '/prompt'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'x'.repeat(200) }),
+      });
+      assert.equal(accepted.status, 202);
+    } finally {
+      await disabled.stop();
+    }
+  });
+});
+
+async function assertJsonError(base, cookie, path, body, status, pattern) {
+  const response = await fetch(makeUrl(base, path), {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  assert.equal(response.status, status);
+  assert.equal(response.headers.get('content-type'), 'application/json');
+  assert.match((await response.json()).error, pattern);
+}

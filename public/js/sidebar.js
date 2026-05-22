@@ -36,6 +36,7 @@ catch { savedProjectAliases = {}; }
 const projectAliases = savedProjectAliases && typeof savedProjectAliases === 'object' && !Array.isArray(savedProjectAliases)
   ? savedProjectAliases
   : {};
+let lastRecentsRenderSignature = '';
 
 function isMobileSidebar() {
   return window.matchMedia('(max-width: 760px)').matches;
@@ -80,6 +81,10 @@ function saveOpenProjects() {
 
 function saveProjectAliases() {
   localStorage.setItem('grokweb.projectAliases', JSON.stringify(projectAliases));
+}
+
+function invalidateRecentsRender() {
+  lastRecentsRenderSignature = '';
 }
 
 function projectAlias(cwd) {
@@ -156,11 +161,13 @@ function wireProjectRename(project, cwd) {
     if (next) projectAliases[cwd] = next;
     else delete projectAliases[cwd];
     saveProjectAliases();
+    invalidateRecentsRender();
     renderRecents();
   });
   project.querySelector('.project-alias-clear').addEventListener('click', () => {
     delete projectAliases[cwd];
     saveProjectAliases();
+    invalidateRecentsRender();
     renderRecents();
   });
   project.querySelector('.project-alias-cancel').addEventListener('click', close);
@@ -171,6 +178,10 @@ function wireProjectRename(project, cwd) {
 }
 
 export function renderRecents() {
+  const signature = recentsRenderSignature();
+  if (signature === lastRecentsRenderSignature) return;
+  lastRecentsRenderSignature = signature;
+
   if (!state.recentsCache.length) {
     dom.recentsEl.innerHTML = '<div class="empty">No prior sessions</div>';
     renderEmptyToggle();
@@ -184,7 +195,7 @@ export function renderRecents() {
     return;
   }
   for (const group of groups) {
-    const currentCwd = state.currentCwd ?? state.recentsCache.find(s => s.id === state.currentSessionId)?.cwd;
+    const currentCwd = currentRecentsCwd();
     const isCurrent = group.cwd === currentCwd || group.sessions.some(s => s.id === state.currentSessionId);
     if (isCurrent && !seededCurrentProject) {
       openProjects.add(group.cwd);
@@ -222,6 +233,7 @@ export function renderRecents() {
       if (openProjects.has(group.cwd)) openProjects.delete(group.cwd);
       else openProjects.add(group.cwd);
       saveOpenProjects();
+      invalidateRecentsRender();
       renderRecents();
     });
     const sessionsEl = project.querySelector('.project-sessions');
@@ -298,6 +310,7 @@ export function initSidebar() {
   dom.showEmptySessionsBtn?.addEventListener('click', () => {
     showEmptySessions = !showEmptySessions;
     localStorage.setItem('grokweb.showEmptySessions', showEmptySessions ? '1' : '0');
+    invalidateRecentsRender();
     renderRecents();
   });
   const searchBtn = document.querySelector('.brand .icons button[title="Search"]');
@@ -319,8 +332,61 @@ export function initSidebar() {
 export function __testSetShowEmptySessions(value) {
   showEmptySessions = !!value;
   localStorage.setItem('grokweb.showEmptySessions', showEmptySessions ? '1' : '0');
+  invalidateRecentsRender();
 }
 
 export function __testGetShowEmptySessions() {
   return showEmptySessions;
+}
+
+export function __testSetSearchQuery(value) {
+  searchQuery = String(value ?? '');
+}
+
+export function __testSetProjectAlias(cwd, alias) {
+  if (alias) projectAliases[cwd] = String(alias);
+  else delete projectAliases[cwd];
+  saveProjectAliases();
+  invalidateRecentsRender();
+}
+
+export function __testInvalidateRecentsRender() {
+  invalidateRecentsRender();
+}
+
+function currentRecentsCwd() {
+  return state.currentCwd ?? state.recentsCache.find(s => s.id === state.currentSessionId)?.cwd;
+}
+
+function recentsRenderSignature() {
+  const currentCwd = currentRecentsCwd();
+  const groups = groupedRecents();
+  const currentGroup = groups.find(group => group.cwd === currentCwd || group.sessions.some(s => s.id === state.currentSessionId));
+  if (currentGroup && !seededCurrentProject) {
+    openProjects.add(currentGroup.cwd);
+    seededCurrentProject = true;
+  }
+  const visibleCwds = groups.map(g => g.cwd);
+  const aliases = Object.fromEntries(visibleCwds.map(cwd => [cwd, projectAlias(cwd)]));
+  const minuteBucket = Math.floor(Date.now() / 60000);
+  return JSON.stringify({
+    currentSessionId: state.currentSessionId ?? null,
+    currentCwd: currentCwd ?? null,
+    searchQuery,
+    showEmptySessions,
+    minuteBucket,
+    openProjects: [...openProjects].filter(cwd => visibleCwds.includes(cwd)).sort(),
+    aliases,
+    sessions: groups.map(group => ({
+      cwd: group.cwd,
+      sessions: group.sessions.slice(0, MAX_PROJECT_SESSIONS).map(s => ({
+        id: s.id,
+        title: s.title ?? '',
+        cwd: s.cwd ?? '',
+        lastActive: s.lastActive ?? '',
+        numMessages: s.numMessages ?? 0,
+      })),
+    })),
+    totalRecents: state.recentsCache.length,
+  });
 }

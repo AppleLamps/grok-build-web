@@ -27,10 +27,22 @@ const CWD = process.env.GROK_CWD ?? process.cwd();
 const BOOTSTRAP_TOKEN = randomBytes(16).toString('hex');
 const SESSION_COOKIE = 'grok_web';
 const SESSION_TOKEN = randomBytes(32).toString('hex');
-const SESSION_COOKIE_MAX_AGE = 12 * 60 * 60;
+const SESSION_COOKIE_MAX_AGE_SECONDS = 12 * 60 * 60;
 const HISTORY_LIMIT = 10000;
+const SESSIONS_CACHE_TTL_MS = Number(process.env.GROK_WEB_SESSIONS_CACHE_TTL_MS ?? 2000);
+const MAX_REQUEST_BODY_BYTES = Number(process.env.GROK_WEB_MAX_REQUEST_BODY_BYTES ?? 64 * 1024 * 1024);
+const AGENT_HELP_TIMEOUT_MS = 3000;
 const DEFAULT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_RPC_TIMEOUT_MS ?? 2 * 60 * 1000);
 const PROMPT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_PROMPT_TIMEOUT_MS ?? 30 * 60 * 1000);
+const CHILD_KILL_GRACE_MS = 500;
+const PERMISSION_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
+const ELICITATION_TIMEOUT_MS = 5 * 60 * 1000;
+const CLI_TIMEOUT_DEFAULT_MS = 30000;
+const CLI_TIMEOUT_SHORT_MS = 10000;
+const CLI_TIMEOUT_UPDATE_CHECK_MS = 15000;
+const CLI_TIMEOUT_TRACE_MS = 60000;
+const CLI_TIMEOUT_ONESHOT_MS = 300000;
+const CLI_TIMEOUT_IMPORT_MS = 120000;
 let bootstrapUsed = false;
 let agentHelpText = null;
 
@@ -38,7 +50,7 @@ function getAgentHelpText() {
   if (agentHelpText !== null) return agentHelpText;
   const r = spawnSync(GROK_BIN, [...GROK_BIN_ARGS, 'agent', '--help'], {
     encoding: 'utf8',
-    timeout: 3000,
+    timeout: AGENT_HELP_TIMEOUT_MS,
     windowsHide: true,
   });
   agentHelpText = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
@@ -133,7 +145,10 @@ class GrokSession {
     this.pending = new Map();
     this.sessionId = null;
     this.listeners = new Set();
-    this.history = []; // every notification + sent prompt, replayed on new SSE connect
+    this.history = []; // bounded event entries replayed on new SSE connect
+    this.historySeq = 0;
+    this.globalHistory = [];
+    this.sessionHistory = new Map();
     this.ready = false;
     this.readyPromise = null;
     this.respawnChain = Promise.resolve();
@@ -237,7 +252,7 @@ class GrokSession {
     Object.assign(this.spawnOpts, newOpts);
     this.ready = false;
     await this.killChild();
-    this.history.length = 0;
+    this.clearAllHistory();
     this.broadcast({ kind: 'agent_respawn', spawnOpts: { ...this.spawnOpts } });
     this.sessionId = null;
     this.start();
@@ -258,7 +273,7 @@ class GrokSession {
     } catch {}
     try { dying.kill(); } catch {}
     await new Promise((resolve) => {
-      const t = setTimeout(resolve, 500);
+      const t = setTimeout(resolve, CHILD_KILL_GRACE_MS);
       dying.once('exit', () => { clearTimeout(t); resolve(); });
     });
   }
@@ -300,7 +315,7 @@ class GrokSession {
       Object.assign(this.spawnOpts, { restoreCode: true });
       this.ready = false;
       await this.killChild();
-      this.history.length = 0;
+      this.clearAllHistory();
       this.broadcast({ kind: 'agent_respawn', spawnOpts: { ...this.spawnOpts } });
       this.start();
       await this.readyPromise;
@@ -353,15 +368,16 @@ class GrokSession {
           this.broadcast({ kind: 'permission_auto_cancelled', reason: 'no_options', toolCall: msg.params?.toolCall, sessionId });
         }
       } else {
-        // Park the request — UI will answer via /permission. Auto-deny after 5 minutes
-        // so a forgotten request doesn't wedge the agent forever.
+        // Park the request. UI will answer via /permission. Auto-deny after
+        // the configured timeout so a forgotten request doesn't wedge the
+        // agent forever.
         const timeout = setTimeout(() => {
           if (this.pendingPermissions.has(msg.id)) {
             this.pendingPermissions.delete(msg.id);
             this.send({ jsonrpc: '2.0', id: msg.id, result: { outcome: { outcome: 'cancelled' } } });
             this.broadcast({ kind: 'permission_timeout', rpcId: msg.id });
           }
-        }, 5 * 60 * 1000);
+        }, PERMISSION_REQUEST_TIMEOUT_MS);
         this.pendingPermissions.set(msg.id, { request: msg.params, timeout });
         this.broadcast({ kind: 'permission_request', rpcId: msg.id, request: msg.params, sessionId });
       }
@@ -369,7 +385,7 @@ class GrokSession {
     }
     if (msg.method && msg.id !== undefined) {
       this.handleClientRequest(msg).catch((e) => {
-        this.sendError(msg.id, -32603, String(e?.message ?? e));
+        this.sendError(msg.id, -32603, errorMessage(e));
       });
       return;
     }
@@ -389,7 +405,7 @@ class GrokSession {
   send(obj) {
     if (!this.child || this.child.killed || !this.child.stdin.writable) return false;
     try { this.child.stdin.write(JSON.stringify(obj) + '\n'); return true; }
-    catch (e) { console.error('[grok-web] stdin write failed:', e.message); return false; }
+    catch (e) { console.error('[grok-web] stdin write failed:', errorMessage(e)); return false; }
   }
 
   sendError(id, code, message) {
@@ -409,7 +425,7 @@ class GrokSession {
           const content = await readFile(file, 'utf8');
           this.send({ jsonrpc: '2.0', id: msg.id, result: { content } });
         } catch (e) {
-          this.sendError(msg.id, -32602, String(e?.message ?? e));
+          this.sendError(msg.id, -32602, errorMessage(e));
         }
         return;
       }
@@ -420,7 +436,7 @@ class GrokSession {
           await writeFile(file, String(content), 'utf8');
           this.send({ jsonrpc: '2.0', id: msg.id, result: null });
         } catch (e) {
-          this.sendError(msg.id, -32602, String(e?.message ?? e));
+          this.sendError(msg.id, -32602, errorMessage(e));
         }
         return;
       }
@@ -481,7 +497,7 @@ class GrokSession {
         this.send({ jsonrpc: '2.0', id: msg.id, result: { action: 'cancel' } });
         this.broadcast({ kind: 'elicitation_resolved', rpcId: msg.id, action: 'timed out', sessionId });
       }
-    }, 5 * 60 * 1000);
+    }, ELICITATION_TIMEOUT_MS);
     this.pendingElicitations.set(msg.id, { request: msg.params, timeout });
     this.broadcast({ kind: 'elicitation_request', rpcId: msg.id, request: msg.params, sessionId });
   }
@@ -586,15 +602,23 @@ class GrokSession {
   subscribe(fn, sessionIdFilter = null) {
     const sub = { fn, sessionIdFilter };
     this.listeners.add(sub);
-    for (const e of this.history) {
-      if (!sessionIdFilter || !e.sessionId || e.sessionId === sessionIdFilter) fn(e);
+    for (const entry of this.replayEntries(sessionIdFilter)) {
+      fn(entry.event);
     }
     return () => this.listeners.delete(sub);
   }
 
   broadcast(event) {
-    this.history.push(event);
-    if (this.history.length > HISTORY_LIMIT) this.history.shift();
+    const entry = { seq: ++this.historySeq, event };
+    this.history.push(entry);
+    if (event.sessionId) {
+      const entries = this.sessionHistory.get(event.sessionId) ?? [];
+      entries.push(entry);
+      this.sessionHistory.set(event.sessionId, entries);
+    } else {
+      this.globalHistory.push(entry);
+    }
+    if (this.history.length > HISTORY_LIMIT) this.pruneHistoryEntry(this.history.shift());
     for (const sub of this.listeners) {
       if (sub.sessionIdFilter && event.sessionId && event.sessionId !== sub.sessionIdFilter) continue;
       try { sub.fn(event); } catch (e) { console.error('listener error', e); }
@@ -604,7 +628,33 @@ class GrokSession {
   clearSessionHistory(...sessionIds) {
     const ids = new Set(sessionIds.filter(Boolean));
     if (!ids.size) return;
-    this.history = this.history.filter((event) => !event.sessionId || !ids.has(event.sessionId));
+    this.history = this.history.filter((entry) => !entry.event.sessionId || !ids.has(entry.event.sessionId));
+    for (const id of ids) this.sessionHistory.delete(id);
+  }
+
+  clearAllHistory() {
+    this.history.length = 0;
+    this.globalHistory.length = 0;
+    this.sessionHistory.clear();
+  }
+
+  replayEntries(sessionIdFilter) {
+    if (!sessionIdFilter) return this.history;
+    const sessionEntries = this.sessionHistory.get(sessionIdFilter) ?? [];
+    return mergeHistoryEntries(this.globalHistory, sessionEntries);
+  }
+
+  pruneHistoryEntry(entry) {
+    if (!entry) return;
+    const sessionId = entry.event.sessionId;
+    const entries = sessionId ? this.sessionHistory.get(sessionId) : this.globalHistory;
+    if (!entries) return;
+    if (entries[0] === entry) entries.shift();
+    else {
+      const index = entries.indexOf(entry);
+      if (index >= 0) entries.splice(index, 1);
+    }
+    if (sessionId && entries.length === 0) this.sessionHistory.delete(sessionId);
   }
 
   rejectPending(error) {
@@ -617,10 +667,19 @@ class GrokSession {
 }
 
 function rpcErrorMessage(error) {
-  if (!error) return 'unknown RPC error';
+  return errorMessage(error || 'unknown RPC error');
+}
+
+function errorMessage(error) {
+  if (error == null) return 'unknown error';
   if (typeof error === 'string') return error;
   if (typeof error.message === 'string') return error.message;
-  return JSON.stringify(error);
+  try {
+    const json = JSON.stringify(error);
+    return json === undefined ? String(error) : json;
+  } catch {
+    return String(error);
+  }
 }
 
 function chooseAutoPermissionOption(options = []) {
@@ -650,9 +709,20 @@ function positiveIntegerOption(value, name) {
   return n;
 }
 
+function mergeHistoryEntries(a, b) {
+  const merged = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (j >= b.length || (i < a.length && a[i].seq <= b[j].seq)) merged.push(a[i++]);
+    else merged.push(b[j++]);
+  }
+  return merged;
+}
+
 // ─── CLI shell-out helper ───────────────────────────────────────────────────
 // Run a one-shot grok CLI command without blocking the bridge event loop.
-function runGrokCli(args, { timeout = 30000, cwd } = {}) {
+function runGrokCli(args, { timeout = CLI_TIMEOUT_DEFAULT_MS, cwd } = {}) {
   return new Promise((resolve) => {
     const child = spawn(GROK_BIN, [...GROK_BIN_ARGS, ...args], {
       cwd: cwd ?? grok?.cwd ?? CWD,
@@ -669,7 +739,7 @@ function runGrokCli(args, { timeout = 30000, cwd } = {}) {
     child.stderr.on('data', (c) => { stderr += c.toString(); });
     child.on('error', (e) => {
       clearTimeout(timer);
-      resolve({ code: -1, stdout, stderr: stderr || e.message, timedOut });
+      resolve({ code: -1, stdout, stderr: stderr || errorMessage(e), timedOut });
     });
     child.on('close', (code) => {
       clearTimeout(timer);
@@ -687,11 +757,19 @@ function runGrokCli(args, { timeout = 30000, cwd } = {}) {
 const SESSIONS_ROOT = process.env.GROK_WEB_SESSIONS_ROOT
   ? resolve(process.env.GROK_WEB_SESSIONS_ROOT)
   : join(homedir(), '.grok', 'sessions');
+const sessionsListCache = new Map();
 
 async function listSessions({ limit = 50 } = {}) {
+  const cacheKey = String(limit);
+  const cached = sessionsListCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cloneSessionList(cached.sessions);
+
   let cwdDirs;
   try { cwdDirs = await readdir(SESSIONS_ROOT, { withFileTypes: true }); }
-  catch { return []; }
+  catch {
+    sessionsListCache.set(cacheKey, { expiresAt: Date.now() + SESSIONS_CACHE_TTL_MS, sessions: [] });
+    return [];
+  }
   const candidates = [];
   for (const cwdDir of cwdDirs) {
     if (!cwdDir.isDirectory()) continue;
@@ -722,7 +800,16 @@ async function listSessions({ limit = 50 } = {}) {
       });
     } catch { /* malformed — skip */ }
   }
-  return results;
+  sessionsListCache.set(cacheKey, { expiresAt: Date.now() + SESSIONS_CACHE_TTL_MS, sessions: results });
+  return cloneSessionList(results);
+}
+
+function cloneSessionList(sessions) {
+  return sessions.map((session) => ({ ...session }));
+}
+
+function invalidateSessionsCache() {
+  sessionsListCache.clear();
 }
 
 // ─── HTTP server ────────────────────────────────────────────────────────────
@@ -756,7 +843,7 @@ function bootstrap(req, res, url) {
   if (bootstrapUsed || url.searchParams.get('token') !== BOOTSTRAP_TOKEN) return false;
   bootstrapUsed = true;
   redirectWithoutToken(res, url, {
-    'set-cookie': `${SESSION_COOKIE}=${encodeURIComponent(SESSION_TOKEN)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_COOKIE_MAX_AGE}`,
+    'set-cookie': `${SESSION_COOKIE}=${encodeURIComponent(SESSION_TOKEN)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_COOKIE_MAX_AGE_SECONDS}`,
   });
   return true;
 }
@@ -774,8 +861,36 @@ function redirectWithoutToken(res, url, headers = {}) {
 
 async function readBody(req) {
   const chunks = [];
-  for await (const c of req) chunks.push(c);
+  let total = 0;
+  for await (const c of req) {
+    total += c.length;
+    if (MAX_REQUEST_BODY_BYTES > 0 && total > MAX_REQUEST_BODY_BYTES) {
+      const error = new Error(`request body exceeds ${MAX_REQUEST_BODY_BYTES} byte limit`);
+      error.code = 'ERR_REQUEST_BODY_TOO_LARGE';
+      throw error;
+    }
+    chunks.push(c);
+  }
   return Buffer.concat(chunks).toString('utf8');
+}
+
+function sendJson(res, status, payload) {
+  res.writeHead(status, { 'content-type': 'application/json' });
+  res.end(JSON.stringify(payload));
+}
+
+function sendJsonError(res, status, error) {
+  sendJson(res, status, { error: errorMessage(error) });
+}
+
+function requireApiAuth(req, res) {
+  if (auth(req)) return true;
+  sendJsonError(res, 401, 'missing or bad session');
+  return false;
+}
+
+function isRequestBodyTooLarge(error) {
+  return error?.code === 'ERR_REQUEST_BODY_TOO_LARGE';
 }
 
 const server = createServer(async (req, res) => {
@@ -799,7 +914,7 @@ const server = createServer(async (req, res) => {
         'cache-control': 'no-store',
       });
       res.end(html);
-    } catch (e) { res.writeHead(500).end(String(e)); }
+    } catch (e) { res.writeHead(500).end(errorMessage(e)); }
     return;
   }
   if (req.method === 'GET' && url.pathname.startsWith('/static/')) {
@@ -843,109 +958,108 @@ const server = createServer(async (req, res) => {
 
   // Send a prompt — body.sessionId optional, falls back to default.
   if (req.method === 'POST' && url.pathname === '/prompt') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     try {
       const body = JSON.parse(await readBody(req));
       if (typeof body.text !== 'string' || !body.text.trim()) {
-        res.writeHead(400).end('empty prompt'); return;
+        sendJsonError(res, 400, 'empty prompt'); return;
       }
       const target = body.sessionId ?? grok.sessionId;
       grok.prompt(body.text, target).catch((e) =>
-        grok.broadcast({ kind: 'error', error: String(e?.message ?? e), sessionId: target })
+        grok.broadcast({ kind: 'error', error: errorMessage(e), sessionId: target })
       );
-      res.writeHead(202, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ ok: true }));
-    } catch (e) { res.writeHead(400).end(String(e)); }
+      sendJson(res, 202, { ok: true });
+    } catch (e) { sendJsonError(res, 400, e); }
     return;
   }
 
   // Cancel a turn — body.sessionId optional.
   if (req.method === 'POST' && url.pathname === '/cancel') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     let sessionId = null;
     if (req.headers['content-length'] && req.headers['content-length'] !== '0') {
-      try { sessionId = JSON.parse(await readBody(req)).sessionId; } catch {}
+      try { sessionId = JSON.parse(await readBody(req)).sessionId; }
+      catch (e) {
+        if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
+      }
     }
     grok.cancel(sessionId);
-    res.writeHead(202, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, sessionId: sessionId ?? grok.sessionId }));
+    sendJson(res, 202, { ok: true, sessionId: sessionId ?? grok.sessionId });
     return;
   }
 
   // Load an existing ACP session for a tab — does NOT change the global default.
   if (req.method === 'POST' && url.pathname === '/tab/load') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     try {
       const body = JSON.parse(await readBody(req));
-      if (!body.sessionId) { res.writeHead(400).end('sessionId required'); return; }
+      if (!body.sessionId) { sendJsonError(res, 400, 'sessionId required'); return; }
       const targetCwd = body.cwd ?? grok.cwd ?? CWD;
       await grok.call('session/load', { sessionId: body.sessionId, cwd: targetCwd, mcpServers: [] });
       grok.cwd = targetCwd;
       grok.rememberSessionCwd(body.sessionId, targetCwd);
       grok.broadcast({ kind: 'session_ready', sessionId: body.sessionId, cwd: targetCwd, loaded: true });
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ sessionId: body.sessionId, cwd: targetCwd }));
+      sendJson(res, 200, { sessionId: body.sessionId, cwd: targetCwd });
     } catch (e) {
-      res.writeHead(500, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: String(e?.message ?? e) }));
+      if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
+      sendJsonError(res, 500, e);
     }
     return;
   }
 
   // Create a new ACP session for a tab — does NOT change the global "default".
   if (req.method === 'POST' && url.pathname === '/tab/new') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     try {
       let cwd = null;
       if (req.headers['content-length'] && req.headers['content-length'] !== '0') {
-        try { cwd = JSON.parse(await readBody(req)).cwd; } catch {}
+        try { cwd = JSON.parse(await readBody(req)).cwd; }
+        catch (e) {
+          if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
+        }
       }
       const tab = await grok.createTabSession(cwd);
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(tab));
+      sendJson(res, 200, tab);
     } catch (e) {
-      res.writeHead(500, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: String(e?.message ?? e) }));
+      if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
+      sendJsonError(res, 500, e);
     }
     return;
   }
 
   // Respond to a pending permission request
   if (req.method === 'POST' && url.pathname === '/permission') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     try {
       const body = JSON.parse(await readBody(req));
       if (typeof body.rpcId !== 'number' || !body.optionId) {
-        res.writeHead(400).end('rpcId + optionId required'); return;
+        sendJsonError(res, 400, 'rpcId + optionId required'); return;
       }
       const ok = grok.respondToPermission(body.rpcId, body.optionId);
-      res.writeHead(ok ? 200 : 410, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ ok }));
-    } catch (e) { res.writeHead(400).end(String(e)); }
+      sendJson(res, ok ? 200 : 410, { ok });
+    } catch (e) { sendJsonError(res, 400, e); }
     return;
   }
 
   // Respond to a pending elicitation request
   if (req.method === 'POST' && url.pathname === '/elicitation') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     try {
       const body = JSON.parse(await readBody(req));
       if (typeof body.rpcId !== 'number' || !body.action) {
-        res.writeHead(400).end('rpcId + action required'); return;
+        sendJsonError(res, 400, 'rpcId + action required'); return;
       }
       const ok = grok.respondToElicitation(body.rpcId, body.action, body.content);
-      res.writeHead(ok ? 200 : 410, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ ok }));
-    } catch (e) { res.writeHead(400).end(String(e)); }
+      sendJson(res, ok ? 200 : 410, { ok });
+    } catch (e) { sendJsonError(res, 400, e); }
     return;
   }
 
   // Read/write bridge settings.
   if (url.pathname === '/settings') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     if (req.method === 'GET') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ autoApprove: grok.autoApprove, ...bridgeSettings }));
+      sendJson(res, 200, { autoApprove: grok.autoApprove, ...bridgeSettings });
       return;
     }
     if (req.method === 'POST') {
@@ -956,140 +1070,131 @@ const server = createServer(async (req, res) => {
           const displayName = body.displayName.trim();
           bridgeSettings.displayName = displayName || defaultUsername();
         }
-        res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ autoApprove: grok.autoApprove, ...bridgeSettings }));
-      } catch (e) { res.writeHead(400).end(String(e)); }
+        sendJson(res, 200, { autoApprove: grok.autoApprove, ...bridgeSettings });
+      } catch (e) { sendJsonError(res, 400, e); }
       return;
     }
   }
 
   // List recent sessions
   if (req.method === 'GET' && url.pathname === '/sessions') {
-    if (!auth(req)) {
-      res.writeHead(401, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'missing or bad session' }));
-      return;
-    }
+    if (!requireApiAuth(req, res)) return;
     try {
       const sessions = await listSessions();
       const current = url.searchParams.get('sessionId') || grok.sessionId;
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ sessions, current }));
+      sendJson(res, 200, { sessions, current });
     } catch (e) {
-      res.writeHead(500, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: String(e?.message ?? e) }));
+      if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
+      sendJsonError(res, 500, e);
     }
     return;
   }
 
   // Start a brand-new session (optionally in a different cwd)
   if (req.method === 'POST' && url.pathname === '/session/new') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     try {
       const body = req.headers['content-length'] && req.headers['content-length'] !== '0'
         ? JSON.parse(await readBody(req)) : {};
       await grok.newSession(body.cwd);
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ sessionId: grok.sessionId, cwd: grok.cwd }));
+      sendJson(res, 200, { sessionId: grok.sessionId, cwd: grok.cwd });
     } catch (e) {
-      res.writeHead(500, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: String(e?.message ?? e) }));
+      if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
+      sendJsonError(res, 500, e);
     }
     return;
   }
 
   // Resume a stored session
   if (req.method === 'POST' && url.pathname === '/session/load') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     try {
       const body = JSON.parse(await readBody(req));
-      if (!body.sessionId) { res.writeHead(400).end('sessionId required'); return; }
+      if (!body.sessionId) { sendJsonError(res, 400, 'sessionId required'); return; }
       await grok.loadSession(body.sessionId, body.cwd, { restoreCode: !!body.restoreCode });
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ sessionId: grok.sessionId, cwd: grok.cwd }));
+      sendJson(res, 200, { sessionId: grok.sessionId, cwd: grok.cwd });
     } catch (e) {
-      res.writeHead(500, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: String(e?.message ?? e) }));
+      if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
+      sendJsonError(res, 500, e);
     }
     return;
   }
 
   // Respawn the agent with new launch flags (effort, sandbox, allow rules, etc.)
   if (req.method === 'POST' && url.pathname === '/session/respawn') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     try {
       const body = req.headers['content-length'] && req.headers['content-length'] !== '0'
         ? JSON.parse(await readBody(req)) : {};
       await grok.respawn(body);
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ sessionId: grok.sessionId, spawnOpts: grok.spawnOpts }));
+      sendJson(res, 200, { sessionId: grok.sessionId, spawnOpts: grok.spawnOpts });
     } catch (e) {
-      res.writeHead(500, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: String(e?.message ?? e) }));
+      if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
+      sendJsonError(res, 500, e);
     }
     return;
   }
 
   // Read current spawn options plus a few diagnostic flags from the env.
   if (req.method === 'GET' && url.pathname === '/spawn-opts') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({
+    if (!requireApiAuth(req, res)) return;
+    sendJson(res, 200, {
       ...grok.spawnOpts,
       _capabilities: agentCapabilities(),
       _env: {
         XAI_API_KEY_set: !!process.env.XAI_API_KEY,
       },
-    }));
+    });
     return;
   }
 
   if (req.method === 'GET' && url.pathname === '/identity') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     const username = defaultUsername();
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({
+    sendJson(res, 200, {
       username,
       displayName: bridgeSettings.displayName || username,
-    }));
+    });
     return;
   }
 
   // CLI shell-out endpoints — wrap one-shot grok subcommands.
   if (req.method === 'GET' && url.pathname === '/cli/inspect') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
-    const r = await runGrokCli(['inspect', '--json'], { timeout: 10000 });
+    if (!requireApiAuth(req, res)) return;
+    const r = await runGrokCli(['inspect', '--json'], { timeout: CLI_TIMEOUT_SHORT_MS });
     res.writeHead(r.code === 0 ? 200 : 500, { 'content-type': 'application/json' });
     res.end(r.stdout || JSON.stringify({ error: r.stderr || `exit ${r.code}` }));
     return;
   }
 
   if (req.method === 'GET' && url.pathname === '/cli/update-check') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
-    const r = await runGrokCli(['update', '--check', '--json'], { timeout: 15000 });
+    if (!requireApiAuth(req, res)) return;
+    const r = await runGrokCli(['update', '--check', '--json'], { timeout: CLI_TIMEOUT_UPDATE_CHECK_MS });
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(r.stdout || JSON.stringify({ error: r.stderr || `exit ${r.code}` }));
     return;
   }
 
   if (req.method === 'GET' && url.pathname === '/cli/models') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
-    const r = await runGrokCli(['models'], { timeout: 10000 });
+    if (!requireApiAuth(req, res)) return;
+    const r = await runGrokCli(['models'], { timeout: CLI_TIMEOUT_SHORT_MS });
     res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
     res.end(r.stdout || r.stderr);
     return;
   }
 
   if (req.method === 'POST' && url.pathname === '/cli/share') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     let sid = grok.sessionId;
     try {
       const body = req.headers['content-length'] && req.headers['content-length'] !== '0'
         ? JSON.parse(await readBody(req)) : {};
       if (body.sessionId) sid = body.sessionId;
-    } catch {}
-    if (!sid) { res.writeHead(400).end('no active session'); return; }
-    const r = await runGrokCli(['share', sid], { timeout: 30000 });
+    } catch (e) {
+      if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
+    }
+    if (!sid) { sendJsonError(res, 400, 'no active session'); return; }
+    const r = await runGrokCli(['share', sid], { timeout: CLI_TIMEOUT_DEFAULT_MS });
     const urlMatch = r.stdout.match(/https?:\/\/\S+/);
     res.writeHead(r.code === 0 ? 200 : 500, { 'content-type': 'application/json' });
     res.end(JSON.stringify({
@@ -1100,31 +1205,33 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/cli/trace') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     let sid = grok.sessionId;
     try {
       const body = req.headers['content-length'] && req.headers['content-length'] !== '0'
         ? JSON.parse(await readBody(req)) : {};
       if (body.sessionId) sid = body.sessionId;
-    } catch {}
-    if (!sid) { res.writeHead(400).end('sessionId required'); return; }
-    const r = await runGrokCli(['trace', sid, '--local', '--json'], { timeout: 60000 });
+    } catch (e) {
+      if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
+    }
+    if (!sid) { sendJsonError(res, 400, 'sessionId required'); return; }
+    const r = await runGrokCli(['trace', sid, '--local', '--json'], { timeout: CLI_TIMEOUT_TRACE_MS });
     res.writeHead(r.code === 0 ? 200 : 500, { 'content-type': 'application/json' });
     res.end(r.stdout || JSON.stringify({ error: r.stderr || `exit ${r.code}` }));
     return;
   }
 
   if (req.method === 'GET' && url.pathname === '/cli/mcp') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
-    const r = await runGrokCli(['mcp', 'list'], { timeout: 10000 });
+    if (!requireApiAuth(req, res)) return;
+    const r = await runGrokCli(['mcp', 'list'], { timeout: CLI_TIMEOUT_SHORT_MS });
     res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
     res.end(r.stdout || r.stderr);
     return;
   }
 
   if (req.method === 'GET' && url.pathname === '/cli/worktree') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
-    const r = await runGrokCli(['worktree', 'list'], { timeout: 10000 });
+    if (!requireApiAuth(req, res)) return;
+    const r = await runGrokCli(['worktree', 'list'], { timeout: CLI_TIMEOUT_SHORT_MS });
     res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
     res.end(r.stdout || r.stderr);
     return;
@@ -1132,8 +1239,8 @@ const server = createServer(async (req, res) => {
 
   // Login (device-auth flow) — surfaces the device URL/code to the UI.
   if (req.method === 'POST' && url.pathname === '/cli/login') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
-    const r = await runGrokCli(['login', '--device-auth'], { timeout: 30000 });
+    if (!requireApiAuth(req, res)) return;
+    const r = await runGrokCli(['login', '--device-auth'], { timeout: CLI_TIMEOUT_DEFAULT_MS });
     res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
     res.end(r.stdout || r.stderr);
     return;
@@ -1142,7 +1249,7 @@ const server = createServer(async (req, res) => {
   // One-shot headless prompt — for --check and --best-of-n which the
   // interactive `agent stdio` connection doesn't support.
   if (req.method === 'POST' && url.pathname === '/cli/oneshot') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     try {
       const body = JSON.parse(await readBody(req));
       const args = [];
@@ -1153,19 +1260,18 @@ const server = createServer(async (req, res) => {
       if (body.check) args.push('--check');
       if (maxTurns) args.push('--max-turns', String(maxTurns));
       args.push('--always-approve', '--output-format', 'json', '-p', body.text ?? '');
-      const r = await runGrokCli(args, { timeout: 300000, cwd: body.cwd });
+      const r = await runGrokCli(args, { timeout: CLI_TIMEOUT_ONESHOT_MS, cwd: body.cwd });
       res.writeHead(r.code === 0 ? 200 : 500, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ ok: r.code === 0, stdout: r.stdout, stderr: r.stderr }));
     } catch (e) {
-      res.writeHead(400, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: String(e?.message ?? e) }));
+      sendJsonError(res, 400, e);
     }
     return;
   }
 
   // Import session(s) — POST a list of session IDs OR a .jsonl file path.
   if (req.method === 'POST' && url.pathname === '/cli/import') {
-    if (!auth(req)) { res.writeHead(401).end(); return; }
+    if (!requireApiAuth(req, res)) return;
     try {
       const body = JSON.parse(await readBody(req));
       const args = ['import', '--json'];
@@ -1174,10 +1280,10 @@ const server = createServer(async (req, res) => {
       if (Array.isArray(body.targets) && body.targets.length) {
         args.push('--', ...body.targets);
       }
-      const r = await runGrokCli(args, { timeout: 120000 });
+      const r = await runGrokCli(args, { timeout: CLI_TIMEOUT_IMPORT_MS });
       res.writeHead(r.code === 0 ? 200 : 500, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ ok: r.code === 0, output: r.stdout, error: r.stderr }));
-    } catch (e) { res.writeHead(400).end(String(e)); }
+    } catch (e) { sendJsonError(res, 400, e); }
     return;
   }
 
@@ -1198,11 +1304,14 @@ let sessionsChangeDebounce = null;
 try {
   watchFs(SESSIONS_ROOT, { recursive: true }, () => {
     clearTimeout(sessionsChangeDebounce);
-    sessionsChangeDebounce = setTimeout(() => grok.broadcast({ kind: 'sessions_changed' }), 1500);
+    sessionsChangeDebounce = setTimeout(() => {
+      invalidateSessionsCache();
+      grok.broadcast({ kind: 'sessions_changed' });
+    }, 1500);
   });
 } catch (e) {
   // Recursive watch may not be supported on some platforms; non-fatal.
-  console.error('[grok-web] sessions watcher unavailable:', e.message);
+  console.error('[grok-web] sessions watcher unavailable:', errorMessage(e));
 }
 
 (async () => {

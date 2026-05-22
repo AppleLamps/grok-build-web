@@ -50,11 +50,12 @@ export async function seedSessions(root) {
   }), 'utf8');
 }
 
-export async function startFakeServer({ scenario = 'normal', sessionsRoot = null, cwd = null } = {}) {
+export async function startFakeServer({ scenario = 'normal', sessionsRoot = null, cwd = null, env = {} } = {}) {
   const child = spawn(process.execPath, ['server.mjs'], {
     cwd: repoRoot,
     env: {
       ...process.env,
+      ...env,
       GROK_BIN: process.execPath,
       GROK_BIN_ARGS: JSON.stringify([fakeGrokPath]),
       GROK_WEB_NO_OPEN: '1',

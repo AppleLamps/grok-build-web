@@ -46,6 +46,7 @@ installDomStubs({
 
 const settings = await importPublic('public/js/settings.js');
 const modelpicker = await importPublic('public/js/modelpicker.js');
+const modelIds = await importPublic('public/js/model-ids.js');
 
 test('settings display-name-only changes avoid respawn and skip unsupported permissionMode', async () => {
   requests.length = 0;
@@ -79,8 +80,12 @@ test('settings launch changes respawn without unsupported permissionMode', async
 test('model picker parses CLI IDs and respawns with a custom model', async () => {
   requests.length = 0;
   assert.deepEqual(modelpicker.__testParseModelIds('grok-build\nxai/grok-next\nother'), ['grok-build', 'grok-next']);
+  assert.deepEqual(modelIds.parseModelIds('grok-build\ngrok-build\nxai/grok-next\nother'), ['grok-build', 'grok-next']);
+  assert.ok(modelIds.KNOWN_MODEL_IDS.includes('grok-build'));
 
   const { wrap } = await modelpicker.__testOpenModelPicker();
+  const optionValues = wrap.querySelectorAll('option').map(option => option.value);
+  assert.ok(optionValues.includes('grok-4.3'));
   wrap.querySelector('[name="customModel"]').value = 'grok-custom-private';
   wrap.dispatchEvent({ type: 'submit', preventDefault() {} });
   await delay(0);

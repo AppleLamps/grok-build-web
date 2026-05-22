@@ -5,9 +5,12 @@
 
 import { state, dom } from './state.js';
 import { renderMarkdown, escapeHTML } from './markdown.js';
-// Imported lazily to avoid an import cycle (tools.js imports from chat.js).
-let _resetTransientToolState = () => {};
-import('./tools.js').then((m) => { _resetTransientToolState = m.resetTransientToolState ?? _resetTransientToolState; }).catch(() => {});
+import { resetTransientToolState } from './tool-state.js';
+
+let assistantRenderPending = false;
+let assistantRenderHandle = null;
+let assistantRenderCancel = null;
+let assistantRenderGeneration = 0;
 
 export function autoScroll() {
   const nearBottom = dom.log.scrollHeight - dom.log.scrollTop - dom.log.clientHeight < 120;
@@ -15,6 +18,7 @@ export function autoScroll() {
 }
 
 export function newTurn() {
+  invalidateAssistantRender();
   // First user prompt clears the welcome screen.
   if (dom.welcome && !dom.welcome.hidden) dom.welcome.hidden = true;
   state.turnEl = document.createElement('div');
@@ -27,11 +31,12 @@ export function newTurn() {
   state.planCards.clear();
   // Reset subagent depth between turns so a failed use_tool can't leak
   // indentation forever.
-  _resetTransientToolState();
+  resetTransientToolState();
   return state.turnEl;
 }
 
 export function clearLog() {
+  invalidateAssistantRender();
   dom.logInner.innerHTML = '';
   // Restore the welcome screen so users see starter prompts in a fresh session.
   if (dom.welcome) {
@@ -45,7 +50,7 @@ export function clearLog() {
   state.toolEls.clear();
   state.planCards.clear();
   state.permCards.clear();
-  _resetTransientToolState();
+  resetTransientToolState();
 }
 
 export function addUserItem(text) {
@@ -94,13 +99,58 @@ export function appendMessage(text) {
     state.turnEl.appendChild(state.assistantEl);
   }
   state.assistantBuf += text;
+  scheduleAssistantRender();
+}
+
+function renderAssistantNow() {
+  if (!state.assistantEl) return;
   state.assistantEl.innerHTML = renderMarkdown(state.assistantBuf);
   state.assistantEl.classList.add('streaming');
   autoScroll();
 }
 
 export function finishStreaming() {
-  if (state.assistantEl) state.assistantEl.classList.remove('streaming');
+  if (!state.assistantEl) return;
+  cancelPendingAssistantRender();
+  renderAssistantNow();
+  state.assistantEl.classList.remove('streaming');
+}
+
+function scheduleAssistantRender() {
+  if (assistantRenderPending) return;
+  assistantRenderPending = true;
+  const generation = assistantRenderGeneration;
+  const run = () => {
+    assistantRenderHandle = null;
+    assistantRenderCancel = null;
+    if (!assistantRenderPending || generation !== assistantRenderGeneration) return;
+    assistantRenderPending = false;
+    renderAssistantNow();
+  };
+  const raf = globalThis.requestAnimationFrame ?? globalThis.window?.requestAnimationFrame;
+  const cancelRaf = globalThis.cancelAnimationFrame ?? globalThis.window?.cancelAnimationFrame;
+  if (typeof raf === 'function') {
+    assistantRenderCancel = typeof cancelRaf === 'function' ? cancelRaf : null;
+    assistantRenderHandle = raf(run);
+  } else {
+    assistantRenderCancel = clearTimeout;
+    assistantRenderHandle = setTimeout(run, 16);
+  }
+}
+
+function cancelPendingAssistantRender() {
+  if (!assistantRenderPending) return;
+  assistantRenderPending = false;
+  if (assistantRenderHandle != null && assistantRenderCancel) {
+    try { assistantRenderCancel(assistantRenderHandle); } catch {}
+  }
+  assistantRenderHandle = null;
+  assistantRenderCancel = null;
+}
+
+function invalidateAssistantRender() {
+  assistantRenderGeneration++;
+  cancelPendingAssistantRender();
 }
 
 // Replay marker (loaded sessions emit user_message_chunk to delimit turns).

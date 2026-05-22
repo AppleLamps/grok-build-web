@@ -12,13 +12,24 @@ const wire = (id, fn) => {
 };
 
 async function showLogin() {
-  const { body } = modal('Sign in to Grok', '<div class="panel-loading">Starting device-auth flow…</div>');
+  const loading = document.createElement('div');
+  loading.className = 'panel-loading';
+  loading.textContent = 'Starting device-auth flow…';
+  const { body } = modal('Sign in to Grok', loading);
   try {
     const r = await fetch('/cli/login', { method: 'POST' });
     const text = await r.text();
-    body.innerHTML = `<pre class="panel-content">${text.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</pre>`;
+    body.innerHTML = '';
+    const pre = document.createElement('pre');
+    pre.className = 'panel-content';
+    pre.textContent = text;
+    body.appendChild(pre);
   } catch (e) {
-    body.innerHTML = `<div class="panel-error">${e.message}</div>`;
+    body.innerHTML = '';
+    const error = document.createElement('div');
+    error.className = 'panel-error';
+    error.textContent = e.message;
+    body.appendChild(error);
   }
 }
 

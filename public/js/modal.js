@@ -14,7 +14,7 @@ export function modal(titleText, body, opts = {}) {
   `;
   m.querySelector('strong').textContent = titleText;
   const bodyEl = m.querySelector('.modal-body');
-  if (typeof body === 'string') bodyEl.innerHTML = body;
+  if (typeof body === 'string') bodyEl.textContent = body;
   else if (body instanceof Node) bodyEl.appendChild(body);
   back.appendChild(m);
   document.body.appendChild(back);

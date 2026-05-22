@@ -87,7 +87,12 @@ export async function bootstrap(server) {
   const first = await fetch(server.launchUrl, { redirect: 'manual' });
   assert.equal(first.status, 302);
   const cookie = first.headers.get('set-cookie')?.split(';')[0];
+  const setCookie = first.headers.get('set-cookie') ?? '';
   assert.ok(cookie, 'bootstrap cookie is set');
+  assert.match(setCookie, /HttpOnly/i);
+  assert.match(setCookie, /SameSite=Lax/i);
+  assert.match(setCookie, /Path=\//i);
+  assert.match(setCookie, /Max-Age=\d+/i);
   assert.equal(first.headers.get('location'), '/');
   return { base: new URL(server.launchUrl), cookie };
 }

@@ -9,10 +9,10 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises';
 import { watch as watchFs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve, extname, sep } from 'node:path';
+import { basename, dirname, join, resolve, extname, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { homedir, userInfo } from 'node:os';
 
@@ -27,6 +27,7 @@ const CWD = process.env.GROK_CWD ?? process.cwd();
 const BOOTSTRAP_TOKEN = randomBytes(16).toString('hex');
 const SESSION_COOKIE = 'grok_web';
 const SESSION_TOKEN = randomBytes(32).toString('hex');
+const SESSION_COOKIE_MAX_AGE = 12 * 60 * 60;
 const HISTORY_LIMIT = 10000;
 const DEFAULT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_RPC_TIMEOUT_MS ?? 2 * 60 * 1000);
 const PROMPT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_PROMPT_TIMEOUT_MS ?? 30 * 60 * 1000);
@@ -344,8 +345,13 @@ class GrokSession {
       const sessionId = msg.params?.sessionId;
       if (this.autoApprove) {
         const optionId = chooseAutoPermissionOption(msg.params?.options);
-        this.send({ jsonrpc: '2.0', id: msg.id, result: { outcome: { outcome: 'selected', optionId } } });
-        this.broadcast({ kind: 'permission_auto_allowed', toolCall: msg.params?.toolCall, optionId, sessionId });
+        if (optionId) {
+          this.send({ jsonrpc: '2.0', id: msg.id, result: { outcome: { outcome: 'selected', optionId } } });
+          this.broadcast({ kind: 'permission_auto_allowed', toolCall: msg.params?.toolCall, optionId, sessionId });
+        } else {
+          this.send({ jsonrpc: '2.0', id: msg.id, result: { outcome: { outcome: 'cancelled' } } });
+          this.broadcast({ kind: 'permission_auto_cancelled', reason: 'no_options', toolCall: msg.params?.toolCall, sessionId });
+        }
       } else {
         // Park the request — UI will answer via /permission. Auto-deny after 5 minutes
         // so a forgotten request doesn't wedge the agent forever.
@@ -399,7 +405,7 @@ class GrokSession {
         return;
       case 'fs/read_text_file': {
         try {
-          const file = this.resolveClientPath(msg.params);
+          const file = await this.resolveClientPath(msg.params);
           const content = await readFile(file, 'utf8');
           this.send({ jsonrpc: '2.0', id: msg.id, result: { content } });
         } catch (e) {
@@ -409,7 +415,7 @@ class GrokSession {
       }
       case 'fs/write_text_file': {
         try {
-          const file = this.resolveClientPath(msg.params);
+          const file = await this.resolveClientPath(msg.params, { forWrite: true });
           const content = msg.params?.content ?? msg.params?.text ?? '';
           await writeFile(file, String(content), 'utf8');
           this.send({ jsonrpc: '2.0', id: msg.id, result: null });
@@ -428,18 +434,34 @@ class GrokSession {
     }
   }
 
-  resolveClientPath(params = {}) {
+  async resolveClientPath(params = {}, { forWrite = false } = {}) {
     const raw = params.path ?? params.filePath ?? params.file_path;
     if (typeof raw !== 'string' || !raw) throw new Error('path required');
     const sessionId = params.sessionId;
     const root = resolve((sessionId && this.sessionCwds.get(sessionId)) || this.cwd || CWD);
-    const file = resolve(root, raw);
+    const requested = resolve(root, raw);
     const rootCmp = process.platform === 'win32' ? root.toLowerCase() : root;
-    const fileCmp = process.platform === 'win32' ? file.toLowerCase() : file;
-    if (fileCmp !== rootCmp && !fileCmp.startsWith(rootCmp + sep)) {
+    const requestedCmp = process.platform === 'win32' ? requested.toLowerCase() : requested;
+    if (requestedCmp !== rootCmp && !requestedCmp.startsWith(rootCmp + sep)) {
       throw new Error('path outside session cwd');
     }
-    return file;
+    const rootReal = await realpath(root);
+    if (!forWrite) {
+      const fileReal = await realpath(requested);
+      if (!isWithinPath(rootReal, fileReal)) throw new Error('path outside session cwd');
+      return fileReal;
+    }
+    try {
+      const fileReal = await realpath(requested);
+      if (!isWithinPath(rootReal, fileReal)) throw new Error('path outside session cwd');
+      return fileReal;
+    } catch (e) {
+      if (e?.message === 'path outside session cwd') throw e;
+      if (e?.code !== 'ENOENT') throw e;
+    }
+    const parentReal = await realpath(dirname(requested));
+    if (!isWithinPath(rootReal, parentReal)) throw new Error('path outside session cwd');
+    return join(parentReal, basename(requested));
   }
 
   rememberSessionCwd(sessionId, cwd) {
@@ -586,7 +608,7 @@ class GrokSession {
   }
 
   rejectPending(error) {
-    for (const [id, resolver] of this.pending) {
+    for (const [id, resolver] of [...this.pending]) {
       if (resolver.timeout) clearTimeout(resolver.timeout);
       resolver.reject(error);
       this.pending.delete(id);
@@ -607,7 +629,7 @@ function chooseAutoPermissionOption(options = []) {
   const positive = opts.find((opt) => /\b(allow|accept|approve|yes)\b/.test(label(opt)));
   if (positive?.optionId) return positive.optionId;
   const nonDeny = opts.find((opt) => !/\b(deny|reject|decline|cancel)\b/.test(label(opt)));
-  return nonDeny?.optionId ?? opts[0]?.optionId ?? 'allow';
+  return nonDeny?.optionId ?? opts.find((opt) => opt?.optionId)?.optionId ?? null;
 }
 
 function isWithinPath(root, file) {
@@ -616,6 +638,16 @@ function isWithinPath(root, file) {
   const rootCmp = process.platform === 'win32' ? rootPath.toLowerCase() : rootPath;
   const fileCmp = process.platform === 'win32' ? filePath.toLowerCase() : filePath;
   return fileCmp === rootCmp || fileCmp.startsWith(rootCmp + sep);
+}
+
+function positiveIntegerOption(value, name) {
+  if (value == null || value === '') return null;
+  const ok = (typeof value === 'number' && Number.isInteger(value))
+    || (typeof value === 'string' && /^\d+$/.test(value.trim()));
+  if (!ok) throw new Error(`${name} must be a positive integer`);
+  const n = Number(value);
+  if (!Number.isSafeInteger(n) || n < 1) throw new Error(`${name} must be a positive integer`);
+  return n;
 }
 
 // ─── CLI shell-out helper ───────────────────────────────────────────────────
@@ -724,7 +756,7 @@ function bootstrap(req, res, url) {
   if (bootstrapUsed || url.searchParams.get('token') !== BOOTSTRAP_TOKEN) return false;
   bootstrapUsed = true;
   redirectWithoutToken(res, url, {
-    'set-cookie': `${SESSION_COOKIE}=${encodeURIComponent(SESSION_TOKEN)}; HttpOnly; SameSite=Lax; Path=/`,
+    'set-cookie': `${SESSION_COOKIE}=${encodeURIComponent(SESSION_TOKEN)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_COOKIE_MAX_AGE}`,
   });
   return true;
 }
@@ -773,8 +805,14 @@ const server = createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname.startsWith('/static/')) {
     // Static assets (CSS/JS) are public — they contain no secrets. The actual
     // API endpoints stay token-gated below.
-    const safe = url.pathname.replace(/^\/static\//, '').replace(/\.\.+/g, '');
-    const file = resolve(PUBLIC_DIR, safe);
+    let relPath;
+    try {
+      relPath = decodeURIComponent(url.pathname.slice('/static/'.length));
+    } catch {
+      res.writeHead(400).end('bad static path');
+      return;
+    }
+    const file = resolve(PUBLIC_DIR, relPath);
     if (!isWithinPath(PUBLIC_DIR, file)) { res.writeHead(403).end(); return; }
     try {
       const data = await readFile(file);
@@ -1108,10 +1146,12 @@ const server = createServer(async (req, res) => {
     try {
       const body = JSON.parse(await readBody(req));
       const args = [];
-      if (body.effort) args.push('--effort', body.effort);
-      if (body.bestOfN) args.push('--best-of-n', String(body.bestOfN));
+      const bestOfN = positiveIntegerOption(body.bestOfN, 'bestOfN');
+      const maxTurns = positiveIntegerOption(body.maxTurns, 'maxTurns');
+      if (body.effort) args.push('--effort', String(body.effort));
+      if (bestOfN) args.push('--best-of-n', String(bestOfN));
       if (body.check) args.push('--check');
-      if (body.maxTurns) args.push('--max-turns', String(body.maxTurns));
+      if (maxTurns) args.push('--max-turns', String(maxTurns));
       args.push('--always-approve', '--output-format', 'json', '-p', body.text ?? '');
       const r = await runGrokCli(args, { timeout: 300000, cwd: body.cwd });
       res.writeHead(r.code === 0 ? 200 : 500, { 'content-type': 'application/json' });
@@ -1170,7 +1210,7 @@ try {
   server.listen(PORT, '127.0.0.1', async () => {
     const port = server.address().port;
     const url = `http://127.0.0.1:${port}/?token=${BOOTSTRAP_TOKEN}`;
-    console.log(`\n  grok-web running\n  ${url}\n  cwd: ${CWD}\n`);
+    console.log(`\n  grok-web running\n  ${url}\n  one-time local URL: do not share it\n  cwd: ${CWD}\n`);
     if (!process.env.GROK_WEB_NO_OPEN) await openBrowser(url);
   });
 })();

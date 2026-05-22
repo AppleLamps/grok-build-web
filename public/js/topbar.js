@@ -1,7 +1,7 @@
 // Topbar wiring: share button + update-available banner.
 
 import { cliShare, cliUpdateCheck } from './api.js';
-import { toast } from './toast.js';
+import { toast, toastLink } from './toast.js';
 import { escapeAttr, escapeHTML, safeHttpUrl } from './markdown.js';
 import { modal } from './modal.js';
 import { state } from './state.js';
@@ -99,9 +99,8 @@ export function initTopbar() {
           const safeUrl = safeHttpUrl(r.url);
           if (safeUrl) {
             const copied = await copyShareUrl(safeUrl);
-            const e = escapeHTML(safeUrl);
             if (copied) {
-              toast(`Share link copied: <a href="${e}" target="_blank" rel="noopener">${e}</a>`, { html: true, duration: 8000 });
+              toastLink('Share link copied: ', safeUrl, { duration: 8000 });
             } else {
               showShareFallback(safeUrl);
             }

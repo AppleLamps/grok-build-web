@@ -10,6 +10,14 @@ import { newTurn, autoScroll, addError, setStatus } from './chat.js';
 import { renderMarkdown, escapeHTML, escapeAttr, safeHttpUrl, safeImageSrc, safeVideoSrc } from './markdown.js';
 import { postPrompt } from './api.js';
 import { setBusy } from './composer.js';
+import {
+  enterSubagent,
+  exitSubagent,
+  getBackgroundTask,
+  getSubagentDepth,
+  resetTransientToolState,
+  setBackgroundTask,
+} from './tool-state.js';
 
 // ─── ANSI escape parser (minimal — colors + bold only) ───────────────────
 const ANSI_COLORS = {
@@ -178,23 +186,7 @@ function currentToolGroup() {
   return g;
 }
 
-// Track which tool calls are subagent spawns so we can indent their children.
-// The `use_tool` tool is grok's subagent dispatcher; any tools it spawns share
-// the same "parent" run. We approximate by marking tools that arrive while a
-// `use_tool` is in_progress as children.
-let subagentDepth = 0;
-
-// Background task registry: id -> {command, status}. Surfaced in the sidebar.
-const bgTasks = new Map();
-
-// Reset all transient per-turn / per-session state. Called by chat.clearLog()
-// so a respawn or session load doesn't leak stale subagent indentation,
-// dangling background tasks, etc.
-export function resetTransientToolState() {
-  subagentDepth = 0;
-  bgTasks.clear();
-  renderBgPanel();
-}
+export { resetTransientToolState };
 
 function getToolEl(id) {
   let el = state.toolEls.get(id);
@@ -202,7 +194,7 @@ function getToolEl(id) {
   const group = currentToolGroup();
   el = document.createElement('div');
   el.className = 'tool';
-  if (subagentDepth > 0) el.classList.add('subagent-child');
+  if (getSubagentDepth() > 0) el.classList.add('subagent-child');
   el.innerHTML = `
     <span class="summary">
       <span class="status-icon"></span>
@@ -719,17 +711,6 @@ function renderTodoSidebar(todos) {
   }).join('');
 }
 
-function renderBgPanel() {
-  if (!dom.bgPanel || !dom.bgList) return;
-  dom.bgPanel.hidden = bgTasks.size === 0;
-  dom.bgList.innerHTML = Array.from(bgTasks.values()).map(t => {
-    const status = t.status ?? 'running';
-    return `<div class="todo-item ${status}" title="${status}">${
-      (t.command ?? t.id ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])).slice(0, 60)
-    }</div>`;
-  }).join('');
-}
-
 function normalizedToolStatus(update) {
   const raw = String(update.status ?? update.rawOutput?.status ?? update.rawOutput?.state ?? '').toLowerCase();
   if (/cancel/.test(raw)) return 'cancelled';
@@ -761,9 +742,8 @@ function updateBackgroundTask(update, titleLc) {
   const status = /kill[_ -]?(command|subagent)/.test(titleLc)
     ? 'killed'
     : normalizedToolStatus(update) || 'running';
-  const prior = bgTasks.get(id) ?? { id, command, status: 'running' };
-  bgTasks.set(id, { ...prior, command: prior.command ?? command, status });
-  renderBgPanel();
+  const prior = getBackgroundTask(id) ?? { id, command, status: 'running' };
+  setBackgroundTask(id, { ...prior, command: prior.command ?? command, status });
 }
 
 export function paintTool(update) {
@@ -771,10 +751,10 @@ export function paintTool(update) {
   // any subsequent tool calls until it completes are children.
   const titleLc = (update.title ?? '').toLowerCase();
   if (update.sessionUpdate === 'tool_call' && /use_tool/.test(titleLc)) {
-    subagentDepth++;
+    enterSubagent();
   }
   if (update.sessionUpdate === 'tool_call_update' && ['completed', 'failed', 'cancelled', 'killed'].includes(normalizedToolStatus(update)) && /use_tool/.test(titleLc)) {
-    subagentDepth = Math.max(0, subagentDepth - 1);
+    exitSubagent();
   }
 
   updateBackgroundTask(update, titleLc);

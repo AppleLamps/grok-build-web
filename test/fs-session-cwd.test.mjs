@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   bootstrap,
@@ -54,6 +54,49 @@ test('client fs requests resolve against the cwd for their sessionId', async () 
       assert.match(updateB.update.rawOutput.outsideError, /path outside session cwd/);
       assert.equal(await readFile(join(rootA, 'written.txt'), 'utf8'), 'written from fake grok');
       assert.equal(await readFile(join(rootB, 'written.txt'), 'utf8'), 'written from fake grok');
+
+      abort.abort();
+      await stream;
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+test('client fs requests reject symlink or junction escapes from session cwd', async (t) => {
+  await withTempDir('grok-web-fs-link-', async (temp) => {
+    const root = join(temp, 'root');
+    const outside = join(temp, 'outside');
+    const sessionsRoot = join(temp, 'sessions');
+    await mkdir(root, { recursive: true });
+    await mkdir(outside, { recursive: true });
+    await writeFile(join(outside, 'secret.txt'), 'outside secret', 'utf8');
+    try {
+      await symlink(outside, join(root, 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
+    } catch (e) {
+      t.skip(`symlink/junction unavailable: ${e.message}`);
+      return;
+    }
+
+    const server = await startFakeServer({ scenario: 'fs-symlink', sessionsRoot });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const events = [];
+      const abort = new AbortController();
+      const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
+      await waitForEvent(events, e => e.kind === 'session_ready', 'initial session_ready');
+
+      const tab = await postJson(base, cookie, '/tab/new', { cwd: root });
+      await postJson(base, cookie, '/prompt', { sessionId: tab.sessionId, text: 'fs symlink probe' }, 202);
+      const update = await waitForEvent(events, e =>
+        e.kind === 'update' &&
+        e.sessionId === tab.sessionId &&
+        e.update?.title === 'fs_symlink_probe',
+      'fs symlink update');
+
+      assert.match(update.update.rawOutput.readError, /path outside session cwd/);
+      assert.match(update.update.rawOutput.writeError, /path outside session cwd/);
+      await assert.rejects(() => readFile(join(outside, 'written.txt'), 'utf8'));
 
       abort.abort();
       await stream;

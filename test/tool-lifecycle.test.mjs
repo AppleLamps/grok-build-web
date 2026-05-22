@@ -5,6 +5,7 @@ import { importPublic, installDomStubs } from './helpers.mjs';
 installDomStubs();
 const { state, dom } = await importPublic('public/js/state.js');
 const { paintTool, resetTransientToolState } = await importPublic('public/js/tools.js');
+const { clearLog } = await importPublic('public/js/chat.js');
 
 test('tool groups expand, collapse, and keep their header', async () => {
   resetDomState();
@@ -83,6 +84,52 @@ test('background and subagent statuses include cancelled and failed states', asy
   const subTool = [...dom.logInner.children[0].querySelector('.tool-group-items').children]
     .find(el => el.querySelector('.target')?.textContent === 'subagent');
   assert.equal(subTool.classList.contains('failed'), true);
+});
+
+test('clearLog resets transient tool state synchronously', async () => {
+  resetDomState();
+
+  paintTool({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'bg-reset',
+    title: 'run_terminal_command',
+    kind: 'execute',
+    status: 'in_progress',
+    rawInput: { command: 'sleep 60', is_background: true },
+  });
+  paintTool({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'bg-reset',
+    title: 'run_terminal_command',
+    kind: 'execute',
+    status: 'in_progress',
+    rawInput: { command: 'sleep 60', is_background: true },
+    rawOutput: { status: 'running' },
+  });
+  assert.equal(dom.bgPanel.hidden, false);
+
+  paintTool({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'sub-reset',
+    title: 'use_tool',
+    kind: 'execute',
+    status: 'in_progress',
+    rawInput: { tool: 'subagent' },
+  });
+
+  clearLog();
+  assert.equal(dom.bgPanel.hidden, true);
+
+  paintTool({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'after-reset',
+    title: 'web_search',
+    kind: 'search',
+    status: 'in_progress',
+    rawInput: { query: 'reset' },
+  });
+  const tool = state.turnEl.querySelector('.tool');
+  assert.equal(tool.classList.contains('subagent-child'), false);
 });
 
 function resetDomState() {

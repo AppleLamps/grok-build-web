@@ -7,18 +7,23 @@ import { toast } from './toast.js';
 import { state } from './state.js';
 
 async function showJsonPanel(title, fetcher) {
-  const { body } = modal(title, '<div class="panel-loading">Loading…</div>');
+  const { body } = modal(title, panelMessage('div', 'panel-loading', 'Loading…'));
   try {
     const data = await fetcher();
     const pretty = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-    body.innerHTML = `<pre class="panel-content">${escapeForHtml(pretty)}</pre>`;
+    body.innerHTML = '';
+    body.appendChild(panelMessage('pre', 'panel-content', pretty));
   } catch (e) {
-    body.innerHTML = `<div class="panel-error">${escapeForHtml(String(e?.message ?? e))}</div>`;
+    body.innerHTML = '';
+    body.appendChild(panelMessage('div', 'panel-error', String(e?.message ?? e)));
   }
 }
 
-function escapeForHtml(s) {
-  return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function panelMessage(tag, className, text) {
+  const el = document.createElement(tag);
+  el.className = className;
+  el.textContent = text;
+  return el;
 }
 
 export function showInspect()   { return showJsonPanel('Grok inspect (current cwd)', cliInspect); }
@@ -28,31 +33,41 @@ export function showModels()    { return showJsonPanel('Available models', cliMo
 
 // Hooks / Plugins are triggered via slash commands. Open the input pre-filled.
 export function showHooks() {
-  const lines = [
-    '<p>Hooks management is via slash commands. Type:</p>',
-    '<ul>',
-    '<li><code>/hooks-list</code> — list configured hooks</li>',
-    '<li><code>/hooks-trust</code> — trust current project for hooks</li>',
-    '<li><code>/hooks-untrust</code> — remove trust</li>',
-    '<li><code>/hooks-add &lt;path&gt;</code> — add a hook file or dir</li>',
-    '<li><code>/hooks-remove &lt;path&gt;</code> — remove a hook</li>',
-    '</ul>',
-  ].join('');
-  modal('Hooks', lines);
+  modal('Hooks', commandHelp('Hooks management is via slash commands. Type:', [
+    ['/hooks-list', 'list configured hooks'],
+    ['/hooks-trust', 'trust current project for hooks'],
+    ['/hooks-untrust', 'remove trust'],
+    ['/hooks-add <path>', 'add a hook file or dir'],
+    ['/hooks-remove <path>', 'remove a hook'],
+  ]));
 }
 
 export function showPlugins() {
-  const lines = [
-    '<p>Plugins management is via slash commands. Type:</p>',
-    '<ul>',
-    '<li><code>/plugins list</code> — installed plugins</li>',
-    '<li><code>/plugins trust &lt;path&gt;</code> — trust a plugin path</li>',
-    '<li><code>/plugins add &lt;path&gt;</code> — add a plugin</li>',
-    '<li><code>/plugins remove &lt;path&gt;</code> — remove</li>',
-    '<li><code>/reload-plugins</code> — reload plugins from disk</li>',
-    '</ul>',
-  ].join('');
-  modal('Plugins', lines);
+  modal('Plugins', commandHelp('Plugins management is via slash commands. Type:', [
+    ['/plugins list', 'installed plugins'],
+    ['/plugins trust <path>', 'trust a plugin path'],
+    ['/plugins add <path>', 'add a plugin'],
+    ['/plugins remove <path>', 'remove'],
+    ['/reload-plugins', 'reload plugins from disk'],
+  ]));
+}
+
+function commandHelp(intro, commands) {
+  const wrap = document.createElement('div');
+  const p = document.createElement('p');
+  p.textContent = intro;
+  wrap.appendChild(p);
+  const ul = document.createElement('ul');
+  for (const [cmd, description] of commands) {
+    const li = document.createElement('li');
+    const code = document.createElement('code');
+    code.textContent = cmd;
+    li.appendChild(code);
+    li.append(` — ${description}`);
+    ul.appendChild(li);
+  }
+  wrap.appendChild(ul);
+  return wrap;
 }
 
 export async function downloadTrace() {

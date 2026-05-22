@@ -28,6 +28,16 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
       assert.equal(home.status, 200);
       assert.match(await home.text(), /grok web/);
 
+      const staticJs = await fetch(makeUrl(base, '/static/js/api.js'));
+      assert.equal(staticJs.status, 200);
+      assert.match(await staticJs.text(), /export async function listSessions/);
+      for (const path of ['/static/%5c..%5cserver.mjs', '/static/..%5cserver.mjs', '/static/%2e%2e/server.mjs']) {
+        const r = await fetch(makeUrl(base, path));
+        const text = await r.text();
+        assert.notEqual(r.status, 200, `${path} should not serve repo files`);
+        assert.doesNotMatch(text, /grok-web: HTTP\+SSE bridge/);
+      }
+
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
@@ -64,9 +74,70 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
       assert.equal(opts._capabilities.noLeader, true);
       assert.equal(opts._capabilities.permissionMode, false);
 
+      const oneshotText = 'line 1\n--not-a-flag\n<script>x</script>';
+      const oneshot = await fetch(makeUrl(base, '/cli/oneshot'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ effort: 'future-effort', bestOfN: 3, maxTurns: '4', text: oneshotText }),
+      });
+      assert.equal(oneshot.status, 200);
+      const oneshotData = await oneshot.json();
+      const fakeResult = JSON.parse(oneshotData.stdout);
+      assert.deepEqual(fakeResult.args, [
+        '--effort', 'future-effort',
+        '--best-of-n', '3',
+        '--max-turns', '4',
+        '--always-approve',
+        '--output-format', 'json',
+        '-p', oneshotText,
+      ]);
+      assert.equal(fakeResult.prompt, oneshotText);
+
+      for (const body of [{ bestOfN: 0 }, { bestOfN: 1.2 }, { bestOfN: true }, { maxTurns: 'abc' }]) {
+        const bad = await fetch(makeUrl(base, '/cli/oneshot'), {
+          method: 'POST',
+          headers: { cookie, 'content-type': 'application/json' },
+          body: JSON.stringify({ text: 'x', ...body }),
+        });
+        assert.equal(bad.status, 400);
+        assert.match((await bad.json()).error, /positive integer/);
+      }
+
       abort.abort();
       await stream;
       assert.doesNotMatch(server.stderr, /TypeError|SyntaxError/);
+      assert.match(server.stdout, /one-time local URL: do not share it/);
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+test('auto-approve cancels permission requests that have no options', async () => {
+  await withTempDir('grok-web-permission-empty-', async (temp) => {
+    const server = await startFakeServer({ scenario: 'permission-empty', sessionsRoot: join(temp, 'sessions') });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const events = [];
+      const abort = new AbortController();
+      const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
+      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+
+      const prompt = await fetch(makeUrl(base, '/prompt'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'permission empty probe' }),
+      });
+      assert.equal(prompt.status, 202);
+      await waitForEvent(events, e => e.kind === 'turn_complete', 'turn_complete');
+
+      assert.ok(events.some(e => e.kind === 'permission_auto_cancelled' && e.reason === 'no_options'));
+      const probe = events.find(e => e.kind === 'update' && e.update?.toolCallId === 'permission-empty');
+      assert.equal(probe?.update?.rawOutput?.permissionOutcome?.outcome, 'cancelled');
+      assert.equal(probe?.update?.rawOutput?.permissionOutcome?.optionId, undefined);
+
+      abort.abort();
+      await stream;
     } finally {
       await server.stop();
     }

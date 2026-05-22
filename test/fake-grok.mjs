@@ -14,6 +14,16 @@ if (args[0] === 'mcp' && args[1] === 'list') {
   process.exit(0);
 }
 
+if (args.includes('-p')) {
+  const promptIndex = args.indexOf('-p');
+  console.log(JSON.stringify({
+    args,
+    prompt: args[promptIndex + 1] ?? '',
+    cwd: process.cwd(),
+  }));
+  process.exit(0);
+}
+
 if (args.includes('agent') && args.includes('--help')) {
   console.log(`Run Grok without the interactive UI
 
@@ -128,8 +138,16 @@ async function emitScenario(sid) {
     await emitFsUpdates(sid);
     return;
   }
+  if (scenario === 'fs-symlink') {
+    await emitFsSymlinkUpdates(sid);
+    return;
+  }
   if (scenario === 'large') {
     emitLargeUpdates(sid);
+    return;
+  }
+  if (scenario === 'permission-empty') {
+    await emitPermissionEmptyUpdates(sid);
     return;
   }
   emitPromptUpdates(sid);
@@ -224,6 +242,24 @@ function emitPromptUpdates(sid) {
   }, sid);
 }
 
+async function emitPermissionEmptyUpdates(sid) {
+  const response = await request('session/request_permission', {
+    sessionId: sid,
+    toolCall: { title: 'read_file', rawInput: { path: 'no-options.txt' } },
+    options: [],
+  }, true);
+  update({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'permission-empty',
+    title: 'permission_empty_probe',
+    kind: 'execute',
+    status: response.result?.outcome?.outcome === 'cancelled' ? 'completed' : 'failed',
+    rawOutput: {
+      permissionOutcome: response.result?.outcome ?? null,
+    },
+  }, sid);
+}
+
 async function emitFsUpdates(sid) {
   const read = await request('fs/read_text_file', { sessionId: sid, path: 'note.txt' }, true);
   const write = await request('fs/write_text_file', { sessionId: sid, path: 'written.txt', content: 'written from fake grok' }, true);
@@ -238,6 +274,22 @@ async function emitFsUpdates(sid) {
       readContent: read.result?.content ?? null,
       writeOk: write.result === null,
       outsideError: outside.error?.message ?? null,
+    },
+  }, sid);
+}
+
+async function emitFsSymlinkUpdates(sid) {
+  const read = await request('fs/read_text_file', { sessionId: sid, path: 'escape/secret.txt' }, true);
+  const write = await request('fs/write_text_file', { sessionId: sid, path: 'escape/written.txt', content: 'outside write' }, true);
+  update({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'fs-symlink-1',
+    title: 'fs_symlink_probe',
+    kind: 'read',
+    status: read.error && write.error ? 'completed' : 'failed',
+    rawOutput: {
+      readError: read.error?.message ?? null,
+      writeError: write.error?.message ?? null,
     },
   }, sid);
 }

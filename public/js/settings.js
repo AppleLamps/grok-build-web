@@ -275,3 +275,15 @@ export function initSettings() {
   const btn = document.getElementById('customize-btn');
   if (btn) btn.addEventListener('click', open);
 }
+
+export const __testFields = FIELDS;
+
+export function __testFieldEl(field, value, currentState = {}) {
+  const previous = current;
+  current = currentState;
+  try {
+    return fieldEl(field, value);
+  } finally {
+    current = previous;
+  }
+}

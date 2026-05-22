@@ -315,3 +315,12 @@ export function initSidebar() {
   }
   loadRecents();
 }
+
+export function __testSetShowEmptySessions(value) {
+  showEmptySessions = !!value;
+  localStorage.setItem('grokweb.showEmptySessions', showEmptySessions ? '1' : '0');
+}
+
+export function __testGetShowEmptySessions() {
+  return showEmptySessions;
+}

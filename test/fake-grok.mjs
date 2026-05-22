@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const args = process.argv.slice(2);
+const scenario = process.env.FAKE_GROK_SCENARIO ?? 'normal';
 
 if (args[0] === 'models') {
   console.log('grok-build');
@@ -37,6 +38,7 @@ if (!args.includes('agent') || !args.includes('stdio')) {
 let buf = '';
 let nextServerRequestId = 1000;
 let sessionId = 'fake-session-1';
+const pending = new Map();
 
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => {
@@ -46,7 +48,9 @@ process.stdin.on('data', (chunk) => {
     const line = buf.slice(0, i).trim();
     buf = buf.slice(i + 1);
     if (!line) continue;
-    try { handle(JSON.parse(line)); }
+    try { handle(JSON.parse(line)).catch((e) => {
+      send({ jsonrpc: '2.0', method: '_x.ai/fake_error', params: { message: String(e?.message ?? e) } });
+    }); }
     catch {
       send({ jsonrpc: '2.0', method: '_x.ai/malformed_notice', params: { line } });
     }
@@ -69,12 +73,22 @@ function update(updateValue, sid = sessionId) {
   });
 }
 
-function request(method, params) {
-  send({ jsonrpc: '2.0', id: nextServerRequestId++, method, params });
+function request(method, params, track = false) {
+  const id = nextServerRequestId++;
+  send({ jsonrpc: '2.0', id, method, params });
+  if (!track) return null;
+  return new Promise((resolve) => pending.set(id, resolve));
 }
 
-function handle(msg) {
-  if (msg.result !== undefined || msg.error !== undefined) return;
+async function handle(msg) {
+  if (msg.id !== undefined && (msg.result !== undefined || msg.error !== undefined)) {
+    const resolve = pending.get(msg.id);
+    if (resolve) {
+      pending.delete(msg.id);
+      resolve(msg.error ? { error: msg.error } : { result: msg.result });
+    }
+    return;
+  }
   if (msg.method === 'initialize') {
     result(msg.id, { protocolVersion: 1, agentCapabilities: { fake: true } });
     return;
@@ -102,14 +116,30 @@ function handle(msg) {
     return;
   }
   if (msg.method === 'session/prompt') {
-    emitPromptUpdates(msg.params.sessionId);
-    result(msg.id, {
-      stopReason: 'cancelled',
-      _meta: { totalTokens: 1200, contextTokens: 512000 },
-    });
+    await emitScenario(msg.params.sessionId);
+    result(msg.id, promptResult());
     return;
   }
   result(msg.id, {});
+}
+
+async function emitScenario(sid) {
+  if (scenario === 'fs') {
+    await emitFsUpdates(sid);
+    return;
+  }
+  if (scenario === 'large') {
+    emitLargeUpdates(sid);
+    return;
+  }
+  emitPromptUpdates(sid);
+}
+
+function promptResult() {
+  return {
+    stopReason: scenario === 'normal' ? 'cancelled' : 'end_turn',
+    _meta: { totalTokens: 1200, contextTokens: 512000 },
+  };
 }
 
 function emitPromptUpdates(sid) {
@@ -191,6 +221,41 @@ function emitPromptUpdates(sid) {
     status: 'failed',
     rawInput: { tool: 'subagent' },
     rawOutput: { error: 'fake subagent failed' },
+  }, sid);
+}
+
+async function emitFsUpdates(sid) {
+  const read = await request('fs/read_text_file', { sessionId: sid, path: 'note.txt' }, true);
+  const write = await request('fs/write_text_file', { sessionId: sid, path: 'written.txt', content: 'written from fake grok' }, true);
+  const outside = await request('fs/read_text_file', { sessionId: sid, path: '../outside.txt' }, true);
+  update({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'fs-1',
+    title: 'fs_session_cwd_probe',
+    kind: 'read',
+    status: outside.error ? 'completed' : 'failed',
+    rawOutput: {
+      readContent: read.result?.content ?? null,
+      writeOk: write.result === null,
+      outsideError: outside.error?.message ?? null,
+    },
+  }, sid);
+}
+
+function emitLargeUpdates(sid) {
+  process.stdout.write('malformed large scenario line\n');
+  update({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'large-1',
+    title: 'run_terminal_command',
+    kind: 'execute',
+    status: 'completed',
+    rawInput: { command: 'large-output' },
+    rawOutput: {
+      output: 'x'.repeat(25000),
+      output_for_prompt: 'front\n' + 'x'.repeat(21000) + '\nback',
+      truncated: true,
+    },
   }, sid);
 }
 

@@ -133,6 +133,7 @@ function fieldEl(f, value) {
 function collectValues() {
   const opts = {};
   for (const el of panel.querySelectorAll('[data-key]')) {
+    if (el.dataset.unsupported === '1') continue;
     const k = el.dataset.key;
     const t = el.dataset.type;
     if (t === 'checkbox') opts[k] = el.checked;
@@ -286,4 +287,17 @@ export function __testFieldEl(field, value, currentState = {}) {
   } finally {
     current = previous;
   }
+}
+
+export async function __testOpenSettings() {
+  await open();
+  return panel;
+}
+
+export async function __testApplySettings() {
+  return apply();
+}
+
+export function __testCollectValues() {
+  return collectValues();
 }

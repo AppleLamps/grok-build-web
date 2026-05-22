@@ -48,7 +48,7 @@ async function openModelPicker() {
   const wrap = document.createElement('form');
   wrap.className = 'model-picker-form';
   wrap.innerHTML = `
-    <div class="model-current">Current model: <strong>loading...</strong></div>
+    <div class="model-current">Current model: <strong class="model-current-value">loading...</strong></div>
     <label>
       <span>Model</span>
       <select name="model"><option value="">Loading models...</option></select>
@@ -64,7 +64,7 @@ async function openModelPicker() {
   `;
   const { close } = modal('Change model', wrap);
   const select = wrap.querySelector('select');
-  const currentEl = wrap.querySelector('.model-current strong');
+  const currentEl = wrap.querySelector('.model-current-value');
   let current = {};
   try { current = await getSpawnOpts(); } catch { current = {}; }
   currentEl.textContent = labelFor(current.model);
@@ -99,10 +99,19 @@ async function openModelPicker() {
       setBusy(false);
     }
   });
+  return { wrap, close };
 }
 
 export function initModelPicker() {
   dom.modelTag?.addEventListener('click', openModelPicker);
   dom.footerModel?.addEventListener('click', openModelPicker);
   refreshModelLabel();
+}
+
+export function __testParseModelIds(text) {
+  return parseModelIds(text);
+}
+
+export async function __testOpenModelPicker() {
+  return openModelPicker();
 }

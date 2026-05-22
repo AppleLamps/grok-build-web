@@ -201,11 +201,35 @@ export class TestElement {
   }
   get innerHTML() { return this._html; }
   get lastElementChild() { return this.children[this.children.length - 1] ?? null; }
+  get elements() {
+    const out = [];
+    walk(this, el => {
+      if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(el.tagName)) out.push(el);
+    });
+    return out;
+  }
 
   appendChild(child) {
     child.parentElement = this;
     this.children.push(child);
     return child;
+  }
+  append(...nodes) {
+    for (const node of nodes) {
+      if (typeof node === 'string') {
+        const text = new TestElement('#text');
+        text.textContent = node;
+        this.appendChild(text);
+      } else {
+        this.appendChild(node);
+      }
+    }
+  }
+  remove() {
+    const parent = this.parentElement;
+    if (!parent) return;
+    parent.children = parent.children.filter(child => child !== this);
+    this.parentElement = null;
   }
   setAttribute(name, value) {
     this.attributes.set(name, String(value));
@@ -213,6 +237,8 @@ export class TestElement {
     if (name.startsWith('data-')) this.dataset[name.slice(5)] = String(value);
     if (name === 'id') this.id = String(value);
     if (name === 'title') this.title = String(value);
+    if (name === 'name') this.name = String(value);
+    if (name === 'value') this.value = String(value);
   }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
   toggleAttribute(name, force) {
@@ -283,6 +309,7 @@ export function installDomStubs({ storage = {}, fetchImpl = null } = {}) {
       if (!elements.has(id)) {
         const el = new TestElement(id === 'input' ? 'textarea' : 'div');
         el.id = id;
+        body.appendChild(el);
         elements.set(id, el);
       }
       return elements.get(id);
@@ -297,24 +324,28 @@ export function installDomStubs({ storage = {}, fetchImpl = null } = {}) {
       return out;
     },
     addEventListener() {},
+    removeEventListener() {},
+  };
+  globalThis.Node = TestElement;
+  globalThis.FormData = class TestFormData {
+    constructor(form) {
+      this.values = new Map();
+      for (const el of form?.elements ?? []) {
+        if (!el.name) continue;
+        this.values.set(el.name, el.type === 'checkbox' ? (el.checked ? 'on' : '') : (el.value ?? ''));
+      }
+    }
+    get(name) { return this.values.has(name) ? this.values.get(name) : null; }
   };
   return { elements, storage, body };
 }
 
 function populateFromHtml(parent, html) {
-  const classRe = /<([a-z0-9-]+)([^>]*)class="([^"]+)"([^>]*)>/gi;
+  const tagRe = /<([a-z0-9-]+)([^>]*)>/gi;
   let match;
-  while ((match = classRe.exec(html))) {
+  while ((match = tagRe.exec(html))) {
     const el = new TestElement(match[1]);
-    el.className = match[3];
-    applyAttributes(el, `${match[2]} ${match[4]}`);
-    parent.appendChild(el);
-  }
-  const idRe = /<([a-z0-9-]+)([^>]*)id="([^"]+)"([^>]*)>/gi;
-  while ((match = idRe.exec(html))) {
-    const el = new TestElement(match[1]);
-    el.id = match[3];
-    applyAttributes(el, `${match[2]} ${match[4]}`);
+    applyAttributes(el, match[2]);
     parent.appendChild(el);
   }
 }
@@ -346,6 +377,15 @@ function walk(root, fn) {
 
 function matchesSelector(el, selector) {
   if (!el) return false;
+  if (selector.includes(',')) return selector.split(',').some(part => matchesSelector(el, part.trim()));
+  const classTag = selector.match(/^([a-z]+)\.([a-zA-Z0-9_-]+)$/);
+  if (classTag) return el.tagName.toLowerCase() === classTag[1].toLowerCase() && el.classList.contains(classTag[2]);
+  const nameAttr = selector.match(/^([a-z]+)?\[name="([^"]+)"\]$/);
+  if (nameAttr) {
+    const tagOk = !nameAttr[1] || el.tagName.toLowerCase() === nameAttr[1].toLowerCase();
+    return tagOk && el.name === nameAttr[2];
+  }
+  if (selector === '[data-key]') return !!el.dataset?.key;
   if (selector.startsWith('.')) return el.classList.contains(selector.slice(1));
   if (selector.startsWith('#')) return el.id === selector.slice(1);
   if (/^[a-z]+$/i.test(selector)) return el.tagName.toLowerCase() === selector.toLowerCase();

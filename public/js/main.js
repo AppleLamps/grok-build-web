@@ -58,7 +58,7 @@ async function ensureTabSession() {
   }
 }
 
-(async () => {
+export async function bootstrapApp() {
   await ensureTabSession();
   initComposer();
   initAttachments();
@@ -71,4 +71,12 @@ async function ensureTabSession() {
   initSettings();
   initToolsMenu();
   initSSE();
-})();
+}
+
+export async function __testEnsureTabSession() {
+  return ensureTabSession();
+}
+
+if (!window.__GROK_WEB_TEST__) {
+  bootstrapApp();
+}

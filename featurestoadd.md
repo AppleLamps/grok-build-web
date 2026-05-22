@@ -14,7 +14,7 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 - **[done] Permission prompt UI** — `[acp session/request_permission]` Cards with per-option buttons; auto-deny after 5 min if forgotten. Active only when the pill is in Manual mode.
 - **[done] Always-approve toggle** — `[slash /always-approve]` `[flag --always-approve]` Composer pill toggles auto/manual; bridge mirrors state and best-effort syncs to the agent.
 - **[done] Plan mode rendering** — `[tool enter_plan_mode/exit_plan_mode]` Plan content rendered as a distinct blue card with **Accept plan / Suggest edits… / Reject** buttons that post a follow-up prompt.
-- **[done via Settings] Permission modes (full)** — `[flag --permission-mode]` Plan / acceptEdits / dontAsk / bypassPermissions all settable through the Settings panel (respawns the agent).
+- **[done, guarded] Permission mode field** — `[flag --permission-mode]` Settings exposes `permissionMode` only when the installed CLI advertises `--permission-mode`; current `grok 0.1.214` help does not, so the field renders disabled with an unsupported notice.
 - **[done via Settings] Effort / reasoning controls** — `[flag --effort]` `[flag --reasoning-effort]` Settings panel exposes `low | medium | high | xhigh | max` for both. Respawns on apply.
 - **[done via Settings] Max turns limit** — `[flag --max-turns]` Settings panel field.
 
@@ -71,6 +71,8 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 - **[done] Todo board** — `[tool todo_write]` Renders both inline (as a checklist in tool details) and in a sidebar panel that updates live.
 - **[partial] Browser tool rendering** — `[tool browser_tab / browser_network_details]` Labels recognized. **Still missing:** rich URL / network table UI.
 - **[done] Web search / fetch rendering** — `[tool web_search / web_fetch]` Labels recognized.
+- **[done] X search rendering** — `[tool x_search / x_search_posts / twitter_search / search_x]` Labels recognized with query, count, handles, timestamps, links, and snippets when present.
+- **[done] Multimodal read_file rendering** — `[tool read_file]` Content arrays and raw output fields render text, images, videos, PDFs, file cards, and extracted PDF/PPTX text.
 - **[done] Image / video gen rendering** — `[tool image_gen / video_gen]` Inline preview when `rawOutput.url` is present.
 - **[done, partial] Scheduler / Routines UI** — `[tool scheduler_create / scheduler_delete / scheduler_list]` Sidebar Tools → "Routines" opens an agent-driven panel for list/create/delete prompts. **Still missing:** live scheduled-tasks status outside the normal turn output.
 - **[done] Tool call grouping** — When 3+ tool calls happen back-to-back, they collapse into a single "N tools ▾" line.
@@ -117,6 +119,7 @@ These weren't features in the original list but unlock most of the rest:
 - **Generic modal** — `modal(title, body)` in `modal.js`. Used by every Tools panel.
 - **Tool dispatch** — `summarizeTool()` recognizes ~17 tool kinds; specialized detail renderers plug in cleanly.
 - **Sessions file watcher** — Server `fs.watch(SESSIONS_ROOT, {recursive:true})` → broadcast `sessions_changed` → client `loadRecents()`.
+- **Regression tests** — `npm test` runs fake ACP, bridge, renderer, sidebar/settings, lifecycle, API, bootstrap, slash-command, and session-edge tests. `npm run test:live` runs real CLI integration checks for bootstrap/SSE/endpoints, web search, multimodal `read_file`, and cancellation, with opt-in X search and plugin MCP auth checks.
 
 ## Remaining items
 

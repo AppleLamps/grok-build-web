@@ -13,9 +13,10 @@ Created by [@lamps_apple](https://x.com/lamps_apple), creator of [grokify.ai](ht
 - Browser chat UI for `grok agent stdio`
 - Project sidebar grouped by workspace
 - Per-tab sessions with `?session=` URLs
-- Tool rendering for terminal, edits, browser actions, images, todos, scheduler, and plan cards
+- Tool rendering for terminal, edits, browser actions, multimodal `read_file`, X/web search, images, videos, todos, scheduler, and plan cards
 - Manual or auto approval mode
 - Settings panel for model, effort, sandbox, rules, tool allow-lists, and display name
+- Local project display aliases for screenshot-safe project names
 - Built-in panels for inspect, MCP servers, worktrees, models, hooks, plugins, traces, imports, and routines
 - Share link support through `grok share`
 - Update notice from `grok update --check --json`
@@ -132,6 +133,10 @@ The Tools section exposes common Grok CLI actions:
 
 Open Settings, edit Display name, then Apply settings. This changes the sidebar footer immediately and does not restart the agent.
 
+### Rename projects locally
+
+Use the pencil button on a project row in the sidebar to set a local display alias. Aliases are stored in browser `localStorage` and only change what the sidebar shows. They do not rename folders, Grok sessions, or `summary.json` values.
+
 ## Configuration
 
 Environment variables read at startup:
@@ -183,6 +188,7 @@ grok-web/
 |       |-- topbar.js          Workspace picker, share, update notice
 |       `-- tools-menu.js      Sidebar tool wiring
 |-- package.json
+|-- test/                      Fake ACP, renderer, UI-state, bridge, and live integration tests
 `-- probe/                     Protocol discovery scripts
 ```
 
@@ -220,8 +226,28 @@ grok-web/
 Run syntax checks:
 
 ```powershell
-node --check server.mjs
-Get-ChildItem public\js -Filter *.js | ForEach-Object { node --check $_.FullName }
+npm run check
+```
+
+Run the account-free regression suite:
+
+```powershell
+npm test
+```
+
+This uses Node's built-in test runner with fake ACP fixtures. It covers bridge auth and SSE, per-session cwd isolation, API failures, renderer shapes, sidebar/settings behavior, permissions, elicitations, slash commands, bootstrap routing, session edge cases, large output, cancellation, and tool lifecycle state.
+
+Run live integration checks against the installed `grok` CLI:
+
+```powershell
+npm run test:live
+```
+
+Live tests start a real local server on an ephemeral port, bootstrap the one-time token, connect SSE, call `/sessions`, `/spawn-opts`, `/cli/models`, `/cli/mcp`, trigger real web search, read generated PNG/JPG/PDF/PPTX fixtures through `read_file`, and verify cancellation recovery. X search and plugin MCP auth are account-dependent opt-in checks:
+
+```powershell
+$env:GROK_WEB_LIVE_X_SEARCH='1'; npm run test:live
+$env:GROK_WEB_LIVE_PLUGIN_MCP_NAME='<server-name>'; npm run test:live
 ```
 
 Feature touch points:

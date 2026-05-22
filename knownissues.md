@@ -4,15 +4,15 @@ Live list. Items that get fixed are removed; items get added as they're discover
 
 ## Functional gaps
 
-- **Permission mode is binary (auto / manual).** The composer pill toggles between auto-approve and manual approval. The CLI's finer-grained `--permission-mode` values (`acceptEdits`, `dontAsk`, `bypassPermissions`, `plan`) are launch-time flags, so changing them requires respawning the agent via the Settings panel. The respawn path drops in-flight permission requests.
+- **Permission mode is mostly binary on the current CLI.** The composer pill toggles between auto-approve and manual approval. Settings includes a guarded `permissionMode` field, but it stays disabled until the installed `grok agent --help` advertises `--permission-mode`.
 - **Loading a session whose original cwd was deleted fails.** Agent returns `Path not found.` and the error renders in the log. There's no fallback to "load anyway in current cwd."
 - **`/cli/oneshot` (headless `--check` / Best-of-N) requires xAI credits.** Returns a structured error if the account is rate-limited or out of credits. The endpoint's parser surfaces the error to the chat log, but the underlying need to pay is on the user.
 
 ## Visual / data quirks
 
 - **Empty-titled sessions** show the folder name instead of a title. Grok generates `generated_title` after a few turns, so freshly-created sessions look bare until they have enough content to summarize.
-- **MCP server `ruflo` spawn errors** appear in stderr at every agent startup (`Failed to spawn MCP server 'ruflo': program not found`). User has it configured in `config.toml` but the binary isn't installed. Cosmetic noise — agent functions normally.
-- **Markdown renderer is minimal.** Handles bold/italic/inline-code/fenced-code/headings/lists/links. Doesn't handle: tables, blockquotes, nested lists, task lists, strikethrough, code fence language hints (renders the class but no highlighting).
+- **MCP server `ruflo` spawn errors** appear in stderr at every agent startup (`Failed to spawn MCP server 'ruflo': program not found`). User has it configured in `config.toml` but the binary isn't installed. Repeated identical lines are rate-limited, so the first error remains visible without flooding the terminal.
+- **Markdown renderer is intentionally small.** Handles bold/italic/inline-code/fenced-code/headings/lists/links and basic pipe tables. Doesn't handle: blockquotes, nested lists, task lists, strikethrough, or syntax highlighting.
 - **Browser tool rendering is generic.** Recognizes the call and shows URL/page text, but doesn't render rich previews (screenshots, DOM snapshots) when the agent provides them.
 
 ## Operational
@@ -29,4 +29,4 @@ Live list. Items that get fixed are removed; items get added as they're discover
 
 ## Tests
 
-- **No automated tests.** `node --check` verifies syntax for every JS module; HTTP smoke tests check endpoint status codes. There are no protocol-level tests for the dispatcher, markdown renderer, ANSI parser, or SSE filter logic.
+- **Live account coverage is partly opt-in.** `npm test` uses fake ACP fixtures and does not require a Grok account. `npm run test:live` covers the real CLI, real web search, multimodal `read_file`, and cancellation. X search and plugin MCP auth are implemented as opt-in live checks because account entitlements and configured server names vary by machine.

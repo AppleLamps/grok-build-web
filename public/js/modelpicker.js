@@ -53,6 +53,10 @@ async function openModelPicker() {
       <span>Model</span>
       <select name="model"><option value="">Loading models...</option></select>
     </label>
+    <label>
+      <span>Custom model</span>
+      <input name="customModel" type="text" placeholder="Type a model ID" />
+    </label>
     <div class="workspace-actions">
       <button class="apply" type="submit">Apply & restart</button>
       <button class="cancel" type="button">Cancel</button>
@@ -80,7 +84,9 @@ async function openModelPicker() {
   wrap.querySelector('.cancel').addEventListener('click', close);
   wrap.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const model = new FormData(wrap).get('model')?.toString() || null;
+    const fd = new FormData(wrap);
+    const custom = fd.get('customModel')?.toString().trim();
+    const model = custom || fd.get('model')?.toString() || null;
     close();
     setBusy(true);
     setStatus('respawning agent...', 'busy');

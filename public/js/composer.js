@@ -106,9 +106,16 @@ export function initComposer() {
   dom.stopBtn.addEventListener('click', async () => {
     dom.stopBtn.disabled = true;
     setStatus('cancelling…', 'busy');
-    try { await postCancel(); }
-    catch (e) { addError(`cancel failed: ${e.message}`); }
-    finally { dom.stopBtn.disabled = false; }
+    try {
+      const r = await postCancel();
+      if (!r.ok) addError(`cancel failed: ${r.status} ${await r.text()}`);
+      setStatus('cancelled', 'ready');
+      setBusy(false);
+    } catch (e) {
+      addError(`cancel failed: ${e.message}`);
+    } finally {
+      dom.stopBtn.disabled = false;
+    }
   });
 
   // Initial settings sync

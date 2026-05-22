@@ -24,6 +24,7 @@ function timeAgo(iso) {
 
 let searchQuery = '';
 const MAX_PROJECT_SESSIONS = 4;
+let showEmptySessions = localStorage.getItem('grokweb.showEmptySessions') === '1';
 let savedOpenProjects = [];
 try { savedOpenProjects = JSON.parse(localStorage.getItem('grokweb.openProjects') ?? '[]'); }
 catch { savedOpenProjects = []; }
@@ -87,13 +88,23 @@ function projectAlias(cwd) {
 }
 
 function filteredRecents() {
-  if (!searchQuery) return state.recentsCache;
+  const sessions = showEmptySessions
+    ? state.recentsCache
+    : state.recentsCache.filter(s => (s.numMessages ?? 0) > 0 || s.id === state.currentSessionId);
+  if (!searchQuery) return sessions;
   const q = searchQuery.toLowerCase();
-  return state.recentsCache.filter(s =>
+  return sessions.filter(s =>
     (s.title ?? '').toLowerCase().includes(q) ||
     (s.cwd ?? '').toLowerCase().includes(q) ||
     projectAlias(s.cwd ?? '(unknown)').toLowerCase().includes(q)
   );
+}
+
+function renderEmptyToggle() {
+  if (!dom.showEmptySessionsBtn) return;
+  dom.showEmptySessionsBtn.setAttribute('aria-pressed', String(showEmptySessions));
+  dom.showEmptySessionsBtn.title = showEmptySessions ? 'Hide empty sessions' : 'Show empty sessions';
+  dom.showEmptySessionsBtn.classList.toggle('active', showEmptySessions);
 }
 
 // Group sessions by cwd, current cwd first, then by most-recent activity.
@@ -162,10 +173,17 @@ function wireProjectRename(project, cwd) {
 export function renderRecents() {
   if (!state.recentsCache.length) {
     dom.recentsEl.innerHTML = '<div class="empty">No prior sessions</div>';
+    renderEmptyToggle();
     return;
   }
   dom.recentsEl.innerHTML = '';
-  for (const group of groupedRecents()) {
+  const groups = groupedRecents();
+  if (!groups.length) {
+    dom.recentsEl.innerHTML = '<div class="empty">No sessions with user messages</div>';
+    renderEmptyToggle();
+    return;
+  }
+  for (const group of groups) {
     const currentCwd = state.currentCwd ?? state.recentsCache.find(s => s.id === state.currentSessionId)?.cwd;
     const isCurrent = group.cwd === currentCwd || group.sessions.some(s => s.id === state.currentSessionId);
     if (isCurrent && !seededCurrentProject) {
@@ -224,6 +242,7 @@ export function renderRecents() {
     }
     dom.recentsEl.appendChild(project);
   }
+  renderEmptyToggle();
 }
 
 export async function loadRecents() {
@@ -276,6 +295,11 @@ export function initSidebar() {
   initMobileSidebar();
   dom.newSessionBtn.addEventListener('click', () => newSessionAction());
   dom.refreshRecentsBtn.addEventListener('click', loadRecents);
+  dom.showEmptySessionsBtn?.addEventListener('click', () => {
+    showEmptySessions = !showEmptySessions;
+    localStorage.setItem('grokweb.showEmptySessions', showEmptySessions ? '1' : '0');
+    renderRecents();
+  });
   const searchBtn = document.querySelector('.brand .icons button[title="Search"]');
   if (searchBtn && dom.recentsSearch) {
     searchBtn.addEventListener('click', () => {

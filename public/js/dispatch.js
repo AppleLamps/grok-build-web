@@ -105,7 +105,7 @@ export function dispatch(event) {
 
     case 'agent_exit':
       setStatus(`agent exited (code ${event.code})`, 'disconnected');
-      setBusy(true); // disable input
+      setBusy(false);
       break;
 
     case 'error':

@@ -7,7 +7,7 @@
 //
 // One shared grok session per launch. Reload the page → same session.
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { watch as watchFs } from 'node:fs';
@@ -19,6 +19,9 @@ import { homedir, userInfo } from 'node:os';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, 'public');
 const GROK_BIN = process.env.GROK_BIN ?? 'grok';
+const GROK_BIN_ARGS = process.env.GROK_BIN_ARGS
+  ? JSON.parse(process.env.GROK_BIN_ARGS)
+  : [];
 const PORT = Number(process.env.PORT ?? 0); // 0 = pick a free port
 const CWD = process.env.GROK_CWD ?? process.cwd();
 const BOOTSTRAP_TOKEN = randomBytes(16).toString('hex');
@@ -28,6 +31,30 @@ const HISTORY_LIMIT = 10000;
 const DEFAULT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_RPC_TIMEOUT_MS ?? 2 * 60 * 1000);
 const PROMPT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_PROMPT_TIMEOUT_MS ?? 30 * 60 * 1000);
 let bootstrapUsed = false;
+let agentHelpText = null;
+
+function getAgentHelpText() {
+  if (agentHelpText !== null) return agentHelpText;
+  const r = spawnSync(GROK_BIN, [...GROK_BIN_ARGS, 'agent', '--help'], {
+    encoding: 'utf8',
+    timeout: 3000,
+    windowsHide: true,
+  });
+  agentHelpText = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
+  return agentHelpText;
+}
+
+function agentSupportsFlag(flag) {
+  return getAgentHelpText().includes(flag);
+}
+
+function agentCapabilities() {
+  return {
+    alwaysApprove: agentSupportsFlag('--always-approve'),
+    noLeader: agentSupportsFlag('--no-leader'),
+    permissionMode: agentSupportsFlag('--permission-mode'),
+  };
+}
 
 function normalizeStderrLine(line) {
   return String(line)
@@ -134,6 +161,9 @@ class GrokSession {
       noPlan: false,
       noMemory: false,
       restoreCode: false,
+      alwaysApprove: true,
+      noLeader: false,
+      permissionMode: null,
       // Default ON: prefer the grok.com subscription path over XAI_API_KEY,
       // since most grok-web users have a SuperHeavy / SuperGrok subscription.
       // Toggle OFF in Settings to use the API key instead.
@@ -160,6 +190,9 @@ class GrokSession {
     if (o.noSubagents) a.push('--no-subagents');
     if (o.noPlan) a.push('--no-plan');
     if (o.noMemory) a.push('--no-memory');
+    if (o.alwaysApprove && agentSupportsFlag('--always-approve')) a.push('--always-approve');
+    if (o.noLeader && agentSupportsFlag('--no-leader')) a.push('--no-leader');
+    if (o.permissionMode && agentSupportsFlag('--permission-mode')) a.push('--permission-mode', o.permissionMode);
     a.push('agent', 'stdio');
     return a;
   }
@@ -177,7 +210,7 @@ class GrokSession {
       delete env.XAI_API_KEY;
       delete env.GROK_API_KEY;
     }
-    this.child = spawn(GROK_BIN, this.buildArgv(), {
+    this.child = spawn(GROK_BIN, [...GROK_BIN_ARGS, ...this.buildArgv()], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env,
     });
@@ -512,6 +545,7 @@ class GrokSession {
 
   setAutoApprove(on, sessionId = null) {
     this.autoApprove = !!on;
+    this.spawnOpts.alwaysApprove = this.autoApprove;
     this.broadcast({ kind: 'auto_approve_changed', autoApprove: this.autoApprove });
     // Also try to sync grok's own /always-approve state. The slash command is
     // sent as a normal prompt; the agent intercepts it before reaching the model.
@@ -588,7 +622,7 @@ function isWithinPath(root, file) {
 // Run a one-shot grok CLI command without blocking the bridge event loop.
 function runGrokCli(args, { timeout = 30000, cwd } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(GROK_BIN, args, {
+    const child = spawn(GROK_BIN, [...GROK_BIN_ARGS, ...args], {
       cwd: cwd ?? grok?.cwd ?? CWD,
       windowsHide: true,
     });
@@ -618,7 +652,9 @@ function runGrokCli(args, { timeout = 30000, cwd } = {}) {
 }
 
 // ─── Session history (read from ~/.grok/sessions) ───────────────────────────
-const SESSIONS_ROOT = join(homedir(), '.grok', 'sessions');
+const SESSIONS_ROOT = process.env.GROK_WEB_SESSIONS_ROOT
+  ? resolve(process.env.GROK_WEB_SESSIONS_ROOT)
+  : join(homedir(), '.grok', 'sessions');
 
 async function listSessions({ limit = 50 } = {}) {
   let cwdDirs;
@@ -793,7 +829,8 @@ const server = createServer(async (req, res) => {
       try { sessionId = JSON.parse(await readBody(req)).sessionId; } catch {}
     }
     grok.cancel(sessionId);
-    res.writeHead(202).end();
+    res.writeHead(202, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, sessionId: sessionId ?? grok.sessionId }));
     return;
   }
 
@@ -961,6 +998,7 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({
       ...grok.spawnOpts,
+      _capabilities: agentCapabilities(),
       _env: {
         XAI_API_KEY_set: !!process.env.XAI_API_KEY,
       },

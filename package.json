@@ -8,6 +8,7 @@
     "grok-web": "./server.mjs"
   },
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "test": "node test/render-smoke.mjs && node test/server-smoke.mjs"
   }
 }

@@ -42,6 +42,14 @@ const FIELDS = [
   { key: 'noMemory', label: 'No cross-session memory', type: 'checkbox' },
   { key: 'restoreCode', label: 'Restore code on session load', type: 'checkbox',
     hint: 'Check out the original commit when resuming a session.' },
+  { key: 'alwaysApprove', label: 'Always approve at launch', type: 'checkbox',
+    hint: 'Starts the agent with --always-approve when this CLI supports it.' },
+  { key: 'noLeader', label: 'Start without shared leader', type: 'checkbox',
+    hint: 'Starts the agent with --no-leader when this CLI supports it.' },
+  { key: 'permissionMode', label: 'Permission mode', type: 'select',
+    options: ['', 'auto', 'manual', 'yolo'],
+    requiresCapability: 'permissionMode',
+    hint: 'Launch-time --permission-mode. Disabled unless the installed grok CLI advertises it.' },
   { key: 'ignoreApiKey', label: 'Use grok.com subscription (ignore XAI_API_KEY)', type: 'checkbox',
     hint: 'ON by default. Strips XAI_API_KEY from the agent\'s env so it falls back to your grok.com login (~/.grok/auth.json) — billed against your subscription, not your API team. Uncheck to use the API key instead. Override at launch with GROK_WEB_USE_API_KEY=1.' },
 ];
@@ -54,6 +62,8 @@ const BRIDGE_FIELDS = [
 function fieldEl(f, value) {
   const wrap = document.createElement('div');
   wrap.className = 'setting-field';
+  const unsupported = f.requiresCapability && current?._capabilities?.[f.requiresCapability] === false;
+  if (unsupported) wrap.classList.add('unsupported');
   const lab = document.createElement('label');
   const inputId = `setting-${f.key}`;
   lab.htmlFor = inputId;
@@ -101,10 +111,20 @@ function fieldEl(f, value) {
   input.id = inputId;
   input.dataset.key = f.key;
   input.dataset.type = f.type;
+  if (unsupported) {
+    input.disabled = true;
+    input.dataset.unsupported = '1';
+  }
   wrap.appendChild(input);
   if (f.hint) {
     const h = document.createElement('div');
     h.className = 'setting-hint'; h.textContent = f.hint;
+    wrap.appendChild(h);
+  }
+  if (unsupported) {
+    const h = document.createElement('div');
+    h.className = 'setting-hint warn';
+    h.textContent = 'Unsupported by the installed grok CLI.';
     wrap.appendChild(h);
   }
   return wrap;

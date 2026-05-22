@@ -41,9 +41,14 @@
 
   <div class="section-head">
     <span>Projects</span>
-    <button class="icon-btn" id="refresh-recents" title="Refresh">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-    </button>
+    <span class="project-actions">
+      <button class="icon-btn" id="show-empty-sessions" title="Show empty sessions" aria-label="Show empty sessions" aria-pressed="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2"/></svg>
+      </button>
+      <button class="icon-btn" id="refresh-recents" title="Refresh">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      </button>
+    </span>
   </div>
   <div class="recents-search">
     <input id="recents-search" type="text" placeholder="Search projects…" />

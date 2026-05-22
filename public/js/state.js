@@ -48,6 +48,7 @@ export const dom = {
   recentsSearch:      document.getElementById('recents-search'),
   newSessionBtn:      document.getElementById('new-session-btn'),
   refreshRecentsBtn:  document.getElementById('refresh-recents'),
+  showEmptySessionsBtn: document.getElementById('show-empty-sessions'),
   modePill:           document.getElementById('mode-pill'),
   todoPanel:          document.getElementById('todo-panel'),
   todoList:           document.getElementById('todo-list'),

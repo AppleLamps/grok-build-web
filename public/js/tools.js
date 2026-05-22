@@ -7,7 +7,7 @@
 
 import { state, dom } from './state.js';
 import { newTurn, autoScroll, addError, setStatus } from './chat.js';
-import { renderMarkdown, escapeHTML, escapeAttr, safeHttpUrl, safeImageSrc } from './markdown.js';
+import { renderMarkdown, escapeHTML, escapeAttr, safeHttpUrl, safeImageSrc, safeVideoSrc } from './markdown.js';
 import { postPrompt } from './api.js';
 import { setBusy } from './composer.js';
 
@@ -22,6 +22,8 @@ const STATUS_ICONS = {
   in_progress: '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/></svg>',
   completed:   '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
   failed:      '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  cancelled:   '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>',
+  killed:      '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>',
 };
 function ansiToHtml(text) {
   if (!text || !text.includes('')) return text.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
@@ -57,17 +59,21 @@ function summarizeTool(toolUpdate) {
   const title = toolUpdate.title ?? '';
   // First, recognize specific tool names regardless of kind for richer labels.
   const lower = title.toLowerCase();
+  const source = String(raw.source ?? raw.platform ?? '').toLowerCase();
+  if (isXSearchTool(lower, raw)) {
+    return { verb: 'Searched X for', target: raw.query ?? raw.q ?? raw.search ?? '' };
+  }
+  if (/video[_ -]?gen|imagine[_ -]?video/.test(lower)) {
+    return { verb: 'Generated video', target: raw.prompt ?? raw.description ?? title };
+  }
   if (/web[_ -]?search/.test(lower) || raw.query !== undefined && /search/.test(lower)) {
-    return { verb: 'Searched the web for', target: raw.query ?? raw.q ?? '' };
+    return { verb: source === 'x' ? 'Searched X for' : 'Searched the web for', target: raw.query ?? raw.q ?? '' };
   }
   if (/web[_ -]?fetch/.test(lower)) {
     return { verb: 'Fetched', target: raw.url ?? '' };
   }
   if (/image[_ -]?gen|imagine/.test(lower)) {
     return { verb: 'Generated image', target: raw.prompt ?? raw.description ?? title };
-  }
-  if (/video[_ -]?gen|imagine[_ -]?video/.test(lower)) {
-    return { verb: 'Generated video', target: raw.prompt ?? raw.description ?? title };
   }
   if (/scheduler[_ -]?create/.test(lower)) {
     return { verb: 'Scheduled', target: raw.prompt ?? raw.name ?? title };
@@ -140,6 +146,12 @@ function summarizeTool(toolUpdate) {
     default:
       return { verb: 'used tool', target: title ?? '' };
   }
+}
+
+function isXSearchTool(title, raw = {}) {
+  const source = String(raw.source ?? raw.platform ?? raw.provider ?? '').toLowerCase();
+  return source === 'x'
+    || /\b(x[_ -]?search|x[_ -]?search[_ -]?posts|twitter[_ -]?search|search[_ -]?x)\b/.test(title);
 }
 
 // Tool-call grouping: when consecutive tool_calls fire without an intervening
@@ -225,20 +237,174 @@ function getToolEl(id) {
 // fall back to generic input/output dump.
 function renderEditDetails(update) {
   const raw = update.rawInput ?? {};
+  const out = update.rawOutput ?? {};
   const oldStr = raw.old_string ?? raw.before ?? raw.oldStr;
   const newStr = raw.new_string ?? raw.after ?? raw.newStr;
-  if (oldStr == null || newStr == null) return null;
+  const path = raw.path ?? raw.file_path ?? out.path ?? out.file_path ?? out.file;
+  const start = raw.start_line ?? raw.startLine ?? raw.line ?? out.start_line ?? out.startLine ?? out.line;
+  const end = raw.end_line ?? raw.endLine ?? out.end_line ?? out.endLine;
+  const hunk = raw.hunk ?? raw.patch ?? out.hunk ?? out.patch ?? out.diff;
   const esc = (s) => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-  return `
+  const parts = [];
+  if (path || start || end) {
+    const loc = [
+      path ? escapeHTML(path) : '',
+      start ? `:${escapeHTML(start)}` : '',
+      end && end !== start ? `-${escapeHTML(end)}` : '',
+    ].join('');
+    parts.push(`<div class="label">location</div><pre>${loc}</pre>`);
+  }
+  if (hunk && (oldStr == null || newStr == null)) {
+    parts.push(`<div class="label">hunk</div><pre class="diff">${esc(hunk)}</pre>`);
+    return parts.join('');
+  }
+  if (oldStr == null || newStr == null) return parts.join('') || null;
+  parts.push(`
     <div class="label">diff</div>
     <pre class="diff"><span class="diff-old">- ${esc(oldStr).replace(/\n/g, '\n- ')}</span>
 <span class="diff-new">+ ${esc(newStr).replace(/\n/g, '\n+ ')}</span></pre>
+  `);
+  return parts.join('');
+}
+
+function itemMime(item = {}) {
+  return String(item.mimeType ?? item.mime_type ?? item.mediaType ?? item.media_type ?? '').toLowerCase();
+}
+
+function itemText(item = {}) {
+  if (typeof item === 'string') return item;
+  if (typeof item.text === 'string') return item.text;
+  if (typeof item.output === 'string') return item.output;
+  if (typeof item.extractedText === 'string') return item.extractedText;
+  if (typeof item.extracted_text === 'string') return item.extracted_text;
+  if (typeof item.content === 'string') return item.content;
+  if (typeof item.content?.text === 'string') return item.content.text;
+  return '';
+}
+
+function itemUrl(item = {}) {
+  if (typeof item === 'string') return '';
+  return item.url ?? item.uri ?? item.href ?? item.image_url ?? item.video_url ?? item.file_url ?? item.path ?? item.filePath ?? item.file_path ?? '';
+}
+
+function dataUrl(item = {}) {
+  if (typeof item !== 'object' || !item.data) return '';
+  const value = String(item.data);
+  if (value.startsWith('data:')) return value;
+  const mime = itemMime(item);
+  return mime ? `data:${mime};base64,${value}` : '';
+}
+
+function contentItems(update) {
+  const out = update.rawOutput ?? {};
+  const items = [];
+  for (const value of [update.content, out.content, out.contents, out.items, out.results]) {
+    if (Array.isArray(value)) items.push(...value);
+  }
+  const direct = {
+    type: out.type,
+    mimeType: out.mimeType ?? out.mime_type,
+    url: out.url ?? out.image_url ?? out.video_url ?? out.file_url,
+    path: out.path ?? out.filePath ?? out.file_path,
+    data: out.data,
+    text: out.text ?? out.extracted_text,
+  };
+  if (direct.url || direct.path || direct.data || direct.text) items.push(direct);
+  return items;
+}
+
+function kindForItem(item = {}) {
+  const type = String(item.type ?? item.kind ?? '').toLowerCase();
+  const mime = itemMime(item);
+  const url = itemUrl(item);
+  if (type.includes('image') || mime.startsWith('image/')) return 'image';
+  if (type.includes('video') || mime.startsWith('video/')) return 'video';
+  if (type.includes('pdf') || mime === 'application/pdf' || /\.pdf($|[?#])/i.test(url)) return 'pdf';
+  if (type.includes('file') || mime || url) return 'file';
+  if (itemText(item)) return 'text';
+  return '';
+}
+
+function fileLabel(item = {}, kind = 'file') {
+  const mime = itemMime(item);
+  const name = item.name ?? item.filename ?? item.fileName ?? item.title ?? item.path ?? itemUrl(item) ?? kind;
+  if (kind === 'pdf') return { type: 'PDF', name };
+  if (/presentation|powerpoint|officedocument\.presentationml/i.test(mime) || /\.(pptx?|odp)$/i.test(String(name))) {
+    return { type: 'PPT', name };
+  }
+  if (mime) return { type: mime.split('/').pop().toUpperCase(), name };
+  return { type: 'FILE', name };
+}
+
+function renderFileCard(item, kind) {
+  const url = itemUrl(item) || dataUrl(item);
+  const safe = /^[a-z][a-z0-9+.-]*:/i.test(url) ? safeHttpUrl(url) : '';
+  const label = fileLabel(item, kind);
+  const path = item.path ?? item.filePath ?? item.file_path ?? item.url ?? item.uri ?? '';
+  return `
+    <div class="tool-file">
+      <span class="tool-file-type">${escapeHTML(label.type)}</span>
+      <div class="tool-file-main">
+        <strong>${escapeHTML(label.name)}</strong>
+        ${path ? `<code>${escapeHTML(path)}</code>` : ''}
+      </div>
+      ${safe ? `<a href="${escapeAttr(safe)}" target="_blank" rel="noopener">Open</a>` : ''}
+    </div>
+  `;
+}
+
+function renderMultimodalDetails(update) {
+  const items = contentItems(update);
+  if (!items.length) return null;
+  const parts = [];
+  for (const item of items) {
+    const kind = kindForItem(item);
+    const text = itemText(item);
+    const url = itemUrl(item) || dataUrl(item);
+    if (kind === 'image') {
+      const safeSrc = safeImageSrc(url);
+      if (safeSrc) parts.push(`<div class="label">image</div><img class="tool-image" src="${escapeAttr(safeSrc)}" alt="tool image" loading="lazy" />`);
+      if (text) parts.push(`<div class="label">text</div><pre>${escapeHTML(text)}</pre>`);
+    } else if (kind === 'video') {
+      const safeSrc = safeVideoSrc(url);
+      if (safeSrc) parts.push(`<div class="label">video</div><video class="tool-video" src="${escapeAttr(safeSrc)}" controls></video>`);
+      if (text) parts.push(`<div class="label">text</div><pre>${escapeHTML(text)}</pre>`);
+    } else if (kind === 'pdf' || kind === 'file') {
+      parts.push(renderFileCard(item, kind));
+      if (text) parts.push(`<div class="label">extracted text</div><pre>${escapeHTML(text)}</pre>`);
+    } else if (text) {
+      parts.push(`<div class="label">text</div><pre>${escapeHTML(text)}</pre>`);
+    }
+  }
+  return parts.length ? parts.join('') : null;
+}
+
+function renderVideoDetails(update) {
+  const raw = update.rawInput ?? {};
+  const out = update.rawOutput ?? {};
+  const url = out.url ?? out.video_url ?? out.path;
+  const media = renderMultimodalDetails(update);
+  const prompt = raw.prompt ?? raw.description ?? '';
+  if (media) {
+    return `${prompt ? `<div class="label">prompt</div><pre>${escapeHTML(prompt)}</pre>` : ''}${media}`;
+  }
+  const safeSrc = safeVideoSrc(url);
+  if (!safeSrc) return null;
+  return `
+    ${prompt ? `<div class="label">prompt</div><pre>${escapeHTML(prompt)}</pre>` : ''}
+    <div class="label">video</div>
+    <video class="tool-video" src="${escapeAttr(safeSrc)}" controls></video>
   `;
 }
 
 function renderImageDetails(update) {
   const raw = update.rawInput ?? {};
   const out = update.rawOutput ?? {};
+  const media = renderMultimodalDetails(update);
+  if (media) {
+    const prompt = raw.prompt ?? raw.description ?? '';
+    return `${prompt ? `<div class="label">prompt</div><pre>${escapeHTML(prompt)}</pre>` : ''}${media}`;
+  }
   const url = out.url ?? out.image_url ?? out.path;
   if (!url) return null;
   const safeSrc = safeImageSrc(url);
@@ -249,6 +415,52 @@ function renderImageDetails(update) {
     ${safeSrc ? `<div class="label">image</div>
     <img class="tool-image" src="${escapeAttr(safeSrc)}" alt="generated image" loading="lazy" />` : ''}
   `;
+}
+
+function resultItems(out = {}) {
+  const candidates = [
+    out.results, out.posts, out.items, out.data, out.entries,
+    out.output?.results, out.output?.posts, out.content?.results,
+  ];
+  for (const c of candidates) if (Array.isArray(c)) return c;
+  return [];
+}
+
+function renderSearchDetails(update, mode = 'web') {
+  const raw = update.rawInput ?? {};
+  const out = update.rawOutput ?? {};
+  const query = raw.query ?? raw.q ?? raw.search ?? out.query ?? '';
+  const items = resultItems(out);
+  const label = mode === 'x' ? 'X results' : 'search results';
+  const parts = [];
+  if (query) parts.push(`<div class="label">query</div><pre>${escapeHTML(query)}</pre>`);
+  if (items.length) {
+    const rows = items.slice(0, 25).map(item => {
+      const title = item.title ?? item.text ?? item.snippet ?? item.content ?? item.handle ?? item.author ?? '';
+      const handle = item.handle ?? item.username ?? item.author?.handle ?? item.author_username ?? '';
+      const time = item.timestamp ?? item.created_at ?? item.createdAt ?? item.date ?? '';
+      const href = item.url ?? item.link ?? item.permalink ?? '';
+      const safe = safeHttpUrl(href);
+      const snippet = item.snippet ?? item.quote ?? item.summary ?? item.text ?? '';
+      return `
+        <tr>
+          <td>${handle ? `<code>${escapeHTML(handle)}</code>` : escapeHTML(title).slice(0, 80)}</td>
+          <td>${escapeHTML(time)}</td>
+          <td>${safe ? `<a href="${escapeAttr(safe)}" target="_blank" rel="noopener">${escapeHTML(snippet || href).slice(0, 160)}</a>` : escapeHTML(snippet).slice(0, 160)}</td>
+        </tr>
+      `;
+    }).join('');
+    parts.push(`
+      <div class="label">${label} · ${items.length}</div>
+      <table class="net-table search-table">
+        <thead><tr><th>${mode === 'x' ? 'Handle' : 'Title'}</th><th>Time</th><th>Snippet</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `);
+  }
+  const text = out.output_for_prompt ?? out.output ?? out.text ?? '';
+  if (!items.length && text) parts.push(`<div class="label">output</div><pre>${escapeHTML(text)}</pre>`);
+  return parts.length ? parts.join('') : null;
 }
 
 function renderTerminalDetails(update) {
@@ -518,6 +730,42 @@ function renderBgPanel() {
   }).join('');
 }
 
+function normalizedToolStatus(update) {
+  const raw = String(update.status ?? update.rawOutput?.status ?? update.rawOutput?.state ?? '').toLowerCase();
+  if (/cancel/.test(raw)) return 'cancelled';
+  if (/kill|killed|terminated/.test(raw)) return 'killed';
+  if (/fail|error/.test(raw)) return 'failed';
+  if (/complete|success|done/.test(raw)) return 'completed';
+  if (/progress|running|pending/.test(raw)) return 'in_progress';
+  return update.sessionUpdate === 'tool_call' ? 'in_progress' : raw;
+}
+
+function backgroundTargetId(update, titleLc) {
+  if (/kill[_ -]?(command|subagent)/.test(titleLc)) {
+    return update.rawInput?.id ?? update.rawInput?.pid ?? update.rawOutput?.id ?? update.toolCallId;
+  }
+  return update.rawOutput?.id ?? update.rawInput?.id ?? update.toolCallId;
+}
+
+function updateBackgroundTask(update, titleLc) {
+  const isBg = update.rawInput?.is_background
+    || /background|run_terminal_command|command_or_subagent|subagent/.test(titleLc);
+  if (!isBg) return;
+  const id = backgroundTargetId(update, titleLc);
+  const command = update.rawInput?.command
+    ?? update.rawInput?.prompt
+    ?? update.rawInput?.description
+    ?? update.rawOutput?.command
+    ?? update.title
+    ?? id;
+  const status = /kill[_ -]?(command|subagent)/.test(titleLc)
+    ? 'killed'
+    : normalizedToolStatus(update) || 'running';
+  const prior = bgTasks.get(id) ?? { id, command, status: 'running' };
+  bgTasks.set(id, { ...prior, command: prior.command ?? command, status });
+  renderBgPanel();
+}
+
 export function paintTool(update) {
   // Subagent boundary tracking — `use_tool` opens a subagent context;
   // any subsequent tool calls until it completes are children.
@@ -525,26 +773,11 @@ export function paintTool(update) {
   if (update.sessionUpdate === 'tool_call' && /use_tool/.test(titleLc)) {
     subagentDepth++;
   }
-  if (update.sessionUpdate === 'tool_call_update' && update.status === 'completed' && /use_tool/.test(titleLc)) {
+  if (update.sessionUpdate === 'tool_call_update' && ['completed', 'failed', 'cancelled', 'killed'].includes(normalizedToolStatus(update)) && /use_tool/.test(titleLc)) {
     subagentDepth = Math.max(0, subagentDepth - 1);
   }
 
-  // Background task tracking — run_terminal_command with is_background:true
-  if (update.rawInput?.is_background || /background/.test(titleLc)) {
-    const id = update.toolCallId;
-    if (update.sessionUpdate === 'tool_call') {
-      bgTasks.set(id, { id, command: update.rawInput?.command, status: 'running' });
-    } else if (update.status === 'completed' || update.status === 'failed') {
-      const t = bgTasks.get(id);
-      if (t) { t.status = update.status; bgTasks.set(id, t); }
-    }
-    renderBgPanel();
-  }
-  // Kill commands remove tasks from the panel
-  if (/kill_command/.test(titleLc) && update.rawInput?.id) {
-    bgTasks.delete(update.rawInput.id);
-    renderBgPanel();
-  }
+  updateBackgroundTask(update, titleLc);
 
   const el = getToolEl(update.toolCallId);
   const summary = summarizeTool(update);
@@ -557,11 +790,12 @@ export function paintTool(update) {
   }
   el.querySelector('.delta-add').textContent = summary.deltaAdd ? `+${summary.deltaAdd}` : '';
   el.querySelector('.delta-del').textContent = summary.deltaDel ? `-${summary.deltaDel}` : '';
-  if (update.status) {
-    el.classList.remove('in_progress', 'completed', 'failed');
-    el.classList.add(update.status);
+  const status = normalizedToolStatus(update);
+  if (status) {
+    el.classList.remove('in_progress', 'completed', 'failed', 'cancelled', 'killed');
+    el.classList.add(status);
     const sicon = el.querySelector('.status-icon');
-    if (sicon) sicon.innerHTML = STATUS_ICONS[update.status] ?? '';
+    if (sicon) sicon.innerHTML = STATUS_ICONS[status] ?? '';
   }
   const body = el.querySelector('.details');
   // Prefer specialized renderers for known tool kinds.
@@ -569,7 +803,11 @@ export function paintTool(update) {
   let specialHTML = null;
   if (update.kind === 'edit') specialHTML = renderEditDetails(update);
   else if (update.kind === 'execute' || /run_terminal_command/.test(title)) specialHTML = renderTerminalDetails(update);
+  else if (/video[_ -]?gen|imagine[_ -]?video/.test(title)) specialHTML = renderVideoDetails(update);
   else if (/image[_ -]?gen|imagine/.test(title)) specialHTML = renderImageDetails(update);
+  else if (isXSearchTool(title, update.rawInput)) specialHTML = renderSearchDetails(update, 'x');
+  else if (/web[_ -]?search/.test(title) || update.kind === 'search') specialHTML = renderSearchDetails(update, 'web');
+  else if (update.kind === 'read') specialHTML = renderMultimodalDetails(update);
   else if (/todo[_ -]?write/.test(title)) specialHTML = renderTodos(update);
   else if (/browser[_ -]?(tab|network)/.test(title)) specialHTML = renderBrowserDetails(update);
   else if (/scheduler/.test(title)) specialHTML = renderSchedulerDetails(update);
@@ -581,17 +819,37 @@ export function paintTool(update) {
 
   const sections = [];
   if (update.rawInput) sections.push(['input', update.rawInput]);
-  const outText = update.rawOutput?.output_for_prompt
+  const multimodal = renderMultimodalDetails(update);
+  if (multimodal) sections.push(['output', multimodal, 'html']);
+  const outText = multimodal ? null : update.rawOutput?.output_for_prompt
     ?? update.rawOutput?.output
     ?? (Array.isArray(update.content) ? update.content.map(c => c?.content?.text ?? '').join('') : null);
   if (outText && outText !== '') sections.push(['output', outText]);
   body.innerHTML = '';
-  for (const [label, value] of sections) {
+  for (const [label, value, mode] of sections) {
     const lab = document.createElement('div'); lab.className = 'label'; lab.textContent = label;
-    const pre = document.createElement('pre');
-    pre.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-    body.appendChild(lab); body.appendChild(pre);
+    body.appendChild(lab);
+    if (mode === 'html') {
+      const div = document.createElement('div');
+      div.innerHTML = value;
+      body.appendChild(div);
+    } else {
+      const pre = document.createElement('pre');
+      pre.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+      body.appendChild(pre);
+    }
   }
+}
+
+export function __testRenderToolDetails(update) {
+  const title = (update.title ?? '').toLowerCase();
+  if (update.kind === 'edit') return renderEditDetails(update);
+  if (update.kind === 'execute' || /run_terminal_command/.test(title)) return renderTerminalDetails(update);
+  if (/video[_ -]?gen|imagine[_ -]?video/.test(title)) return renderVideoDetails(update);
+  if (/image[_ -]?gen|imagine/.test(title)) return renderImageDetails(update);
+  if (isXSearchTool(title, update.rawInput)) return renderSearchDetails(update, 'x');
+  if (/web[_ -]?search/.test(title) || update.kind === 'search') return renderSearchDetails(update, 'web');
+  return renderMultimodalDetails(update);
 }
 
 export function renderPlanCard(u) {

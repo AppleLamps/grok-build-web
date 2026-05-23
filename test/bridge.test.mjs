@@ -316,6 +316,136 @@ test('tab session load is serialized with concurrent respawns', async () => {
   });
 });
 
+test('tab prompts are serialized on the shared agent connection', async () => {
+  await withTempDir('grok-web-prompt-queue-', async (temp) => {
+    const server = await startFakeServer({
+      scenario: 'quiet',
+      sessionsRoot: join(temp, 'sessions'),
+      env: { FAKE_GROK_DELAY_PROMPT_MS: '250' },
+    });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const events = [];
+      const abort = new AbortController();
+      const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
+      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+
+      const tabA = await postJson(base, cookie, '/tab/new', {});
+      const tabB = await postJson(base, cookie, '/tab/new', {});
+      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tabA.sessionId, 'tab A ready');
+      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tabB.sessionId, 'tab B ready');
+
+      const first = await postJson(base, cookie, '/prompt', { sessionId: tabA.sessionId, text: 'prompt A' }, 202);
+      const second = await postJson(base, cookie, '/prompt', { sessionId: tabB.sessionId, text: 'prompt B' }, 202);
+      assert.equal(first.queued, false);
+      assert.equal(second.queued, true);
+      assert.match(first.turnId, /^turn-/);
+      assert.match(second.turnId, /^turn-/);
+
+      await waitForEvent(events, e => e.kind === 'turn_complete' && e.sessionId === tabA.sessionId, 'tab A complete');
+      await waitForEvent(events, e => e.kind === 'turn_complete' && e.sessionId === tabB.sessionId, 'tab B complete');
+
+      const starts = events.filter(e => e.kind === 'meta' && e.method === '_x.ai/fake_prompt_probe' && e.params?.phase === 'start');
+      assert.deepEqual(starts.map(e => e.sessionId), [tabA.sessionId, tabB.sessionId]);
+      assert.equal(starts.some(e => e.params?.maxActivePromptCount > 1), false);
+
+      const completeA = events.findIndex(e => e.kind === 'turn_complete' && e.sessionId === tabA.sessionId);
+      const completeB = events.findIndex(e => e.kind === 'turn_complete' && e.sessionId === tabB.sessionId);
+      assert.ok(completeA < completeB, 'tab A completes before queued tab B');
+      assert.ok(events.some(e => e.kind === 'turn_queued' && e.sessionId === tabB.sessionId && e.turnId === second.turnId));
+
+      abort.abort();
+      await stream;
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+test('cancel removes queued turns without sending them to the agent', async () => {
+  await withTempDir('grok-web-prompt-cancel-', async (temp) => {
+    const server = await startFakeServer({
+      scenario: 'quiet',
+      sessionsRoot: join(temp, 'sessions'),
+      env: { FAKE_GROK_DELAY_PROMPT_MS: '350' },
+    });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const events = [];
+      const abort = new AbortController();
+      const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
+      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+
+      const tabA = await postJson(base, cookie, '/tab/new', {});
+      const tabB = await postJson(base, cookie, '/tab/new', {});
+      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tabA.sessionId, 'tab A ready');
+      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tabB.sessionId, 'tab B ready');
+
+      await postJson(base, cookie, '/prompt', { sessionId: tabA.sessionId, text: 'slow A' }, 202);
+      const queued = await postJson(base, cookie, '/prompt', { sessionId: tabB.sessionId, text: 'queued B' }, 202);
+      assert.equal(queued.queued, true);
+
+      const cancel = await postJson(base, cookie, '/cancel', { sessionId: tabB.sessionId }, 202);
+      assert.equal(cancel.queuedCancelled, 1);
+      await waitForEvent(events, e => e.kind === 'turn_cancelled' && e.sessionId === tabB.sessionId && e.turnId === queued.turnId, 'queued turn cancelled');
+      await waitForEvent(events, e => e.kind === 'turn_complete' && e.sessionId === tabA.sessionId, 'tab A complete');
+      await delay(500);
+
+      const starts = events.filter(e => e.kind === 'meta' && e.method === '_x.ai/fake_prompt_probe' && e.params?.phase === 'start');
+      assert.deepEqual(starts.map(e => e.sessionId), [tabA.sessionId]);
+      assert.equal(events.some(e => e.kind === 'turn_complete' && e.sessionId === tabB.sessionId), false);
+
+      abort.abort();
+      await stream;
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+test('auto-approve settings are scoped by tab session', async () => {
+  await withTempDir('grok-web-session-approval-', async (temp) => {
+    const server = await startFakeServer({ sessionsRoot: join(temp, 'sessions') });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const events = [];
+      const abort = new AbortController();
+      const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
+      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+
+      const tabA = await postJson(base, cookie, '/tab/new', {});
+      const tabB = await postJson(base, cookie, '/tab/new', {});
+      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tabA.sessionId, 'tab A ready');
+      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tabB.sessionId, 'tab B ready');
+
+      const tabAManual = await postJson(base, cookie, '/settings', { sessionId: tabA.sessionId, autoApprove: false });
+      const tabBAuto = await postJson(base, cookie, '/settings', { sessionId: tabB.sessionId, autoApprove: true });
+      assert.equal(tabAManual.autoApprove, false);
+      assert.equal(tabBAuto.autoApprove, true);
+
+      const defaultSettings = await fetch(makeUrl(base, '/settings'), { headers: { cookie } }).then(r => r.json());
+      const settingsA = await fetch(makeUrl(base, `/settings?sessionId=${encodeURIComponent(tabA.sessionId)}`), { headers: { cookie } }).then(r => r.json());
+      const settingsB = await fetch(makeUrl(base, `/settings?sessionId=${encodeURIComponent(tabB.sessionId)}`), { headers: { cookie } }).then(r => r.json());
+      assert.equal(defaultSettings.autoApprove, true);
+      assert.equal(settingsA.autoApprove, false);
+      assert.equal(settingsB.autoApprove, true);
+
+      await postJson(base, cookie, '/prompt', { sessionId: tabA.sessionId, text: 'manual approval A' }, 202);
+      await waitForEvent(events, e => e.kind === 'permission_request' && e.sessionId === tabA.sessionId, 'tab A manual permission');
+      await postJson(base, cookie, '/prompt', { sessionId: tabB.sessionId, text: 'auto approval B' }, 202);
+      await waitForEvent(events, e => e.kind === 'permission_auto_allowed' && e.sessionId === tabB.sessionId, 'tab B auto permission');
+
+      assert.equal(events.some(e => e.kind === 'permission_auto_allowed' && e.sessionId === tabA.sessionId), false);
+      assert.equal(events.some(e => e.kind === 'permission_request' && e.sessionId === tabB.sessionId), false);
+
+      abort.abort();
+      await stream;
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
 test('API bad requests return JSON error bodies', async () => {
   await withTempDir('grok-web-json-errors-', async (temp) => {
     const server = await startFakeServer({ sessionsRoot: join(temp, 'sessions') });
@@ -396,6 +526,16 @@ async function assertJsonError(base, cookie, path, body, status, pattern) {
   assert.equal(response.status, status);
   assert.equal(response.headers.get('content-type'), 'application/json');
   assert.match((await response.json()).error, pattern);
+}
+
+async function postJson(base, cookie, path, body, expectedStatus = 200) {
+  const response = await fetch(makeUrl(base, path), {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  assert.equal(response.status, expectedStatus);
+  return response.json();
 }
 
 function assertSecurityHeaders(headers) {

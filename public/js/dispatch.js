@@ -45,6 +45,16 @@ export function dispatch(event) {
       setBusy(true);
       break;
 
+    case 'turn_queued':
+      setStatus(`queued · position ${event.position ?? 1}`, 'busy');
+      setBusy(true);
+      break;
+
+    case 'turn_cancelled':
+      setStatus(event.queued ? 'queued turn cancelled' : 'cancelled', 'ready');
+      setBusy(false);
+      break;
+
     case 'update':
       handleUpdate(event.update);
       break;

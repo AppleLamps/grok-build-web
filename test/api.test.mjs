@@ -56,3 +56,18 @@ test('api postTabNew includes current tab session id for cwd inheritance', async
     { url: '/tab/new', body: { sessionId: 'tab-123', cwd: 'C:\\Users\\lucas\\other' } },
   ]);
 });
+
+test('api getSettings includes current tab session id', async () => {
+  const calls = [];
+  installDomStubs({
+    storage: { 'grokweb.tabSessionId': 'tab-123' },
+    fetchImpl: async (url) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify({ autoApprove: false }), { status: 200 });
+    },
+  });
+
+  const api = await importFresh('public/js/api.js');
+  assert.deepEqual(await api.getSettings(), { autoApprove: false });
+  assert.deepEqual(calls, ['/settings?sessionId=tab-123']);
+});

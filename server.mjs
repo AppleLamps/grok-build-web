@@ -151,8 +151,16 @@ class GrokSession {
     this.sessionHistory = new Map();
     this.ready = false;
     this.readyPromise = null;
+    this.loadedAgentSessionId = null;
     this.respawnChain = Promise.resolve();
-    this.autoApprove = true; // when false, route permission requests to the UI
+    this.agentMutationActive = false;
+    this.agentMutationBacklog = 0;
+    this.nextTurnId = 1;
+    this.activeTurn = null;
+    this.turnQueue = [];
+    this.defaultAutoApprove = true; // when false, route permission requests to the UI
+    this.autoApprove = this.defaultAutoApprove; // legacy default-setting view
+    this.sessionAutoApprovals = new Map();
     this.pendingPermissions = new Map(); // rpcId -> {request, timeout}
     this.pendingElicitations = new Map(); // rpcId -> {request, timeout}
     this.unhandledClientRequests = new Set();
@@ -248,7 +256,16 @@ class GrokSession {
   }
 
   async enqueueAgentMutation(fn) {
-    const next = this.respawnChain.then(fn);
+    this.agentMutationBacklog++;
+    const next = this.respawnChain.then(async () => {
+      this.agentMutationBacklog--;
+      this.agentMutationActive = true;
+      try {
+        return await fn();
+      } finally {
+        this.agentMutationActive = false;
+      }
+    });
     this.respawnChain = next.catch(() => {});
     return next;
   }
@@ -260,6 +277,7 @@ class GrokSession {
     this.clearAllHistory();
     this.broadcast({ kind: 'agent_respawn', spawnOpts: { ...this.spawnOpts } });
     this.sessionId = null;
+    this.loadedAgentSessionId = null;
     this.start();
     await this.readyPromise;
   }
@@ -292,6 +310,7 @@ class GrokSession {
     });
     const res = await this.call('session/new', { cwd: this.cwd ?? CWD, mcpServers: [] });
     this.sessionId = res.sessionId;
+    this.loadedAgentSessionId = this.sessionId;
     this.cwd = this.cwd ?? CWD;
     this.rememberSessionCwd(this.sessionId, this.cwd);
     this.ready = true;
@@ -299,15 +318,18 @@ class GrokSession {
   }
 
   async newSession(cwd) {
-    if (this.sessionId) this.notify('session/cancel', { sessionId: this.sessionId });
-    const previousSessionId = this.sessionId;
-    const targetCwd = cwd ?? this.cwd ?? CWD;
-    const res = await this.call('session/new', { cwd: targetCwd, mcpServers: [] });
-    this.sessionId = res.sessionId;
-    this.cwd = targetCwd;
-    this.rememberSessionCwd(this.sessionId, targetCwd);
-    this.clearSessionHistory(previousSessionId);
-    this.broadcast({ kind: 'session_replaced', sessionId: this.sessionId, cwd: targetCwd });
+    return this.enqueueAgentMutation(async () => {
+      if (this.sessionId) this.notify('session/cancel', { sessionId: this.sessionId });
+      const previousSessionId = this.sessionId;
+      const targetCwd = cwd ?? this.cwd ?? CWD;
+      const res = await this.call('session/new', { cwd: targetCwd, mcpServers: [] });
+      this.sessionId = res.sessionId;
+      this.loadedAgentSessionId = this.sessionId;
+      this.cwd = targetCwd;
+      this.rememberSessionCwd(this.sessionId, targetCwd);
+      this.clearSessionHistory(previousSessionId);
+      this.broadcast({ kind: 'session_replaced', sessionId: this.sessionId, cwd: targetCwd });
+    });
   }
 
   async loadSession(sessionId, cwd, opts = {}) {
@@ -323,6 +345,7 @@ class GrokSession {
   async finishLoadSession(sessionId, targetCwd, previousSessionId) {
     await this.call('session/load', { sessionId, cwd: targetCwd, mcpServers: [] });
     this.sessionId = sessionId;
+    this.loadedAgentSessionId = sessionId;
     this.cwd = targetCwd;
     this.rememberSessionCwd(sessionId, targetCwd);
     this.clearSessionHistory(previousSessionId, sessionId);
@@ -333,6 +356,7 @@ class GrokSession {
     return this.enqueueAgentMutation(async () => {
       const targetCwd = cwd ?? this.cwdForSession(sessionId) ?? this.cwd ?? CWD;
       await this.call('session/load', { sessionId, cwd: targetCwd, mcpServers: [] });
+      this.loadedAgentSessionId = sessionId;
       this.rememberSessionCwd(sessionId, targetCwd);
       this.broadcast({ kind: 'session_ready', sessionId, cwd: targetCwd, loaded: true });
       return { sessionId, cwd: targetCwd };
@@ -364,12 +388,15 @@ class GrokSession {
     }
     // Notification or server-side request
     if (msg.method === 'session/update') {
-      this.broadcast({ kind: 'update', update: msg.params.update, sessionId: msg.params.sessionId });
+      const agentSessionId = msg.params.sessionId;
+      const sessionId = this.activeTurn?.sessionId ?? agentSessionId;
+      const update = this.normalizedSessionUpdate(msg.params.update, sessionId, agentSessionId);
+      this.broadcast({ kind: 'update', update, sessionId });
       return;
     }
     if (msg.method === 'session/request_permission' && msg.id !== undefined) {
       const sessionId = msg.params?.sessionId;
-      if (this.autoApprove) {
+      if (this.autoApproveFor(sessionId)) {
         const optionId = chooseAutoPermissionOption(msg.params?.options);
         if (optionId) {
           this.send({ jsonrpc: '2.0', id: msg.id, result: { outcome: { outcome: 'selected', optionId } } });
@@ -386,7 +413,7 @@ class GrokSession {
           if (this.pendingPermissions.has(msg.id)) {
             this.pendingPermissions.delete(msg.id);
             this.send({ jsonrpc: '2.0', id: msg.id, result: { outcome: { outcome: 'cancelled' } } });
-            this.broadcast({ kind: 'permission_timeout', rpcId: msg.id });
+            this.broadcast({ kind: 'permission_timeout', rpcId: msg.id, sessionId });
           }
         }, PERMISSION_REQUEST_TIMEOUT_MS);
         this.pendingPermissions.set(msg.id, { request: msg.params, timeout });
@@ -536,39 +563,83 @@ class GrokSession {
 
   notify(method, params) { this.send({ jsonrpc: '2.0', method, params }); }
 
-  async prompt(text, sessionId = null) {
-    if (!this.ready) await this.readyPromise;
+  prompt(text, sessionId = null, opts = {}) {
     const target = sessionId ?? this.sessionId;
-    this.broadcast({ kind: 'user_prompt', text, sessionId: target });
+    const turn = {
+      turnId: `turn-${this.nextTurnId++}`,
+      sessionId: target,
+      text,
+      internal: !!opts.internal,
+      cancelled: false,
+    };
+    const queued = this.agentMutationActive || this.agentMutationBacklog > 0 || this.turnQueue.length > 0;
+    if (!turn.internal) this.broadcast({ kind: 'user_prompt', text, sessionId: target, turnId: turn.turnId });
+    if (queued && !turn.internal) {
+      const position = this.turnQueue.filter(t => !t.cancelled && !t.internal).length + (this.activeTurn ? 1 : 0) + 1;
+      this.broadcast({ kind: 'turn_queued', sessionId: target, turnId: turn.turnId, position });
+    }
+    this.turnQueue.push(turn);
+    const promise = this.enqueueAgentMutation(() => this.runQueuedPrompt(turn));
+    return { turnId: turn.turnId, queued, promise };
+  }
+
+  async runQueuedPrompt(turn) {
+    const idx = this.turnQueue.indexOf(turn);
+    if (idx >= 0) this.turnQueue.splice(idx, 1);
+    if (turn.cancelled) return { cancelled: true };
+    if (!this.ready) await this.readyPromise;
+    const target = turn.sessionId ?? this.sessionId;
+    this.activeTurn = turn;
     try {
+      await this.ensureAgentSessionLoaded(target);
       const res = await this.call('session/prompt', {
         sessionId: target,
-        prompt: [{ type: 'text', text }],
+        prompt: [{ type: 'text', text: turn.text }],
       }, { timeoutMs: PROMPT_RPC_TIMEOUT_MS });
-      this.broadcast({ kind: 'turn_complete', result: res, sessionId: target });
+      if (!turn.internal) this.broadcast({ kind: 'turn_complete', result: res, sessionId: target, turnId: turn.turnId });
       return res;
     } catch (e) {
       if (e?.rpcTimeout && target) this.notify('session/cancel', { sessionId: target });
       throw e;
+    } finally {
+      if (this.activeTurn === turn) this.activeTurn = null;
     }
   }
 
   cancel(sessionId = null) {
     const target = sessionId ?? this.sessionId;
+    let queuedCancelled = 0;
+    for (const turn of [...this.turnQueue]) {
+      if (turn.sessionId !== target) continue;
+      turn.cancelled = true;
+      const idx = this.turnQueue.indexOf(turn);
+      if (idx >= 0) this.turnQueue.splice(idx, 1);
+      queuedCancelled++;
+      if (!turn.internal) {
+        this.broadcast({ kind: 'turn_cancelled', sessionId: target, turnId: turn.turnId, queued: true });
+      }
+    }
     if (target) this.notify('session/cancel', { sessionId: target });
+    return {
+      activeCancelled: !!(this.activeTurn && this.activeTurn.sessionId === target),
+      queuedCancelled,
+    };
   }
 
   // Spawn an additional ACP session on the same agent connection — used by
   // tabs that want their own conversation thread.
   async createTabSession(cwd = null, baseSessionId = null) {
-    if (!this.ready) await this.readyPromise;
-    const targetCwd = cwd ?? this.cwdForSession(baseSessionId) ?? this.cwd ?? CWD;
-    const res = await this.call('session/new', { cwd: targetCwd, mcpServers: [] });
-    this.rememberSessionCwd(res.sessionId, targetCwd);
-    // Broadcast a per-tab session_ready event tagged with the new sid so the
-    // browser tab subscribed to that sid can flip its UI out of "loading".
-    this.broadcast({ kind: 'session_ready', sessionId: res.sessionId, cwd: targetCwd });
-    return { sessionId: res.sessionId, cwd: targetCwd };
+    return this.enqueueAgentMutation(async () => {
+      if (!this.ready) await this.readyPromise;
+      const targetCwd = cwd ?? this.cwdForSession(baseSessionId) ?? this.cwd ?? CWD;
+      const res = await this.call('session/new', { cwd: targetCwd, mcpServers: [] });
+      this.loadedAgentSessionId = res.sessionId;
+      this.rememberSessionCwd(res.sessionId, targetCwd);
+      // Broadcast a per-tab session_ready event tagged with the new sid so the
+      // browser tab subscribed to that sid can flip its UI out of "loading".
+      this.broadcast({ kind: 'session_ready', sessionId: res.sessionId, cwd: targetCwd });
+      return { sessionId: res.sessionId, cwd: targetCwd };
+    });
   }
 
   respondToPermission(rpcId, optionId) {
@@ -580,7 +651,7 @@ class GrokSession {
       ? { outcome: 'cancelled' }
       : { outcome: 'selected', optionId };
     this.send({ jsonrpc: '2.0', id: rpcId, result: { outcome } });
-    this.broadcast({ kind: 'permission_resolved', rpcId, optionId });
+    this.broadcast({ kind: 'permission_resolved', rpcId, optionId, sessionId: pending.request?.sessionId });
     return true;
   }
 
@@ -596,18 +667,60 @@ class GrokSession {
   }
 
   setAutoApprove(on, sessionId = null) {
-    this.autoApprove = !!on;
-    this.spawnOpts.alwaysApprove = this.autoApprove;
-    this.broadcast({ kind: 'auto_approve_changed', autoApprove: this.autoApprove });
+    const next = !!on;
+    if (sessionId) {
+      this.sessionAutoApprovals.set(sessionId, next);
+    } else {
+      this.defaultAutoApprove = next;
+      this.autoApprove = next;
+      this.spawnOpts.alwaysApprove = next;
+    }
+    this.broadcast({ kind: 'auto_approve_changed', autoApprove: next, sessionId });
     // Also try to sync grok's own /always-approve state. The slash command is
     // sent as a normal prompt; the agent intercepts it before reaching the model.
     const target = sessionId ?? this.sessionId;
     if (this.ready && target) {
-      this.call('session/prompt', {
-        sessionId: target,
-        prompt: [{ type: 'text', text: `/always-approve ${on ? 'on' : 'off'}` }],
-      }).catch(() => { /* slash command may not be supported in headless — best effort */ });
+      this.prompt(`/always-approve ${next ? 'on' : 'off'}`, target, { internal: true })
+        .promise.catch(() => { /* slash command may not be supported in headless, best effort */ });
     }
+  }
+
+  autoApproveFor(sessionId = null) {
+    if (sessionId && this.sessionAutoApprovals.has(sessionId)) {
+      return this.sessionAutoApprovals.get(sessionId);
+    }
+    return this.defaultAutoApprove;
+  }
+
+  async ensureAgentSessionLoaded(sessionId) {
+    if (!sessionId || this.loadedAgentSessionId === sessionId) return;
+    const targetCwd = this.cwdForSession(sessionId) ?? this.cwd ?? CWD;
+    if (this.loadedAgentSessionId) this.notify('session/cancel', { sessionId: this.loadedAgentSessionId });
+    this.notify('session/cancel', { sessionId });
+    await this.call('session/load', { sessionId, cwd: targetCwd, mcpServers: [] });
+    this.loadedAgentSessionId = sessionId;
+    this.rememberSessionCwd(sessionId, targetCwd);
+  }
+
+  normalizedSessionUpdate(update, sessionId, agentSessionId) {
+    if (!update || !sessionId) return update;
+    const normalized = { ...update };
+    let changed = false;
+    if (agentSessionId && sessionId !== agentSessionId && normalized.sessionId && normalized.sessionId !== sessionId) {
+      normalized.sessionId = sessionId;
+      changed = true;
+    }
+    const rawOutput = normalized.rawOutput;
+    if (rawOutput && typeof rawOutput === 'object' && typeof rawOutput.output_file === 'string') {
+      const staleOutputPath = [...this.sessionCwds.keys()]
+        .some(knownSessionId => knownSessionId !== sessionId && rawOutput.output_file.includes(knownSessionId));
+      if (staleOutputPath || (agentSessionId && sessionId !== agentSessionId && rawOutput.output_file.includes(agentSessionId))) {
+        normalized.rawOutput = { ...rawOutput };
+        delete normalized.rawOutput.output_file;
+        changed = true;
+      }
+    }
+    return changed ? normalized : update;
   }
 
   // Subscribers receive live events only. /stream handles bounded replay with
@@ -1139,10 +1252,11 @@ const server = createServer(async (req, res) => {
         sendJsonError(res, 400, 'empty prompt'); return;
       }
       const target = body.sessionId ?? grok.sessionId;
-      grok.prompt(body.text, target).catch((e) =>
+      const turn = grok.prompt(body.text, target);
+      turn.promise.catch((e) =>
         grok.broadcast({ kind: 'error', error: errorMessage(e), sessionId: target })
       );
-      sendJson(res, 202, { ok: true });
+      sendJson(res, 202, { ok: true, turnId: turn.turnId, queued: turn.queued });
     } catch (e) { sendJsonError(res, 400, e); }
     return;
   }
@@ -1157,8 +1271,8 @@ const server = createServer(async (req, res) => {
         if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
       }
     }
-    grok.cancel(sessionId);
-    sendJson(res, 202, { ok: true, sessionId: sessionId ?? grok.sessionId });
+    const cancelResult = grok.cancel(sessionId);
+    sendJson(res, 202, { ok: true, sessionId: sessionId ?? grok.sessionId, ...cancelResult });
     return;
   }
 
@@ -1234,18 +1348,20 @@ const server = createServer(async (req, res) => {
   if (url.pathname === '/settings') {
     if (!requireApiAuth(req, res)) return;
     if (req.method === 'GET') {
-      sendJson(res, 200, { autoApprove: grok.autoApprove, ...bridgeSettings });
+      const sessionId = url.searchParams.get('sessionId') || null;
+      sendJson(res, 200, { autoApprove: grok.autoApproveFor(sessionId), ...bridgeSettings });
       return;
     }
     if (req.method === 'POST') {
       try {
         const body = JSON.parse(await readBody(req));
-        if (typeof body.autoApprove === 'boolean') grok.setAutoApprove(body.autoApprove, body.sessionId);
+        const sessionId = body.sessionId ?? null;
+        if (typeof body.autoApprove === 'boolean') grok.setAutoApprove(body.autoApprove, sessionId);
         if (typeof body.displayName === 'string') {
           const displayName = body.displayName.trim();
           bridgeSettings.displayName = displayName || defaultUsername();
         }
-        sendJson(res, 200, { autoApprove: grok.autoApprove, ...bridgeSettings });
+        sendJson(res, 200, { autoApprove: grok.autoApproveFor(sessionId), ...bridgeSettings });
       } catch (e) { sendJsonError(res, 400, e); }
       return;
     }

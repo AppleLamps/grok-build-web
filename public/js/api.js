@@ -30,7 +30,9 @@ function withSid(body) {
 }
 
 export async function getSettings() {
-  const r = await fetch(url('/settings'));
+  const u = new URL(url('/settings'), location.origin);
+  if (TAB_SESSION_ID) u.searchParams.set('sessionId', TAB_SESSION_ID);
+  const r = await fetch(u.pathname + u.search);
   return r.json();
 }
 

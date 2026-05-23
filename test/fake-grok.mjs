@@ -3,6 +3,7 @@
 const args = process.argv.slice(2);
 const scenario = process.env.FAKE_GROK_SCENARIO ?? 'normal';
 const delaySessionLoadMs = Number(process.env.FAKE_GROK_DELAY_SESSION_LOAD_MS ?? 0);
+const delayPromptMs = Number(process.env.FAKE_GROK_DELAY_PROMPT_MS ?? 0);
 
 if (args[0] === 'models') {
   console.log('grok-build');
@@ -49,6 +50,8 @@ if (!args.includes('agent') || !args.includes('stdio')) {
 let buf = '';
 let nextServerRequestId = 1000;
 let sessionId = 'fake-session-1';
+let activePromptCount = 0;
+let maxActivePromptCount = 0;
 const pending = new Map();
 
 process.stdin.setEncoding('utf8');
@@ -91,6 +94,21 @@ function request(method, params, track = false) {
   return new Promise((resolve) => pending.set(id, resolve));
 }
 
+function promptProbe(phase, msg) {
+  send({
+    jsonrpc: '2.0',
+    method: '_x.ai/fake_prompt_probe',
+    params: {
+      phase,
+      rpcId: msg.id,
+      sessionId: msg.params?.sessionId,
+      activePromptCount,
+      maxActivePromptCount,
+      text: msg.params?.prompt?.[0]?.text ?? '',
+    },
+  });
+}
+
 async function handle(msg) {
   if (msg.id !== undefined && (msg.result !== undefined || msg.error !== undefined)) {
     const resolve = pending.get(msg.id);
@@ -128,8 +146,22 @@ async function handle(msg) {
     return;
   }
   if (msg.method === 'session/prompt') {
-    await emitScenario(msg.params.sessionId);
-    result(msg.id, promptResult());
+    const text = msg.params?.prompt?.[0]?.text ?? '';
+    if (/^\/always-approve\b/.test(text)) {
+      result(msg.id, promptResult());
+      return;
+    }
+    activePromptCount++;
+    maxActivePromptCount = Math.max(maxActivePromptCount, activePromptCount);
+    promptProbe('start', msg);
+    try {
+      if (delayPromptMs > 0) await delay(delayPromptMs);
+      await emitScenario(msg.params.sessionId);
+      result(msg.id, promptResult());
+    } finally {
+      activePromptCount--;
+      promptProbe('end', msg);
+    }
     return;
   }
   result(msg.id, {});
@@ -154,6 +186,9 @@ async function emitScenario(sid) {
   }
   if (scenario === 'permission-empty') {
     await emitPermissionEmptyUpdates(sid);
+    return;
+  }
+  if (scenario === 'quiet') {
     return;
   }
   emitPromptUpdates(sid);

@@ -63,6 +63,54 @@ test('client fs requests resolve against the cwd for their sessionId', async () 
   });
 });
 
+test('tab new without explicit cwd inherits from the current tab session only', async () => {
+  await withTempDir('grok-web-tab-cwd-', async (temp) => {
+    const rootA = join(temp, 'a');
+    const rootB = join(temp, 'b');
+    const sessionsRoot = join(temp, 'sessions');
+    await mkdir(rootA, { recursive: true });
+    await mkdir(rootB, { recursive: true });
+
+    const server = await startFakeServer({ scenario: 'fs', sessionsRoot });
+    try {
+      const { base, cookie } = await bootstrap(server);
+
+      const tabA = await postJson(base, cookie, '/tab/new', { cwd: rootA });
+      const tabB = await postJson(base, cookie, '/tab/new', { cwd: rootB });
+      const tabAChild = await postJson(base, cookie, '/tab/new', { sessionId: tabA.sessionId });
+
+      assert.equal(tabA.cwd, rootA);
+      assert.equal(tabB.cwd, rootB);
+      assert.equal(tabAChild.cwd, rootA);
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+test('tab load without explicit cwd reuses the loaded session cwd', async () => {
+  await withTempDir('grok-web-tab-load-cwd-', async (temp) => {
+    const rootA = join(temp, 'a');
+    const rootB = join(temp, 'b');
+    const sessionsRoot = join(temp, 'sessions');
+    await mkdir(rootA, { recursive: true });
+    await mkdir(rootB, { recursive: true });
+
+    const server = await startFakeServer({ scenario: 'fs', sessionsRoot });
+    try {
+      const { base, cookie } = await bootstrap(server);
+
+      const tabA = await postJson(base, cookie, '/tab/new', { cwd: rootA });
+      await postJson(base, cookie, '/tab/new', { cwd: rootB });
+      const loadedA = await postJson(base, cookie, '/tab/load', { sessionId: tabA.sessionId });
+
+      assert.equal(loadedA.cwd, rootA);
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
 test('client fs requests reject symlink or junction escapes from session cwd', async (t) => {
   await withTempDir('grok-web-fs-link-', async (temp) => {
     const root = join(temp, 'root');

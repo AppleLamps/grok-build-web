@@ -35,8 +35,8 @@ const AGENT_HELP_TIMEOUT_MS = 3000;
 const DEFAULT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_RPC_TIMEOUT_MS ?? 2 * 60 * 1000);
 const PROMPT_RPC_TIMEOUT_MS = Number(process.env.GROK_WEB_PROMPT_TIMEOUT_MS ?? 30 * 60 * 1000);
 const CHILD_KILL_GRACE_MS = 500;
-const PERMISSION_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
-const ELICITATION_TIMEOUT_MS = 5 * 60 * 1000;
+const PERMISSION_REQUEST_TIMEOUT_MS = Number(process.env.GROK_WEB_PERMISSION_TIMEOUT_MS ?? 5 * 60 * 1000);
+const ELICITATION_TIMEOUT_MS = Number(process.env.GROK_WEB_ELICITATION_TIMEOUT_MS ?? 5 * 60 * 1000);
 const CLI_TIMEOUT_DEFAULT_MS = 30000;
 const CLI_TIMEOUT_SHORT_MS = 10000;
 const CLI_TIMEOUT_UPDATE_CHECK_MS = 15000;
@@ -216,6 +216,7 @@ class GrokSession {
   start() {
     this.buf = '';
     this.rejectPending(new Error('agent process restarted'));
+    this.clearParkedClientRequestTimers();
     this.pendingPermissions.clear();
     this.pendingElicitations.clear();
     // Compose env. When ignoreApiKey is true, strip XAI_API_KEY so the agent
@@ -243,7 +244,11 @@ class GrokSession {
   }
 
   async respawn(newOpts = {}) {
-    const next = this.respawnChain.then(() => this.doRespawn(newOpts));
+    return this.enqueueAgentMutation(() => this.doRespawn(newOpts));
+  }
+
+  async enqueueAgentMutation(fn) {
+    const next = this.respawnChain.then(fn);
     this.respawnChain = next.catch(() => {});
     return next;
   }
@@ -306,26 +311,32 @@ class GrokSession {
   }
 
   async loadSession(sessionId, cwd, opts = {}) {
-    // Cancel against the still-alive child *before* respawning. If restoreCode
-    // triggers a respawn we don't want to write to a dead child afterwards.
-    if (this.sessionId && this.ready) this.notify('session/cancel', { sessionId: this.sessionId });
-    const previousSessionId = this.sessionId;
-    const targetCwd = cwd ?? this.cwd ?? CWD;
-    if (opts.restoreCode && !this.spawnOpts.restoreCode) {
-      Object.assign(this.spawnOpts, { restoreCode: true });
-      this.ready = false;
-      await this.killChild();
-      this.clearAllHistory();
-      this.broadcast({ kind: 'agent_respawn', spawnOpts: { ...this.spawnOpts } });
-      this.start();
-      await this.readyPromise;
-    }
+    return this.enqueueAgentMutation(async () => {
+      const previousSessionId = this.sessionId;
+      const targetCwd = cwd ?? this.cwd ?? CWD;
+      if (this.sessionId && this.ready) this.notify('session/cancel', { sessionId: this.sessionId });
+      if (opts.restoreCode && !this.spawnOpts.restoreCode) await this.doRespawn({ restoreCode: true });
+      await this.finishLoadSession(sessionId, targetCwd, previousSessionId);
+    });
+  }
+
+  async finishLoadSession(sessionId, targetCwd, previousSessionId) {
     await this.call('session/load', { sessionId, cwd: targetCwd, mcpServers: [] });
     this.sessionId = sessionId;
     this.cwd = targetCwd;
     this.rememberSessionCwd(sessionId, targetCwd);
     this.clearSessionHistory(previousSessionId, sessionId);
     this.broadcast({ kind: 'session_replaced', sessionId, cwd: targetCwd, loaded: true });
+  }
+
+  async loadTabSession(sessionId, cwd) {
+    return this.enqueueAgentMutation(async () => {
+      const targetCwd = cwd ?? this.cwdForSession(sessionId) ?? this.cwd ?? CWD;
+      await this.call('session/load', { sessionId, cwd: targetCwd, mcpServers: [] });
+      this.rememberSessionCwd(sessionId, targetCwd);
+      this.broadcast({ kind: 'session_ready', sessionId, cwd: targetCwd, loaded: true });
+      return { sessionId, cwd: targetCwd };
+    });
   }
 
   onStdout(chunk) {
@@ -454,7 +465,7 @@ class GrokSession {
     const raw = params.path ?? params.filePath ?? params.file_path;
     if (typeof raw !== 'string' || !raw) throw new Error('path required');
     const sessionId = params.sessionId;
-    const root = resolve((sessionId && this.sessionCwds.get(sessionId)) || this.cwd || CWD);
+    const root = resolve(this.cwdForSession(sessionId) ?? this.cwd ?? CWD);
     const requested = resolve(root, raw);
     const rootCmp = process.platform === 'win32' ? root.toLowerCase() : root;
     const requestedCmp = process.platform === 'win32' ? requested.toLowerCase() : requested;
@@ -482,6 +493,10 @@ class GrokSession {
 
   rememberSessionCwd(sessionId, cwd) {
     if (sessionId && cwd) this.sessionCwds.set(sessionId, cwd);
+  }
+
+  cwdForSession(sessionId) {
+    return sessionId ? this.sessionCwds.get(sessionId) : null;
   }
 
   parkElicitation(msg) {
@@ -545,11 +560,10 @@ class GrokSession {
 
   // Spawn an additional ACP session on the same agent connection — used by
   // tabs that want their own conversation thread.
-  async createTabSession(cwd = null) {
+  async createTabSession(cwd = null, baseSessionId = null) {
     if (!this.ready) await this.readyPromise;
-    const targetCwd = cwd ?? this.cwd ?? CWD;
+    const targetCwd = cwd ?? this.cwdForSession(baseSessionId) ?? this.cwd ?? CWD;
     const res = await this.call('session/new', { cwd: targetCwd, mcpServers: [] });
-    this.cwd = targetCwd;
     this.rememberSessionCwd(res.sessionId, targetCwd);
     // Broadcast a per-tab session_ready event tagged with the new sid so the
     // browser tab subscribed to that sid can flip its UI out of "loading".
@@ -596,15 +610,11 @@ class GrokSession {
     }
   }
 
-  // Subscribers can filter to one sessionId (multi-tab support).
-  // sessionIdFilter=null receives every event; events without a sessionId
-  // (global lifecycle like agent_exit, sessions_changed) reach everyone.
+  // Subscribers receive live events only. /stream handles bounded replay with
+  // response backpressure so reconnects cannot block broadcast().
   subscribe(fn, sessionIdFilter = null) {
     const sub = { fn, sessionIdFilter };
     this.listeners.add(sub);
-    for (const entry of this.replayEntries(sessionIdFilter)) {
-      fn(entry.event);
-    }
     return () => this.listeners.delete(sub);
   }
 
@@ -662,6 +672,15 @@ class GrokSession {
       if (resolver.timeout) clearTimeout(resolver.timeout);
       resolver.reject(error);
       this.pending.delete(id);
+    }
+  }
+
+  clearParkedClientRequestTimers() {
+    for (const entry of this.pendingPermissions.values()) {
+      if (entry.timeout) clearTimeout(entry.timeout);
+    }
+    for (const entry of this.pendingElicitations.values()) {
+      if (entry.timeout) clearTimeout(entry.timeout);
     }
   }
 }
@@ -823,6 +842,27 @@ const MIME = {
   '.svg': 'image/svg+xml',
 };
 
+const SECURITY_HEADERS = {
+  'content-security-policy': [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https:",
+    "media-src 'self' data: blob: https:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join('; '),
+  'x-frame-options': 'DENY',
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'no-referrer',
+};
+
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 function parseCookies(header = '') {
   const cookies = {};
   for (const part of header.split(';')) {
@@ -837,6 +877,46 @@ function parseCookies(header = '') {
 
 function auth(req) {
   return parseCookies(req.headers.cookie)[SESSION_COOKIE] === SESSION_TOKEN;
+}
+
+function setSecurityHeaders(res) {
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
+}
+
+function parseHostHeader(host) {
+  if (!host) return null;
+  try {
+    const parsed = new URL(`http://${String(host).trim()}`);
+    const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    return { hostname, port: parsed.port };
+  } catch {
+    return null;
+  }
+}
+
+function isAllowedHost(req) {
+  const host = parseHostHeader(req.headers.host);
+  if (!host) return false;
+  if (!['127.0.0.1', 'localhost', '::1'].includes(host.hostname)) return false;
+  const activePort = server.address()?.port;
+  if (activePort && host.port && host.port !== String(activePort)) return false;
+  return true;
+}
+
+function isAllowedOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  let parsed;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return false;
+  }
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (!['127.0.0.1', 'localhost', '::1'].includes(hostname)) return false;
+  const activePort = server.address()?.port;
+  if (activePort && parsed.port !== String(activePort)) return false;
+  return true;
 }
 
 function bootstrap(req, res, url) {
@@ -893,9 +973,53 @@ function isRequestBodyTooLarge(error) {
   return error?.code === 'ERR_REQUEST_BODY_TOO_LARGE';
 }
 
+function sseEvent(event) {
+  return `data: ${JSON.stringify(event)}\n\n`;
+}
+
+function writeWithBackpressure(res, chunk) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    function cleanup() {
+      res.off('drain', onDrain);
+      res.off('error', onError);
+      res.off('close', onClose);
+    }
+    function done(fn, value) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      fn(value);
+    }
+    function onDrain() { done(resolve); }
+    function onError(error) { done(reject, error); }
+    function onClose() { done(reject, new Error('SSE response closed')); }
+    try {
+      if (res.write(chunk)) {
+        resolve();
+        return;
+      }
+      res.once('drain', onDrain);
+      res.once('error', onError);
+      res.once('close', onClose);
+    } catch (e) {
+      cleanup();
+      reject(e);
+    }
+  });
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  res.setHeader('referrer-policy', 'no-referrer');
+  setSecurityHeaders(res);
+  if (!isAllowedHost(req)) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }).end('bad host');
+    return;
+  }
+  if (MUTATING_METHODS.has(req.method) && !isAllowedOrigin(req)) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }).end('bad origin');
+    return;
+  }
   // HTML entrypoint is cookie-gated after the one-time launch URL bootstrap.
   if (req.method === 'GET' && url.pathname === '/') {
     if (auth(req) && url.searchParams.has('token')) {
@@ -941,18 +1065,68 @@ const server = createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/stream') {
     if (!auth(req)) { res.writeHead(401).end(); return; }
     const filter = url.searchParams.get('sessionId') || null;
+    let closed = false;
+    let replaying = true;
+    let replayDone = false;
+    let ping = null;
+    let unsubscribe = () => {};
+    let writeQueue = Promise.resolve();
+    const liveBacklog = [];
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
+      unsubscribe();
+      if (ping) clearInterval(ping);
+    };
+    const enqueueWrite = (chunk, label = 'SSE write') => {
+      const next = writeQueue.then(() => {
+        if (closed) return undefined;
+        return writeWithBackpressure(res, chunk);
+      });
+      writeQueue = next.catch((e) => {
+        if (!closed) console.error(`${label} failed:`, errorMessage(e));
+        cleanup();
+      });
+      return next;
+    };
+    req.on('close', cleanup);
     res.writeHead(200, {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache',
       'connection': 'keep-alive',
       'x-accel-buffering': 'no',
     });
-    res.write('retry: 1000\n\n');
-    const unsubscribe = grok.subscribe((event) => {
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    unsubscribe = grok.subscribe((event) => {
+      if (closed) return;
+      if (replaying) {
+        liveBacklog.push(event);
+        return;
+      }
+      enqueueWrite(sseEvent(event), 'SSE live write');
     }, filter);
-    const ping = setInterval(() => res.write(': ping\n\n'), 15000);
-    req.on('close', () => { unsubscribe(); clearInterval(ping); });
+    try {
+      await writeWithBackpressure(res, 'retry: 1000\n\n');
+      for (const entry of grok.replayEntries(filter)) {
+        if (closed) break;
+        await writeWithBackpressure(res, sseEvent(entry.event));
+      }
+      replaying = false;
+      replayDone = true;
+      while (liveBacklog.length && !closed) {
+        await writeWithBackpressure(res, sseEvent(liveBacklog.shift()));
+      }
+      if (!closed) {
+        ping = setInterval(() => {
+          enqueueWrite(': ping\n\n', 'SSE ping write');
+        }, 15000);
+      }
+    } catch (e) {
+      if (!closed) console.error('SSE replay failed:', errorMessage(e));
+      cleanup();
+      if (!replayDone) {
+        try { res.end(); } catch {}
+      }
+    }
     return;
   }
 
@@ -994,12 +1168,8 @@ const server = createServer(async (req, res) => {
     try {
       const body = JSON.parse(await readBody(req));
       if (!body.sessionId) { sendJsonError(res, 400, 'sessionId required'); return; }
-      const targetCwd = body.cwd ?? grok.cwd ?? CWD;
-      await grok.call('session/load', { sessionId: body.sessionId, cwd: targetCwd, mcpServers: [] });
-      grok.cwd = targetCwd;
-      grok.rememberSessionCwd(body.sessionId, targetCwd);
-      grok.broadcast({ kind: 'session_ready', sessionId: body.sessionId, cwd: targetCwd, loaded: true });
-      sendJson(res, 200, { sessionId: body.sessionId, cwd: targetCwd });
+      const tab = await grok.loadTabSession(body.sessionId, body.cwd);
+      sendJson(res, 200, tab);
     } catch (e) {
       if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
       sendJsonError(res, 500, e);
@@ -1012,13 +1182,18 @@ const server = createServer(async (req, res) => {
     if (!requireApiAuth(req, res)) return;
     try {
       let cwd = null;
+      let sessionId = null;
       if (req.headers['content-length'] && req.headers['content-length'] !== '0') {
-        try { cwd = JSON.parse(await readBody(req)).cwd; }
+        try {
+          const body = JSON.parse(await readBody(req));
+          cwd = body.cwd;
+          sessionId = body.sessionId;
+        }
         catch (e) {
           if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
         }
       }
-      const tab = await grok.createTabSession(cwd);
+      const tab = await grok.createTabSession(cwd, sessionId);
       sendJson(res, 200, tab);
     } catch (e) {
       if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }

@@ -36,3 +36,23 @@ test('api postRespawn surfaces server error bodies', async () => {
   const api = await importFresh('public/js/api.js');
   await assert.rejects(() => api.postRespawn({ model: 'grok-build' }), /bad launch flag/);
 });
+
+test('api postTabNew includes current tab session id for cwd inheritance', async () => {
+  const calls = [];
+  installDomStubs({
+    storage: { 'grokweb.tabSessionId': 'tab-123' },
+    fetchImpl: async (url, opts) => {
+      calls.push({ url: String(url), body: JSON.parse(opts.body) });
+      return new Response(JSON.stringify({ sessionId: 'tab-new', cwd: 'C:\\Users\\lucas\\project' }), { status: 200 });
+    },
+  });
+
+  const api = await importFresh('public/js/api.js');
+  await api.postTabNew();
+  await api.postTabNew('C:\\Users\\lucas\\other');
+
+  assert.deepEqual(calls, [
+    { url: '/tab/new', body: { sessionId: 'tab-123' } },
+    { url: '/tab/new', body: { sessionId: 'tab-123', cwd: 'C:\\Users\\lucas\\other' } },
+  ]);
+});

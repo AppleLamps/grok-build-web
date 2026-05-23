@@ -17,7 +17,7 @@ Live list. Items that get fixed are removed; items get added as they're discover
 
 ## Operational
 
-- **History replay on SSE connect.** New SSE subscribers receive the full in-memory event history filtered by their sessionId. With long sessions and many tabs the replay cost grows linearly. Cap is 10000 events; older ones are dropped.
+- **History replay on SSE connect.** New SSE subscribers receive the full in-memory event history filtered by their sessionId. Replay is backpressure-aware and the cap is 10000 events; older events are dropped.
 - **Process cleanup on Ctrl-C is best-effort.** SIGINT kills the child agent, but on Windows orphaned `grok.exe` instances have occasionally been observed if the server crashes. Check `Get-Process grok` if launch fails ("Address already in use" suggests something is squatting the port).
 - **No graceful shutdown of in-flight turns.** Stopping the server mid-prompt drops the response on the floor — the session is persisted by grok itself but the UI never sees the completion.
 - **Sessions watcher reliability.** `fs.watch` is best-effort across platforms; recursive mode isn't guaranteed on every OS. A silent watcher death stops sidebar auto-refresh — manual refresh still works.

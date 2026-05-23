@@ -99,7 +99,8 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 ## Bridge plumbing (web-only, but required for parity)
 
 - **[done] SSE reconnect with backoff** — `[plumbing]` Exponential backoff capped at 15s; visible "disconnected · retry in Xs" status.
-- **[done] Per-tab sessions** — `[plumbing]` Each browser tab has its own `sessionId` stored in URL (`?session=`) + `localStorage`. The shared agent process hosts multiple ACP sessions via `session/new`; the bridge tags every broadcast with `sessionId` and SSE subscribers filter to one session. Endpoints: `POST /tab/new`, `POST /tab/load`, `GET /stream?sessionId=...`. Verified: tab A and tab B run in parallel with 0 event leakage between them.
+- **[done] Per-tab sessions** — `[plumbing]` Each browser tab has its own `sessionId` stored in URL (`?session=`) + `localStorage`. The shared agent process hosts multiple ACP sessions via `session/new`; the bridge tags every broadcast with `sessionId` and SSE subscribers filter to one session. Per-tab cwd is stored by session instead of mutating the bridge default cwd. Endpoints: `POST /tab/new`, `POST /tab/load`, `GET /stream?sessionId=...`. Verified: tab A and tab B run in parallel with 0 event leakage between them.
+- **[done] Local HTTP hardening** — `[plumbing]` Adds CSP, frame blocking, `nosniff`, local Host validation, same-origin checks for mutating browser requests, and backpressure-aware SSE replay with listener cleanup.
 - **[done] Update notifications** — `[cli update --check]` Yellow banner on page load if `grok update --check --json` reports a newer version.
 - **[done] Inspect view** — `[cli inspect --json]` Sidebar Tools → "Inspect config" shows the discovered config as JSON.
 
@@ -115,7 +116,7 @@ These weren't features in the original list but unlock most of the rest:
 
 - **Modular client** — 23 JS modules, 2 CSS files. Each module owns one domain.
 - **CLI shell-out helper** — async `runGrokCli(args)` in `server.mjs` + ten `/cli/*` endpoints (inspect, update-check, models, share, trace, mcp, worktree, login, oneshot, import). Any new grok subcommand integration is ~10 lines.
-- **Respawn machinery** — serialized `GrokSession.respawn(newOpts)` + `POST /session/respawn`. Any new launch-time flag becomes a Settings field with no other code changes.
+- **Respawn machinery** — serialized `GrokSession.respawn(newOpts)` + `POST /session/respawn`; session-load mutations share the same queue when a load needs a restore-code respawn. Any new launch-time flag becomes a Settings field with no other code changes.
 - **Generic modal** — `modal(title, body)` in `modal.js`. Used by every Tools panel.
 - **Tool dispatch** — `summarizeTool()` recognizes ~17 tool kinds; specialized detail renderers plug in cleanly.
 - **Sessions file watcher** — Server `fs.watch(SESSIONS_ROOT, {recursive:true})` → broadcast `sessions_changed` → client `loadRecents()`.

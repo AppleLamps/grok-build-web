@@ -235,7 +235,7 @@ Run the account-free regression suite:
 npm test
 ```
 
-This uses Node's built-in test runner with fake ACP fixtures. It covers bridge auth and SSE, per-session cwd isolation, API failures, renderer shapes, sidebar/settings behavior, permissions, elicitations, slash commands, bootstrap routing, session edge cases, large output, cancellation, and tool lifecycle state.
+This uses Node's built-in test runner with fake ACP fixtures. It covers bridge auth and SSE, security headers and local request guards, per-session cwd isolation, API failures, renderer shapes, sidebar/settings behavior, permissions, elicitations, slash commands, bootstrap routing, session edge cases, large output, cancellation, and tool lifecycle state.
 
 Run live integration checks against the installed `grok` CLI:
 
@@ -265,7 +265,11 @@ Feature touch points:
 
 Grok Build Web is designed for local use. The launch URL includes a one-time token that sets an HttpOnly cookie. API and SSE requests require that cookie. Static assets are public because they contain no secrets.
 
-The bridge can read and write files only through ACP requests from the agent, and those filesystem handlers are confined to the active session workspace.
+HTTP responses include a local-app security baseline: CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: no-referrer`. The server only accepts `Host` values for `127.0.0.1`, `localhost`, or `::1` on its active port. Mutating browser requests with an `Origin` header must come from the same local origin.
+
+The bridge can read and write files only through ACP requests from the agent, and those filesystem handlers are confined to the request's session workspace. Per-tab session APIs keep workspace cwd in per-session state so one tab cannot silently change another tab's fallback cwd.
+
+Agent restarts and session loads share one serialized mutation queue. Permission and elicitation timeout handles are cleared across respawns, and SSE reconnect replay is delivered with response backpressure and listener cleanup.
 
 ## Related
 

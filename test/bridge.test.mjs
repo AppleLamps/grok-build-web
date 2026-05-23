@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { request as httpRequest } from 'node:http';
 import { join } from 'node:path';
 import {
   bootstrap,
+  delay,
   makeUrl,
   readEvents,
   seedSessions,
@@ -144,6 +146,176 @@ test('auto-approve cancels permission requests that have no options', async () =
   });
 });
 
+test('security headers and local request guards are enforced', async () => {
+  await withTempDir('grok-web-security-headers-', async (temp) => {
+    const server = await startFakeServer({ sessionsRoot: join(temp, 'sessions') });
+    try {
+      const { base, cookie } = await bootstrap(server);
+
+      const home = await fetch(makeUrl(base, '/'), { headers: { cookie } });
+      assert.equal(home.status, 200);
+      assertSecurityHeaders(home.headers);
+      assert.match(home.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+
+      const staticJs = await fetch(makeUrl(base, '/static/js/api.js'));
+      assert.equal(staticJs.status, 200);
+      assertSecurityHeaders(staticJs.headers);
+
+      const api = await fetch(makeUrl(base, '/sessions'), { headers: { cookie } });
+      assert.equal(api.status, 200);
+      assertSecurityHeaders(api.headers);
+
+      const badHost = await rawHttpRequest(makeUrl(base, '/static/js/api.js'), {
+        headers: { host: 'example.test' },
+      });
+      assert.equal(badHost.statusCode, 403);
+      assert.equal(badHost.body, 'bad host');
+      assert.equal(badHost.headers['x-frame-options'], 'DENY');
+
+      const badOrigin = await fetch(makeUrl(base, '/cancel'), {
+        method: 'POST',
+        headers: {
+          cookie,
+          origin: 'https://example.test',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+      assert.equal(badOrigin.status, 403);
+      assert.equal(await badOrigin.text(), 'bad origin');
+
+      const sameOrigin = await fetch(makeUrl(base, '/cancel'), {
+        method: 'POST',
+        headers: {
+          cookie,
+          origin: base.origin,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+      assert.equal(sameOrigin.status, 202);
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+test('respawn clears stale permission timers before reused RPC IDs can resolve new requests', async () => {
+  await withTempDir('grok-web-permission-respawn-', async (temp) => {
+    const server = await startFakeServer({
+      sessionsRoot: join(temp, 'sessions'),
+      env: { GROK_WEB_PERMISSION_TIMEOUT_MS: '1800' },
+    });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const events = [];
+      const abort = new AbortController();
+      const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
+      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+
+      const settings = await fetch(makeUrl(base, '/settings'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ autoApprove: false }),
+      });
+      assert.equal(settings.status, 200);
+
+      const firstPrompt = await fetch(makeUrl(base, '/prompt'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'park first permission' }),
+      });
+      assert.equal(firstPrompt.status, 202);
+      await waitForEvent(events, e => e.kind === 'permission_request' && e.rpcId === 1000, 'first permission_request');
+
+      await delay(700);
+      const respawn = await fetch(makeUrl(base, '/session/respawn'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      assert.equal(respawn.status, 200);
+      await waitForEvent(events, e => e.kind === 'agent_respawn', 'agent_respawn');
+      await waitForEvent(events, e => e.kind === 'session_ready' && events.indexOf(e) > 0, 'respawned session_ready');
+
+      const secondPrompt = await fetch(makeUrl(base, '/prompt'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'park second permission' }),
+      });
+      assert.equal(secondPrompt.status, 202);
+      await waitForEvent(
+        events,
+        () => events.filter(e => e.kind === 'permission_request' && e.rpcId === 1000).length === 2,
+        'second permission_request with reused rpcId',
+      );
+
+      await delay(1300);
+      assert.equal(events.some(e => e.kind === 'permission_timeout' && e.rpcId === 1000), false);
+
+      const answer = await fetch(makeUrl(base, '/permission'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ rpcId: 1000, optionId: 'allow' }),
+      });
+      assert.equal(answer.status, 200);
+      assert.deepEqual(await answer.json(), { ok: true });
+
+      abort.abort();
+      await stream;
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+test('tab session load is serialized with concurrent respawns', async () => {
+  await withTempDir('grok-web-tab-load-respawn-', async (temp) => {
+    const server = await startFakeServer({
+      sessionsRoot: join(temp, 'sessions'),
+      env: { FAKE_GROK_DELAY_SESSION_LOAD_MS: '300' },
+    });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const events = [];
+      const abort = new AbortController();
+      const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
+      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+
+      const load = fetch(makeUrl(base, '/tab/load'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId: 'slow-loaded-session', cwd: temp }),
+      });
+      await delay(50);
+      const respawn = fetch(makeUrl(base, '/session/respawn'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'grok-4.3' }),
+      });
+
+      const loadResponse = await load;
+      assert.equal(loadResponse.status, 200);
+      assert.equal((await loadResponse.json()).sessionId, 'slow-loaded-session');
+
+      const respawnResponse = await respawn;
+      assert.equal(respawnResponse.status, 200);
+      assert.equal((await respawnResponse.json()).spawnOpts.model, 'grok-4.3');
+
+      const loadedIndex = events.findIndex(e => e.kind === 'session_ready' && e.sessionId === 'slow-loaded-session' && e.loaded);
+      const respawnIndex = events.findIndex(e => e.kind === 'agent_respawn');
+      assert.notEqual(loadedIndex, -1, 'tab load completed');
+      assert.notEqual(respawnIndex, -1, 'respawn event was emitted');
+      assert.ok(loadedIndex < respawnIndex, 'tab load finished before queued respawn');
+
+      abort.abort();
+      await stream;
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
 test('API bad requests return JSON error bodies', async () => {
   await withTempDir('grok-web-json-errors-', async (temp) => {
     const server = await startFakeServer({ sessionsRoot: join(temp, 'sessions') });
@@ -224,4 +396,39 @@ async function assertJsonError(base, cookie, path, body, status, pattern) {
   assert.equal(response.status, status);
   assert.equal(response.headers.get('content-type'), 'application/json');
   assert.match((await response.json()).error, pattern);
+}
+
+function assertSecurityHeaders(headers) {
+  assert.equal(headers.get('x-frame-options'), 'DENY');
+  assert.equal(headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(headers.get('referrer-policy'), 'no-referrer');
+  const csp = headers.get('content-security-policy');
+  assert.match(csp, /default-src 'self'/);
+  assert.match(csp, /object-src 'none'/);
+  assert.match(csp, /base-uri 'none'/);
+}
+
+function rawHttpRequest(url, { method = 'GET', headers = {}, body = null } = {}) {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({
+      hostname: url.hostname,
+      port: url.port,
+      path: `${url.pathname}${url.search}`,
+      method,
+      headers,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => {
+        resolve({
+          statusCode: res.statusCode,
+          headers: res.headers,
+          body: Buffer.concat(chunks).toString('utf8'),
+        });
+      });
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
 }

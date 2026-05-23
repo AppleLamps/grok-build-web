@@ -2,6 +2,7 @@
 
 const args = process.argv.slice(2);
 const scenario = process.env.FAKE_GROK_SCENARIO ?? 'normal';
+const delaySessionLoadMs = Number(process.env.FAKE_GROK_DELAY_SESSION_LOAD_MS ?? 0);
 
 if (args[0] === 'models') {
   console.log('grok-build');
@@ -109,6 +110,7 @@ async function handle(msg) {
     return;
   }
   if (msg.method === 'session/load') {
+    if (delaySessionLoadMs > 0) await delay(delaySessionLoadMs);
     sessionId = msg.params.sessionId;
     result(msg.id, { sessionId });
     return;
@@ -131,6 +133,10 @@ async function handle(msg) {
     return;
   }
   result(msg.id, {});
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function emitScenario(sid) {

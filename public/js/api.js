@@ -63,7 +63,7 @@ export async function postCancel() {
 // Per-tab session management
 export async function postTabNew(cwd = null) {
   const r = await fetch(url('/tab/new'), {
-    method: 'POST', headers: json, body: JSON.stringify(cwd ? { cwd } : {}),
+    method: 'POST', headers: json, body: JSON.stringify(withSid(cwd ? { cwd } : {})),
   });
   if (!r.ok) throw new Error(await r.text());
   return r.json();

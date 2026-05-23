@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { request as httpRequest } from 'node:http';
+import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   bootstrap,
@@ -517,6 +518,81 @@ test('request body limit rejects oversized JSON and can be disabled', async () =
   });
 });
 
+test('session-media serves only authenticated files under sessions root', async () => {
+  await withTempDir('grok-web-session-media-', async (temp) => {
+    const sessionsRoot = join(temp, 'sessions');
+    const mediaDir = join(sessionsRoot, 'cwd', 'session-id', 'images');
+    await mkdir(mediaDir, { recursive: true });
+    await writeFile(join(mediaDir, '1.jpg'), 'fake image bytes');
+    await writeFile(join(mediaDir, 'note.txt'), 'not media');
+    await mkdir(join(mediaDir, 'folder.jpg'));
+    await writeFile(join(temp, 'outside.jpg'), 'outside');
+    let symlinkCreated = false;
+    try {
+      await symlink(join(temp, 'outside.jpg'), join(mediaDir, 'escape.jpg'));
+      symlinkCreated = true;
+    } catch {
+      symlinkCreated = false;
+    }
+
+    const server = await startFakeServer({ sessionsRoot });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const mediaUrl = (path) => makeUrl(base, `/session-media?path=${encodeURIComponent(path)}`);
+
+      const unauth = await fetch(mediaUrl('cwd/session-id/images/1.jpg'));
+      assert.equal(unauth.status, 401);
+
+      const ok = await fetch(mediaUrl('cwd/session-id/images/1.jpg'), { headers: { cookie } });
+      assert.equal(ok.status, 200);
+      assert.equal(ok.headers.get('content-type'), 'image/jpeg');
+      assert.equal(await ok.text(), 'fake image bytes');
+
+      const dotGrok = await fetch(mediaUrl('.grok/sessions/cwd/session-id/images/1.jpg'), { headers: { cookie } });
+      assert.equal(dotGrok.status, 200);
+
+      const traversal = await fetch(mediaUrl('../outside.jpg'), { headers: { cookie } });
+      assert.equal(traversal.status, 403);
+
+      const unsupported = await fetch(mediaUrl('cwd/session-id/images/note.txt'), { headers: { cookie } });
+      assert.equal(unsupported.status, 415);
+
+      const directory = await fetch(mediaUrl('cwd/session-id/images/folder.jpg'), { headers: { cookie } });
+      assert.equal(directory.status, 403);
+
+      const missing = await fetch(mediaUrl('cwd/session-id/images/missing.jpg'), { headers: { cookie } });
+      assert.equal(missing.status, 404);
+
+      if (symlinkCreated) {
+        const escaped = await fetch(mediaUrl('cwd/session-id/images/escape.jpg'), { headers: { cookie } });
+        assert.equal(escaped.status, 403);
+      }
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+test('cli worktree receives Windows HOME fallback when parent HOME is empty', async () => {
+  await withTempDir('grok-web-worktree-home-', async (temp) => {
+    const server = await startFakeServer({
+      sessionsRoot: join(temp, 'sessions'),
+      env: { HOME: '', USERPROFILE: temp, GROK_HOME: '' },
+    });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const response = await fetch(makeUrl(base, '/cli/worktree'), { headers: { cookie } });
+      assert.equal(response.status, 200);
+      const text = await response.text();
+      assert.doesNotMatch(text, /neither \$GROK_HOME nor \$HOME is set/);
+      if (process.platform === 'win32') assert.match(text, new RegExp(`HOME=${escapeRegExp(temp)}`));
+      assert.match(text, /main/);
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
 async function assertJsonError(base, cookie, path, body, status, pattern) {
   const response = await fetch(makeUrl(base, path), {
     method: 'POST',
@@ -526,6 +602,10 @@ async function assertJsonError(base, cookie, path, body, status, pattern) {
   assert.equal(response.status, status);
   assert.equal(response.headers.get('content-type'), 'application/json');
   assert.match((await response.json()).error, pattern);
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 async function postJson(base, cookie, path, body, expectedStatus = 200) {

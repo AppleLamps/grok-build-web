@@ -151,7 +151,7 @@ function handleUpdate(u) {
       paintTool(u);
       break;
     case 'available_commands_update':
-      setCommands(u.availableCommands);
+      setCommands(firstCommandList(u));
       break;
     case 'hook_execution':
       for (const run of (u.runs ?? [])) {
@@ -179,4 +179,11 @@ function handleUpdate(u) {
       break;
     }
   }
+}
+
+function firstCommandList(update) {
+  for (const key of ['availableCommands', 'available_commands', 'commands', 'items']) {
+    if (Array.isArray(update?.[key])) return update[key];
+  }
+  return [];
 }

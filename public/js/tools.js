@@ -29,6 +29,12 @@ const NETWORK_REQUEST_LIMIT = 100;
 const COOKIE_RENDER_LIMIT = 30;
 const BROWSER_TEXT_LIMIT = 4000;
 const BROWSER_HTML_LIMIT = 8000;
+const SEARCH_JSON_PARSE_LIMIT = 256 * 1024;
+const SEARCH_MAX_DEPTH = 4;
+const SEARCH_MAX_ARRAYS = 20;
+const MEDIA_IMAGE_EXT = /\.(png|jpe?g|gif|webp)(?:$|[?#])/i;
+const MEDIA_VIDEO_EXT = /\.(mp4|webm|ogg)(?:$|[?#])/i;
+const SAFE_STATUS_CLASSES = new Set(['pending', 'in_progress', 'completed', 'failed', 'cancelled', 'killed']);
 
 const STATUS_ICONS = {
   in_progress: '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/></svg>',
@@ -37,6 +43,12 @@ const STATUS_ICONS = {
   cancelled:   '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>',
   killed:      '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>',
 };
+
+function safeStatusClass(value) {
+  const status = String(value ?? '').toLowerCase();
+  return SAFE_STATUS_CLASSES.has(status) ? status : 'unknown';
+}
+
 function ansiToHtml(text) {
   if (!text || !text.includes('')) return text.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
   const out = [];
@@ -294,14 +306,29 @@ function dataUrl(item = {}) {
 function contentItems(update) {
   const out = update.rawOutput ?? {};
   const items = [];
-  for (const value of [update.content, out.content, out.contents, out.items, out.results]) {
-    if (Array.isArray(value)) items.push(...value);
-  }
+  const add = (value, defaults = {}) => {
+    if (value == null) return;
+    if (Array.isArray(value)) {
+      for (const item of value) add(item, defaults);
+      return;
+    }
+    if (typeof value === 'string') {
+      items.push({ ...defaults, path: value });
+      return;
+    }
+    if (typeof value === 'object') items.push({ ...defaults, ...value });
+  };
+  for (const value of [
+    update.content, out.content, out.contents, out.items, out.results,
+    out.files, out.media, out.assets,
+  ]) add(value);
+  add(out.images, { type: 'image' });
+  add(out.videos, { type: 'video' });
   const direct = {
     type: out.type,
     mimeType: out.mimeType ?? out.mime_type,
     url: out.url ?? out.image_url ?? out.video_url ?? out.file_url,
-    path: out.path ?? out.filePath ?? out.file_path,
+    path: out.path ?? out.filePath ?? out.file_path ?? out.output_file ?? out.outputFile ?? out.file,
     data: out.data,
     text: out.text ?? out.extracted_text,
   };
@@ -315,10 +342,29 @@ function kindForItem(item = {}) {
   const url = itemUrl(item);
   if (type.includes('image') || mime.startsWith('image/')) return 'image';
   if (type.includes('video') || mime.startsWith('video/')) return 'video';
+  if (MEDIA_IMAGE_EXT.test(url)) return 'image';
+  if (MEDIA_VIDEO_EXT.test(url)) return 'video';
   if (type.includes('pdf') || mime === 'application/pdf' || /\.pdf($|[?#])/i.test(url)) return 'pdf';
   if (type.includes('file') || mime || url) return 'file';
   if (itemText(item)) return 'text';
   return '';
+}
+
+function sessionMediaUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  const raw = value.trim();
+  if (/^(https?|data|blob):/i.test(raw)) return '';
+  if (!MEDIA_IMAGE_EXT.test(raw) && !MEDIA_VIDEO_EXT.test(raw)) return '';
+  const normalized = raw.replace(/\\/g, '/');
+  if (!/(^|[/])\.grok\/sessions\//i.test(normalized) && !/\/\.grok\/sessions\//i.test(normalized)) return '';
+  return `/session-media?path=${encodeURIComponent(raw)}`;
+}
+
+function mediaSrcFor(kind, value) {
+  const local = sessionMediaUrl(value);
+  if (local) return local;
+  const direct = kind === 'video' ? safeVideoSrc(value) : safeImageSrc(value);
+  return direct;
 }
 
 function fileLabel(item = {}, kind = 'file') {
@@ -358,12 +404,14 @@ function renderMultimodalDetails(update) {
     const text = itemText(item);
     const url = itemUrl(item) || dataUrl(item);
     if (kind === 'image') {
-      const safeSrc = safeImageSrc(url);
+      const safeSrc = mediaSrcFor('image', url);
       if (safeSrc) parts.push(`<div class="label">image</div><img class="tool-image" src="${escapeAttr(safeSrc)}" alt="tool image" loading="lazy" />`);
+      if (url) parts.push(`<div class="label">path</div><code>${escapeHTML(url)}</code>`);
       if (text) parts.push(`<div class="label">text</div><pre>${escapeHTML(text)}</pre>`);
     } else if (kind === 'video') {
-      const safeSrc = safeVideoSrc(url);
+      const safeSrc = mediaSrcFor('video', url);
       if (safeSrc) parts.push(`<div class="label">video</div><video class="tool-video" src="${escapeAttr(safeSrc)}" controls></video>`);
+      if (url) parts.push(`<div class="label">path</div><code>${escapeHTML(url)}</code>`);
       if (text) parts.push(`<div class="label">text</div><pre>${escapeHTML(text)}</pre>`);
     } else if (kind === 'pdf' || kind === 'file') {
       parts.push(renderFileCard(item, kind));
@@ -384,12 +432,13 @@ function renderVideoDetails(update) {
   if (media) {
     return `${prompt ? `<div class="label">prompt</div><pre>${escapeHTML(prompt)}</pre>` : ''}${media}`;
   }
-  const safeSrc = safeVideoSrc(url);
+  const safeSrc = mediaSrcFor('video', url);
   if (!safeSrc) return null;
   return `
     ${prompt ? `<div class="label">prompt</div><pre>${escapeHTML(prompt)}</pre>` : ''}
     <div class="label">video</div>
     <video class="tool-video" src="${escapeAttr(safeSrc)}" controls></video>
+    ${url ? `<div class="label">path</div><code>${escapeHTML(url)}</code>` : ''}
   `;
 }
 
@@ -403,23 +452,96 @@ function renderImageDetails(update) {
   }
   const url = out.url ?? out.image_url ?? out.path;
   if (!url) return null;
-  const safeSrc = safeImageSrc(url);
+  const safeSrc = mediaSrcFor('image', url);
   const prompt = raw.prompt ?? raw.description ?? '';
   return `
     <div class="label">prompt</div>
-    <pre>${prompt.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</pre>
+    <pre>${escapeHTML(prompt)}</pre>
     ${safeSrc ? `<div class="label">image</div>
     <img class="tool-image" src="${escapeAttr(safeSrc)}" alt="generated image" loading="lazy" />` : ''}
+    ${url ? `<div class="label">path</div><code>${escapeHTML(url)}</code>` : ''}
   `;
 }
 
+function parseJsonLike(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > SEARCH_JSON_PARSE_LIMIT || !/^[{\[]/.test(trimmed)) return null;
+  try { return JSON.parse(trimmed); } catch { return null; }
+}
+
 function resultItems(out = {}) {
-  const candidates = [
-    out.results, out.posts, out.items, out.data, out.entries,
-    out.output?.results, out.output?.posts, out.content?.results,
-  ];
-  for (const c of candidates) if (Array.isArray(c)) return c;
-  return [];
+  const roots = [
+    out,
+    out.output,
+    out.structuredContent,
+    out.structured_content,
+    out.content,
+    parseJsonLike(out.output),
+    parseJsonLike(out.output_for_prompt),
+  ].filter(Boolean);
+  const keys = new Set(['results', 'posts', 'items', 'entries', 'data', 'documents', 'sources', 'citations']);
+  const arrays = [];
+  const seen = new Set();
+  const visit = (value, depth) => {
+    if (arrays.length >= SEARCH_MAX_ARRAYS || depth > SEARCH_MAX_DEPTH || value == null) return;
+    if (Array.isArray(value)) {
+      if (seen.has(value)) return;
+      seen.add(value);
+      arrays.push(value);
+      for (const item of value) {
+        if (item && typeof item === 'object') visit(item, depth + 1);
+        if (arrays.length >= SEARCH_MAX_ARRAYS) return;
+      }
+      return;
+    }
+    if (typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    for (const [key, child] of Object.entries(value)) {
+      if (arrays.length >= SEARCH_MAX_ARRAYS) return;
+      if (keys.has(key) && Array.isArray(child)) arrays.push(child);
+      else if (key === 'content' && Array.isArray(child)) visit(child, depth + 1);
+      else if (['output', 'structuredContent', 'structured_content', 'content'].includes(key)) visit(child, depth + 1);
+    }
+  };
+  for (const root of roots) visit(root, 0);
+  return arrays
+    .map(array => ({ array, score: array.filter(isSearchResultLike).length }))
+    .sort((a, b) => b.score - a.score)[0]?.array ?? [];
+}
+
+function isSearchResultLike(item) {
+  if (!item || typeof item !== 'object') return false;
+  return !!(
+    item.title ?? item.name ?? item.text ?? item.snippet ?? item.summary
+    ?? item.url ?? item.link ?? item.href ?? item.permalink
+    ?? item.handle ?? item.username ?? item.author_username
+    ?? item.source?.url ?? item.metadata?.url
+  );
+}
+
+function firstText(...values) {
+  for (const value of values) {
+    if (value == null) continue;
+    if (typeof value === 'object') continue;
+    const text = String(value);
+    if (text) return text;
+  }
+  return '';
+}
+
+function normalizeSearchItem(item = {}) {
+  const source = item.source && typeof item.source === 'object' ? item.source : {};
+  const metadata = item.metadata && typeof item.metadata === 'object' ? item.metadata : {};
+  const author = item.author && typeof item.author === 'object' ? item.author : {};
+  const user = item.user && typeof item.user === 'object' ? item.user : {};
+  return {
+    title: firstText(item.title, item.name, item.text, item.snippet, item.content, item.summary),
+    snippet: firstText(item.snippet, item.summary, item.quote, item.text, item.content, item.description),
+    href: firstText(item.url, item.link, item.href, item.permalink, source.url, metadata.url),
+    handle: firstText(item.handle, item.username, author.handle, author.username, item.author_username, user.handle),
+    time: firstText(item.timestamp, item.created_at, item.createdAt, item.date, item.published_at, item.publishedAt),
+  };
 }
 
 function renderSearchDetails(update, mode = 'web') {
@@ -432,17 +554,15 @@ function renderSearchDetails(update, mode = 'web') {
   if (query) parts.push(`<div class="label">query</div><pre>${escapeHTML(query)}</pre>`);
   if (items.length) {
     const rows = items.slice(0, SEARCH_RESULT_LIMIT).map(item => {
-      const title = item.title ?? item.text ?? item.snippet ?? item.content ?? item.handle ?? item.author ?? '';
-      const handle = item.handle ?? item.username ?? item.author?.handle ?? item.author_username ?? '';
-      const time = item.timestamp ?? item.created_at ?? item.createdAt ?? item.date ?? '';
-      const href = item.url ?? item.link ?? item.permalink ?? '';
-      const safe = safeHttpUrl(href);
-      const snippet = item.snippet ?? item.quote ?? item.summary ?? item.text ?? '';
+      const normalized = normalizeSearchItem(item);
+      const safe = safeHttpUrl(normalized.href);
+      const title = normalized.title.slice(0, 80);
+      const snippet = (normalized.snippet || normalized.href).slice(0, 160);
       return `
         <tr>
-          <td>${handle ? `<code>${escapeHTML(handle)}</code>` : escapeHTML(title).slice(0, 80)}</td>
-          <td>${escapeHTML(time)}</td>
-          <td>${safe ? `<a href="${escapeAttr(safe)}" target="_blank" rel="noopener">${escapeHTML(snippet || href).slice(0, 160)}</a>` : escapeHTML(snippet).slice(0, 160)}</td>
+          <td>${normalized.handle ? `<code>${escapeHTML(normalized.handle)}</code>` : escapeHTML(title)}</td>
+          <td>${escapeHTML(normalized.time)}</td>
+          <td>${safe ? `<a href="${escapeAttr(safe)}" target="_blank" rel="noopener">${escapeHTML(snippet)}</a>` : escapeHTML(snippet)}</td>
         </tr>
       `;
     }).join('');
@@ -473,9 +593,10 @@ function renderTerminalDetails(update) {
     ? outputText.map(o => ansiToHtml(typeof o === 'string' ? o : (o.text ?? ''))).join('')
     : ansiToHtml(String(outputText));
   const bg = raw.is_background ? '<span class="term-pill bg">background</span>' : '';
+  const exitText = escapeHTML(String(exit));
   const exitPill = exit == null ? ''
     : exit === 0 ? `<span class="term-pill ok">exit 0</span>`
-    : `<span class="term-pill fail">exit ${exit}</span>`;
+    : `<span class="term-pill fail">exit ${exitText}</span>`;
   const truncPill = truncated ? '<span class="term-pill warn">truncated</span>' : '';
   const toPill = timedOut ? '<span class="term-pill fail">timed out</span>' : '';
   return `
@@ -497,15 +618,16 @@ function renderBrowserDetails(update) {
     const rows = requests.slice(0, NETWORK_REQUEST_LIMIT).map(r => {
       const s = r.status ?? r.statusCode ?? '—';
       const cls = (typeof s === 'number' && s >= 400) ? 'fail' : 'ok';
-      const url = r.url ?? '';
+      const statusText = String(s);
+      const url = String(r.url ?? '');
       const initiator = r.initiator ? `<div class="net-initiator">${escapeHTML(r.initiator)}</div>` : '';
       const dur = r.duration ?? r.time_ms;
       const size = r.size ?? r.bytes ?? r.content_length;
       return `
         <tr>
-          <td class="m-${cls}">${s}</td>
+          <td class="m-${cls}">${escapeHTML(statusText)}</td>
           <td>${escapeHTML(r.method ?? 'GET')}</td>
-          <td><div title="${escapeHTML(url)}">${escapeHTML(url.slice(0, 90))}</div>${initiator}</td>
+          <td><div title="${escapeAttr(url)}">${escapeHTML(url.slice(0, 90))}</div>${initiator}</td>
           <td>${size != null ? formatBytes(size) : ''}</td>
           <td>${dur != null ? Math.round(dur) + 'ms' : ''}</td>
         </tr>
@@ -541,7 +663,7 @@ function renderBrowserDetails(update) {
   if (action) {
     parts.push(`<div class="browser-action">
       <span class="browser-action-verb">${actionLabel(action)}</span>
-      ${selector ? `<code class="browser-selector" title="${escapeHTML(selector)}">${escapeHTML(selector.slice(0, 80))}</code>` : ''}
+      ${selector ? `<code class="browser-selector" title="${escapeAttr(selector)}">${escapeHTML(String(selector).slice(0, 80))}</code>` : ''}
       ${inputValue ? `<code class="browser-input">${escapeHTML(String(inputValue).slice(0, 80))}</code>` : ''}
     </div>`);
   }
@@ -556,7 +678,7 @@ function renderBrowserDetails(update) {
   if (tabId) parts.push(`<div class="label">tab</div><code class="browser-tabid">${escapeHTML(String(tabId))}</code>`);
   if (status) {
     const cls = (typeof status === 'number' && status >= 400) ? 'fail' : 'ok';
-    parts.push(`<div class="label">status</div><span class="term-pill ${cls}">${status}</span>`);
+    parts.push(`<div class="label">status</div><span class="term-pill ${cls}">${escapeHTML(String(status))}</span>`);
   }
   if (title) parts.push(`<div class="label">page title</div><div class="browser-page-title">${escapeHTML(title)}</div>`);
 
@@ -697,9 +819,9 @@ function renderTodos(update) {
     <div class="label">todos</div>
     <ul class="todo-inline">
       ${todos.map(t => {
-        const status = t.status ?? t.state ?? 'pending';
-        const text = (t.text ?? t.content ?? t.task ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
-        return `<li class="todo-item ${status}">${text}</li>`;
+        const status = safeStatusClass(t.status ?? t.state ?? 'pending');
+        const text = t.text ?? t.content ?? t.task ?? '';
+        return `<li class="todo-item ${status}">${escapeHTML(text)}</li>`;
       }).join('')}
     </ul>
   `;
@@ -709,9 +831,9 @@ function renderTodoSidebar(todos) {
   if (!dom.todoPanel || !dom.todoList) return;
   dom.todoPanel.hidden = todos.length === 0;
   dom.todoList.innerHTML = todos.map(t => {
-    const status = t.status ?? t.state ?? 'pending';
-    const text = (t.text ?? t.content ?? t.task ?? '');
-    return `<div class="todo-item ${status}" title="${status}">${text.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</div>`;
+    const status = safeStatusClass(t.status ?? t.state ?? 'pending');
+    const text = t.text ?? t.content ?? t.task ?? '';
+    return `<div class="todo-item ${status}" title="${escapeAttr(status)}">${escapeHTML(text)}</div>`;
   }).join('');
 }
 
@@ -776,24 +898,25 @@ export function paintTool(update) {
   el.querySelector('.delta-del').textContent = summary.deltaDel ? `-${summary.deltaDel}` : '';
   const status = normalizedToolStatus(update);
   if (status) {
-    el.classList.remove('in_progress', 'completed', 'failed', 'cancelled', 'killed');
-    el.classList.add(status);
+    const cls = safeStatusClass(status);
+    el.classList.remove('in_progress', 'completed', 'failed', 'cancelled', 'killed', 'unknown');
+    el.classList.add(cls);
     const sicon = el.querySelector('.status-icon');
-    if (sicon) sicon.innerHTML = STATUS_ICONS[status] ?? '';
+    if (sicon) sicon.innerHTML = STATUS_ICONS[cls] ?? '';
   }
   const body = el.querySelector('.details');
   // Prefer specialized renderers for known tool kinds.
   const title = (update.title ?? '').toLowerCase();
   let specialHTML = null;
   if (update.kind === 'edit') specialHTML = renderEditDetails(update);
+  else if (/todo[_ -]?write/.test(title)) specialHTML = renderTodos(update);
+  else if (/browser[_ -]?(tab|network)/.test(title)) specialHTML = renderBrowserDetails(update);
   else if (update.kind === 'execute' || /run_terminal_command/.test(title)) specialHTML = renderTerminalDetails(update);
   else if (/video[_ -]?gen|imagine[_ -]?video/.test(title)) specialHTML = renderVideoDetails(update);
   else if (/image[_ -]?gen|imagine/.test(title)) specialHTML = renderImageDetails(update);
   else if (isXSearchTool(title, update.rawInput)) specialHTML = renderSearchDetails(update, 'x');
   else if (/web[_ -]?search/.test(title) || update.kind === 'search') specialHTML = renderSearchDetails(update, 'web');
   else if (update.kind === 'read') specialHTML = renderMultimodalDetails(update);
-  else if (/todo[_ -]?write/.test(title)) specialHTML = renderTodos(update);
-  else if (/browser[_ -]?(tab|network)/.test(title)) specialHTML = renderBrowserDetails(update);
   else if (/scheduler/.test(title)) specialHTML = renderSchedulerDetails(update);
 
   if (specialHTML) {
@@ -828,6 +951,8 @@ export function paintTool(update) {
 export function __testRenderToolDetails(update) {
   const title = (update.title ?? '').toLowerCase();
   if (update.kind === 'edit') return renderEditDetails(update);
+  if (/todo[_ -]?write/.test(title)) return renderTodos(update);
+  if (/browser[_ -]?(tab|network)/.test(title)) return renderBrowserDetails(update);
   if (update.kind === 'execute' || /run_terminal_command/.test(title)) return renderTerminalDetails(update);
   if (/video[_ -]?gen|imagine[_ -]?video/.test(title)) return renderVideoDetails(update);
   if (/image[_ -]?gen|imagine/.test(title)) return renderImageDetails(update);

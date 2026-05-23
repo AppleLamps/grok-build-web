@@ -10,7 +10,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises';
-import { watch as watchFs } from 'node:fs';
+import { createReadStream, watch as watchFs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, join, resolve, extname, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -230,11 +230,7 @@ class GrokSession {
     // Compose env. When ignoreApiKey is true, strip XAI_API_KEY so the agent
     // falls back to the cached grok.com token (Grok SuperHeavy / SuperGrok
     // subscription path) instead of the API team-billed path.
-    const env = { ...process.env };
-    if (this.spawnOpts.ignoreApiKey) {
-      delete env.XAI_API_KEY;
-      delete env.GROK_API_KEY;
-    }
+    const env = buildGrokEnv({ ignoreApiKey: this.spawnOpts.ignoreApiKey });
     this.child = spawn(GROK_BIN, [...GROK_BIN_ARGS, ...this.buildArgv()], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env,
@@ -852,12 +848,28 @@ function mergeHistoryEntries(a, b) {
   return merged;
 }
 
+function buildGrokEnv({ ignoreApiKey = false } = {}) {
+  const env = { ...process.env };
+  if (process.platform === 'win32' && !String(env.HOME ?? '').trim()) {
+    env.HOME = env.USERPROFILE || homedir();
+  }
+  if (process.platform === 'win32' && !String(env.GROK_HOME ?? '').trim() && String(env.HOME ?? '').trim()) {
+    env.GROK_HOME = join(env.HOME, '.grok');
+  }
+  if (ignoreApiKey) {
+    delete env.XAI_API_KEY;
+    delete env.GROK_API_KEY;
+  }
+  return env;
+}
+
 // ─── CLI shell-out helper ───────────────────────────────────────────────────
 // Run a one-shot grok CLI command without blocking the bridge event loop.
 function runGrokCli(args, { timeout = CLI_TIMEOUT_DEFAULT_MS, cwd } = {}) {
   return new Promise((resolve) => {
     const child = spawn(GROK_BIN, [...GROK_BIN_ARGS, ...args], {
       cwd: cwd ?? grok?.cwd ?? CWD,
+      env: buildGrokEnv(),
       windowsHide: true,
     });
     let stdout = '';
@@ -927,6 +939,9 @@ async function listSessions({ limit = 50 } = {}) {
         id: data.info?.id,
         cwd: data.info?.cwd,
         title: data.generated_title ?? data.session_summary ?? '(untitled)',
+        // 0.1.217 writes agent_name to summary.json, but /session-info did not
+        // expose it in the observed session/update stream.
+        agentName: data.agent_name ?? data.agentName ?? data.info?.agent_name,
         lastActive: data.last_active_at ?? data.updated_at,
         numMessages: data.num_chat_messages ?? 0,
       });
@@ -953,6 +968,16 @@ const MIME = {
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
+};
+const SESSION_MEDIA_MIME = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.ogg': 'video/ogg',
 };
 
 const SECURITY_HEADERS = {
@@ -994,6 +1019,74 @@ function auth(req) {
 
 function setSecurityHeaders(res) {
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
+}
+
+function mediaPathError(status, message) {
+  const e = new Error(message);
+  e.status = status;
+  return e;
+}
+
+function hasPathTraversal(value) {
+  return String(value ?? '').replace(/\\/g, '/').split('/').some(part => part === '..');
+}
+
+function resolveSessionMediaCandidate(rawPath) {
+  const raw = String(rawPath ?? '').trim();
+  if (!raw) throw mediaPathError(400, 'path required');
+  const ext = extname(raw).toLowerCase();
+  if (!SESSION_MEDIA_MIME[ext]) throw mediaPathError(415, 'unsupported media type');
+
+  const normalized = raw.replace(/\\/g, '/');
+  const lower = normalized.toLowerCase();
+  const prefixes = ['~/.grok/sessions/', '.grok/sessions/'];
+  for (const prefix of prefixes) {
+    if (lower.startsWith(prefix)) {
+      const rel = normalized.slice(prefix.length);
+      if (!rel || hasPathTraversal(rel)) throw mediaPathError(403, 'path outside sessions root');
+      return resolve(SESSIONS_ROOT, rel);
+    }
+  }
+
+  const embedded = '/.grok/sessions/';
+  const idx = lower.indexOf(embedded);
+  if (idx >= 0) {
+    const rel = normalized.slice(idx + embedded.length);
+    if (!rel || hasPathTraversal(rel)) throw mediaPathError(403, 'path outside sessions root');
+    return resolve(SESSIONS_ROOT, rel);
+  }
+
+  if (hasPathTraversal(normalized)) throw mediaPathError(403, 'path outside sessions root');
+  return resolve(SESSIONS_ROOT, raw);
+}
+
+async function resolveSessionMediaFile(rawPath) {
+  const candidate = resolveSessionMediaCandidate(rawPath);
+  if (!isWithinPath(SESSIONS_ROOT, candidate)) throw mediaPathError(403, 'path outside sessions root');
+
+  let rootReal;
+  try {
+    rootReal = await realpath(SESSIONS_ROOT);
+  } catch {
+    throw mediaPathError(404, 'sessions root not found');
+  }
+
+  let fileReal;
+  try {
+    fileReal = await realpath(candidate);
+  } catch (e) {
+    if (e?.code === 'ENOENT' || e?.code === 'ENOTDIR') throw mediaPathError(404, 'media not found');
+    throw e;
+  }
+  if (!isWithinPath(rootReal, fileReal)) throw mediaPathError(403, 'path outside sessions root');
+
+  const st = await stat(fileReal);
+  if (!st.isFile()) throw mediaPathError(403, 'not a file');
+
+  const ext = extname(candidate).toLowerCase();
+  const contentType = SESSION_MEDIA_MIME[ext];
+  if (!contentType) throw mediaPathError(415, 'unsupported media type');
+  return { file: fileReal, contentType };
 }
 
 function parseHostHeader(host) {
@@ -1171,6 +1264,28 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
       res.end(data);
     } catch { res.writeHead(404).end(); }
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/session-media') {
+    if (!auth(req)) { res.writeHead(401).end(); return; }
+    try {
+      const media = await resolveSessionMediaFile(url.searchParams.get('path'));
+      res.writeHead(200, {
+        'content-type': media.contentType,
+        'cache-control': 'no-store',
+      });
+      const stream = createReadStream(media.file);
+      stream.on('error', () => {
+        if (!res.headersSent) res.writeHead(404);
+        res.end();
+      });
+      stream.pipe(res);
+    } catch (e) {
+      const status = e?.status ?? 500;
+      res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(status === 500 ? errorMessage(e) : e.message);
+    }
     return;
   }
 

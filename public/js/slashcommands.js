@@ -9,8 +9,46 @@ let popup = null;
 let selectedIdx = 0;
 let filtered = [];
 
+const COMPAT_COMMANDS = [
+  { name: 'export', description: 'Export a session transcript as Markdown' },
+  { name: 'config-agents', description: 'Configure agents' },
+];
+
 export function setCommands(list) {
-  commands = list ?? [];
+  const seen = new Set();
+  const normalized = [];
+  const add = (entry) => {
+    const command = normalizeCommand(entry);
+    if (!command || seen.has(command.name)) return;
+    seen.add(command.name);
+    normalized.push(command);
+  };
+  if (Array.isArray(list)) {
+    for (const entry of list) {
+      try { add(entry); } catch {}
+    }
+  }
+  for (const command of COMPAT_COMMANDS) add(command);
+  commands = normalized;
+}
+
+function normalizeCommand(entry) {
+  const source = entry && typeof entry === 'object' ? entry : null;
+  const rawName = typeof entry === 'string'
+    ? entry
+    : source?.name ?? source?.command ?? source?.id ?? source?.title;
+  if (rawName == null) return null;
+  const name = String(rawName).trim().replace(/^\/+/, '').trim();
+  if (!name) return null;
+  const out = { name };
+  if (source?.description != null) out.description = String(source.description);
+  if (source?.input != null) out.input = source.input;
+  if (source?.hint != null) out.hint = String(source.hint);
+  return out;
+}
+
+function commandNeedsArgument(command) {
+  return !!(command?.input?.hint || command?.input || command?.hint);
 }
 
 function ensurePopup() {
@@ -34,7 +72,7 @@ function render() {
     item.dataset.idx = String(i);
     const name = document.createElement('span');
     name.className = 'slash-name';
-    name.textContent = `/${c.name ?? ''}`;
+    name.textContent = `/${c.name}`;
     const desc = document.createElement('span');
     desc.className = 'slash-desc';
     desc.textContent = (c.description ?? '').slice(0, 120);
@@ -53,9 +91,8 @@ function render() {
 function pick() {
   const c = filtered[selectedIdx];
   if (!c) return;
-  const cur = dom.input.value;
   // Replace the slash prefix with the command + space; keep hint inside paren in placeholder
-  const hint = c.input?.hint ? ` ` : '';
+  const hint = commandNeedsArgument(c) ? ` ` : '';
   dom.input.value = `/${c.name}${hint}`;
   hide();
   dom.input.focus();
@@ -71,7 +108,7 @@ export function initSlash() {
   dom.input.addEventListener('input', () => {
     const v = dom.input.value;
     if (!v.startsWith('/')) { hide(); return; }
-    const q = v.slice(1).toLowerCase();
+    const q = v.slice(1).replace(/^\/+/, '').toLowerCase();
     filtered = commands
       .filter(c => c.name.toLowerCase().startsWith(q) || c.name.toLowerCase().includes(q))
       .slice(0, 12);

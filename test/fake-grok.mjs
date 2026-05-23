@@ -16,6 +16,13 @@ if (args[0] === 'mcp' && args[1] === 'list') {
   process.exit(0);
 }
 
+if (args[0] === 'worktree' && args[1] === 'list') {
+  console.log(`HOME=${process.env.HOME ?? ''}`);
+  console.log(`GROK_HOME=${process.env.GROK_HOME ?? ''}`);
+  console.log(`${process.cwd()}  main`);
+  process.exit(0);
+}
+
 if (args.includes('-p')) {
   const promptIndex = args.indexOf('-p');
   console.log(JSON.stringify({

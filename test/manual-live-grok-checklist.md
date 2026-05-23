@@ -20,9 +20,11 @@ Keep these visual/account checks manual when needed:
 - Open Settings and confirm unsupported launch flags are disabled for the installed CLI.
 - Run `grok mcp list` and test a plugin-provided MCP server that requires auth when available.
 
-## Grok 0.1.217 Compatibility Watch
+## Grok 0.1.217 Compatibility Status
 
-As of the last local check, `grok --version` reported `0.1.216` and `grok update --check --json` reported no stable update. When `0.1.217` is available locally, run the automated live suite and check these release-note items against Grok Build Web:
+Local compatibility work has been completed against `grok 0.1.217 (332caedb7)`. The automated live suite passed, and follow-up web fixes landed for slash command compatibility, generated media previews, search/X result cards, Worktrees panel environment handling, and renderer escaping.
+
+Keep these checks in the manual pass when validating future Grok CLI updates:
 
 - Confirm `/export` appears in slash autocomplete from `available_commands_update`, completes cleanly, and does not need a custom web route.
 - Confirm `/config-agents` appears in slash autocomplete and renders usable modal or agent output in the chat log.
@@ -36,3 +38,16 @@ As of the last local check, `grok --version` reported `0.1.216` and `grok update
 - On an extra-large monitor, confirm the app shell, sidebar, composer, modals, and tool groups do not stretch or overlap.
 - If testing Linux, paste an image into the TUI separately for CLI validation; Grok Build Web still only supports text-file attachments in the browser.
 - If testing a repo with an empty git index, verify `grok -w` no longer crashes in the CLI and that the web Worktrees panel still lists worktrees normally.
+
+## Grok 0.1.218 Compatibility Watch
+
+As of the last local check, `grok update --check --json` reported current and latest stable as `0.1.217`, so `0.1.218` was not available yet. When `0.1.218` lands, run `npm run test:live`, review the release notes in the Grok TUI, and manually verify:
+
+- Windows Ctrl+X default shortcut help binding.
+- Linux image pasting and shortcut keybinding behavior.
+- User-specified duration for video generation.
+- Temporary screenshot image support on macOS.
+- Image byte validation prevents retry loops.
+- Compaction prompt improvements match training behavior and rehydrate skills.
+- Increased macOS/Linux ulimit handling prevents ENOSPC failures that can brick the CLI.
+- Multi-line image links remain non-clickable and no longer break rendering.

@@ -165,6 +165,8 @@ The Grok CLI exposes Agent Client Protocol over `grok agent stdio`. `server.mjs`
 
 Multiple browser tabs are supported. Each tab keeps its own ACP `sessionId` in the URL and localStorage. The bridge tags events with `sessionId`, so each tab receives only its own stream.
 
+The bridge uses one shared Grok CLI child process. Per-tab prompts, session loads, approval-mode syncs, and respawns are serialized through the bridge so one tab cannot race another on the shared JSON-RPC pipe.
+
 ## Repository Map
 
 ```text
@@ -198,6 +200,7 @@ grok-web/
 |---|---|---|
 | `/` | GET | Token-gated app shell |
 | `/static/*` | GET | Static CSS and JS |
+| `/session-media` | GET | Authenticated previews for generated media under Grok session storage |
 | `/stream` | GET | SSE stream of agent events |
 | `/prompt` | POST | Send an ACP prompt |
 | `/cancel` | POST | Cancel the running turn |
@@ -250,6 +253,23 @@ $env:GROK_WEB_LIVE_X_SEARCH='1'; npm run test:live
 $env:GROK_WEB_LIVE_PLUGIN_MCP_NAME='<server-name>'; npm run test:live
 ```
 
+### Upcoming 0.1.218 Compatibility Checks
+
+Grok CLI 0.1.218 is expected to ship additional platform and media-generation fixes. Once the update is available, run the automated live suite and manual compatibility checks again against the installed CLI.
+
+Expected 0.1.218 items to verify:
+
+- Windows Ctrl+X default shortcut help binding
+- Linux image pasting and shortcut keybinding behavior
+- User-specified duration for video generation
+- Temporary screenshot image support on macOS
+- Image byte validation that prevents retry loops
+- Compaction prompt improvements for training alignment and skill rehydration
+- Increased macOS and Linux ulimit handling to avoid ENOSPC failures that can brick the CLI
+- Multi-line image links remain non-clickable and no longer break rendering
+
+The compatibility pass should include the existing `npm run test:live` suite, plus manual checks for Windows, Linux, and macOS behaviors where those fixes are platform-specific. The 0.1.218 release notes should also be reviewed in the Grok TUI when available.
+
 Feature touch points:
 
 - New tool renderer: `public/js/tools.js`
@@ -267,9 +287,9 @@ Grok Build Web is designed for local use. The launch URL includes a one-time tok
 
 HTTP responses include a local-app security baseline: CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: no-referrer`. The server only accepts `Host` values for `127.0.0.1`, `localhost`, or `::1` on its active port. Mutating browser requests with an `Origin` header must come from the same local origin.
 
-The bridge can read and write files only through ACP requests from the agent, and those filesystem handlers are confined to the request's session workspace. Per-tab session APIs keep workspace cwd in per-session state so one tab cannot silently change another tab's fallback cwd.
+The bridge can read and write files only through ACP requests from the agent, and those filesystem handlers are confined to the request's session workspace. Generated media previews are served only through the authenticated `/session-media` endpoint, which is confined to Grok session storage and does not expose arbitrary local files. Per-tab session APIs keep workspace cwd in per-session state so one tab cannot silently change another tab's fallback cwd.
 
-Agent restarts and session loads share one serialized mutation queue. Permission and elicitation timeout handles are cleared across respawns, and SSE reconnect replay is delivered with response backpressure and listener cleanup.
+Agent restarts, session loads, and prompts share one serialized mutation queue over the single Grok CLI child process. Permission and elicitation timeout handles are cleared across respawns, and SSE reconnect replay is delivered with response backpressure and listener cleanup.
 
 ## Related
 

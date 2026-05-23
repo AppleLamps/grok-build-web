@@ -14,7 +14,7 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 - **[done] Permission prompt UI** — `[acp session/request_permission]` Cards with per-option buttons; auto-deny after 5 min if forgotten. Active only when the pill is in Manual mode.
 - **[done] Always-approve toggle** — `[slash /always-approve]` `[flag --always-approve]` Composer pill toggles auto/manual; bridge mirrors state and best-effort syncs to the agent.
 - **[done] Plan mode rendering** — `[tool enter_plan_mode/exit_plan_mode]` Plan content rendered as a distinct blue card with **Accept plan / Suggest edits… / Reject** buttons that post a follow-up prompt.
-- **[done, guarded] Permission mode field** — `[flag --permission-mode]` Settings exposes `permissionMode` only when the installed CLI advertises `--permission-mode`; current `grok 0.1.214` help does not, so the field renders disabled with an unsupported notice.
+- **[done, guarded] Permission mode field** — `[flag --permission-mode]` Settings exposes `permissionMode` only when the installed CLI advertises `--permission-mode`; current `grok 0.1.217` agent help does not, so the field renders disabled with an unsupported notice.
 - **[done via Settings] Effort / reasoning controls** — `[flag --effort]` `[flag --reasoning-effort]` Settings panel exposes `low | medium | high | xhigh | max` for both. Respawns on apply.
 - **[done via Settings] Max turns limit** — `[flag --max-turns]` Settings panel field.
 
@@ -69,11 +69,11 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 - **[done] Terminal output styling** — `[tool run_terminal_command]` ANSI color codes are parsed into styled spans (bold, italic, underline, foreground colors).
 - **[partial] Background task tracking** — `[tool kill_command_or_subagent / get_command_or_subagent_output / wait_commands_or_subagents / monitor]` Recognized by name with appropriate labels. **Still missing:** dedicated panel showing live status of all background tasks.
 - **[done] Todo board** — `[tool todo_write]` Renders both inline (as a checklist in tool details) and in a sidebar panel that updates live.
-- **[partial] Browser tool rendering** — `[tool browser_tab / browser_network_details]` Labels recognized. **Still missing:** rich URL / network table UI.
-- **[done] Web search / fetch rendering** — `[tool web_search / web_fetch]` Labels recognized.
+- **[done, partial] Browser tool rendering** — `[tool browser_tab / browser_network_details]` Labels recognized with URL/action/page text, screenshots, console errors, cookies, and network tables when structured data is present. **Still missing:** DOM snapshot/replay-specific UI.
+- **[done] Web search / fetch rendering** — `[tool web_search / web_fetch]` Labels recognized with robust nested result extraction, links, timestamps, and snippets when present.
 - **[done] X search rendering** — `[tool x_search / x_search_posts / twitter_search / search_x]` Labels recognized with query, count, handles, timestamps, links, and snippets when present.
 - **[done] Multimodal read_file rendering** — `[tool read_file]` Content arrays and raw output fields render text, images, videos, PDFs, file cards, and extracted PDF/PPTX text.
-- **[done] Image / video gen rendering** — `[tool image_gen / video_gen]` Inline preview when `rawOutput.url` is present.
+- **[done] Image / video gen rendering** — `[tool image_gen / video_gen]` Inline preview when `rawOutput.url` is present or when 0.1.217 emits local Grok session media paths served through `/session-media`.
 - **[done, partial] Scheduler / Routines UI** — `[tool scheduler_create / scheduler_delete / scheduler_list]` Sidebar Tools → "Routines" opens an agent-driven panel for list/create/delete prompts. **Still missing:** live scheduled-tasks status outside the normal turn output.
 - **[done] Tool call grouping** — When 3+ tool calls happen back-to-back, they collapse into a single "N tools ▾" line.
 - **[done, partial] Subagent nesting** — CSS class `.tool.subagent-child` exists for indentation; logic to apply it on `use_tool` spawns is still wiring-only (not auto-applied).
@@ -99,7 +99,7 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 ## Bridge plumbing (web-only, but required for parity)
 
 - **[done] SSE reconnect with backoff** — `[plumbing]` Exponential backoff capped at 15s; visible "disconnected · retry in Xs" status.
-- **[done] Per-tab sessions** — `[plumbing]` Each browser tab has its own `sessionId` stored in URL (`?session=`) + `localStorage`. The shared agent process hosts multiple ACP sessions via `session/new`; the bridge tags every broadcast with `sessionId` and SSE subscribers filter to one session. Per-tab cwd is stored by session instead of mutating the bridge default cwd. Endpoints: `POST /tab/new`, `POST /tab/load`, `GET /stream?sessionId=...`. Verified: tab A and tab B run in parallel with 0 event leakage between them.
+- **[done] Per-tab sessions** — `[plumbing]` Each browser tab has its own `sessionId` stored in URL (`?session=`) + `localStorage`. The shared agent process hosts multiple ACP sessions via `session/new`; the bridge tags every broadcast with `sessionId` and SSE subscribers filter to one session. Per-tab cwd is stored by session instead of mutating the bridge default cwd. Prompts, session loads, approval-mode syncs, and respawns are serialized on the shared Grok process to avoid cross-tab JSON-RPC races. Endpoints: `POST /tab/new`, `POST /tab/load`, `GET /stream?sessionId=...`. Verified: tab A and tab B have 0 event leakage between them.
 - **[done] Local HTTP hardening** — `[plumbing]` Adds CSP, frame blocking, `nosniff`, local Host validation, same-origin checks for mutating browser requests, and backpressure-aware SSE replay with listener cleanup.
 - **[done] Update notifications** — `[cli update --check]` Yellow banner on page load if `grok update --check --json` reports a newer version.
 - **[done] Inspect view** — `[cli inspect --json]` Sidebar Tools → "Inspect config" shows the discovered config as JSON.

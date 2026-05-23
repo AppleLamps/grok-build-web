@@ -1,8 +1,8 @@
-# Placeholder UI Implementation Plan
+# Placeholder UI Implementation Status
 
 ## Summary
 
-Wire the remaining placeholder UI controls without adding npm dependencies or a build step:
+The placeholder UI controls covered by this plan have been wired without adding npm dependencies or a build step:
 
 - Attach button: text/code/markdown file attachments into the composer.
 - Mic button: browser speech-to-text into the composer.
@@ -10,7 +10,7 @@ Wire the remaining placeholder UI controls without adding npm dependencies or a 
 - Routines UI: agent-driven scheduler panel using the active Grok session.
 - Share button: keep existing behavior, polish states and fallback UX.
 
-## Implementation Steps
+## Implemented Steps
 
 1. Attach files
    - Add a client module for the Attach button.
@@ -56,13 +56,12 @@ Wire the remaining placeholder UI controls without adding npm dependencies or a 
    - Continue to show toast errors with CLI stderr or exit text.
 
 6. Documentation
-   - Update `knownissues.md` to remove fixed placeholder entries.
-   - Keep non-text attachment limitations as a current capability note.
-   - Update `featurestoadd.md` with done entries.
-   - Update `README.md` with attachment, voice, model picker, and Routines behavior.
+   - `knownissues.md` keeps only current limitations.
+   - `featurestoadd.md` tracks these items as shipped.
+   - `README.md` documents attachment, voice, model picker, and Routines behavior.
 
 7. Verification
-   - Run `node --check server.mjs`.
-   - Run `node --check public/js/*.js`.
-   - Verify the app renders in a browser at desktop and mobile widths.
-   - Manually exercise attach, voice support/unsupported state, model picker, Routines prompts, and Share fallback where possible.
+   - Use `npm run check` for syntax checks.
+   - Use `npm test` for account-free regression coverage.
+   - Use `npm run test:live` for real installed-CLI coverage when a Grok account is available.
+   - Manually exercise attach, voice support/unsupported state, model picker, Routines prompts, and Share fallback when changing those flows.

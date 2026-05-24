@@ -123,13 +123,28 @@
   display: grid; gap: 4px;
   font-size: 13px; color: var(--ink-2);
 }
+.elicitation-field.question-field {
+  border: 0; padding: 0; margin: 0; gap: 8px;
+}
+.elicitation-field.question-field legend {
+  padding: 0; margin-bottom: 2px; font-weight: 600; color: var(--ink);
+}
 .elicitation-field span { font-weight: 500; color: var(--ink); }
 .elicitation-field input:not([type=checkbox]),
-.elicitation-field select {
+.elicitation-field select,
+.elicitation-field textarea {
   background: rgba(255,255,255,.75); border: 1px solid var(--line);
   border-radius: 6px; padding: 7px 9px; font: inherit; color: var(--ink);
 }
+.elicitation-field textarea { resize: vertical; min-height: 42px; }
 .elicitation-field input[type=checkbox] { width: 16px; height: 16px; }
+.question-option {
+  display: grid; grid-template-columns: auto 1fr; gap: 4px 8px;
+  align-items: start; padding: 7px 9px; border: 1px solid var(--line-soft);
+  border-radius: 7px; background: rgba(255,255,255,.55);
+}
+.question-option input { margin-top: 2px; }
+.question-option small { grid-column: 2; }
 .elicitation-field small { color: var(--mute); font-size: 12px; }
 .elicitation-detail {
   background: rgba(255,255,255,.65); border-radius: 6px;
@@ -148,7 +163,8 @@
 .elicitation-card .cancel { background: #FCE8E8; color: var(--red); }
 .elicitation-card button:disabled,
 .elicitation-card input:disabled,
-.elicitation-card select:disabled { opacity: .5; cursor: default; }
+.elicitation-card select:disabled,
+.elicitation-card textarea:disabled { opacity: .5; cursor: default; }
 .elicitation-card.resolved { opacity: .55; }
 .elicitation-card.resolved .elicitation-actions { display: none; }
 .elicitation-card .resolution {

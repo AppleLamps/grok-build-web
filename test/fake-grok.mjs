@@ -195,6 +195,10 @@ async function emitScenario(sid) {
     await emitPermissionEmptyUpdates(sid);
     return;
   }
+  if (scenario === 'ask-question') {
+    await emitAskQuestionUpdates(sid);
+    return;
+  }
   if (scenario === 'quiet') {
     return;
   }
@@ -304,6 +308,46 @@ async function emitPermissionEmptyUpdates(sid) {
     status: response.result?.outcome?.outcome === 'cancelled' ? 'completed' : 'failed',
     rawOutput: {
       permissionOutcome: response.result?.outcome ?? null,
+    },
+  }, sid);
+}
+
+async function emitAskQuestionUpdates(sid) {
+  update({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'ask-question-1',
+    title: 'ask_user_question',
+    rawInput: {
+      questions: [{
+        question: 'Which UI improvement should be prioritized?',
+        options: [
+          { label: 'visual polish', description: 'Improve spacing, typography, motion, and visual details.' },
+          { label: 'mobile', description: 'Improve responsive layout and touch ergonomics.' },
+        ],
+        multiSelect: false,
+      }],
+    },
+  }, sid);
+  const response = await request('_x.ai/ask_user_question', {
+    sessionId: sid,
+    toolCallId: 'ask-question-1',
+    questions: [{
+      question: 'Which UI improvement should be prioritized?',
+      options: [
+        { label: 'visual polish', description: 'Improve spacing, typography, motion, and visual details.' },
+        { label: 'mobile', description: 'Improve responsive layout and touch ergonomics.' },
+      ],
+      multiSelect: false,
+    }],
+    mode: 'default',
+  }, true);
+  update({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'ask-question-1',
+    title: 'ask_user_question',
+    status: typeof response.result?.outcome === 'string' ? 'completed' : 'failed',
+    rawOutput: {
+      questionOutcome: response.result ?? null,
     },
   }, sid);
 }

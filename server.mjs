@@ -162,7 +162,7 @@ class GrokSession {
     this.autoApprove = this.defaultAutoApprove; // legacy default-setting view
     this.sessionAutoApprovals = new Map();
     this.pendingPermissions = new Map(); // rpcId -> {request, timeout}
-    this.pendingElicitations = new Map(); // rpcId -> {request, timeout}
+    this.pendingElicitations = new Map(); // rpcId -> {request, timeout, responseKind}
     this.unhandledClientRequests = new Set();
     this.sessionCwds = new Map();
     this.stderrLimiter = new StderrRateLimiter();
@@ -453,6 +453,9 @@ class GrokSession {
       case 'elicitation/create':
         this.parkElicitation(msg);
         return;
+      case '_x.ai/ask_user_question':
+        this.parkUserQuestion(msg);
+        return;
       case 'fs/read_text_file': {
         try {
           const file = await this.resolveClientPath(msg.params);
@@ -536,8 +539,27 @@ class GrokSession {
         this.broadcast({ kind: 'elicitation_resolved', rpcId: msg.id, action: 'timed out', sessionId });
       }
     }, ELICITATION_TIMEOUT_MS);
-    this.pendingElicitations.set(msg.id, { request: msg.params, timeout });
+    this.pendingElicitations.set(msg.id, { request: msg.params, timeout, responseKind: 'elicitation' });
     this.broadcast({ kind: 'elicitation_request', rpcId: msg.id, request: msg.params, sessionId });
+  }
+
+  parkUserQuestion(msg) {
+    const sessionId = msg.params?.sessionId;
+    const request = {
+      mode: 'question',
+      questions: Array.isArray(msg.params?.questions) ? msg.params.questions : [],
+      sessionId,
+      toolCallId: msg.params?.toolCallId,
+    };
+    const timeout = setTimeout(() => {
+      if (this.pendingElicitations.has(msg.id)) {
+        this.pendingElicitations.delete(msg.id);
+        this.send({ jsonrpc: '2.0', id: msg.id, result: { outcome: '' } });
+        this.broadcast({ kind: 'elicitation_resolved', rpcId: msg.id, action: 'timed out', sessionId });
+      }
+    }, ELICITATION_TIMEOUT_MS);
+    this.pendingElicitations.set(msg.id, { request, timeout, responseKind: 'ask_user_question' });
+    this.broadcast({ kind: 'elicitation_request', rpcId: msg.id, request, sessionId });
   }
 
   call(method, params, { timeoutMs = DEFAULT_RPC_TIMEOUT_MS } = {}) {
@@ -656,7 +678,9 @@ class GrokSession {
     if (!pending) return false;
     clearTimeout(pending.timeout);
     this.pendingElicitations.delete(rpcId);
-    const result = content === undefined ? { action } : { action, content };
+    const result = pending.responseKind === 'ask_user_question'
+      ? { outcome: action === 'accept' ? String(content ?? '') : '' }
+      : content === undefined ? { action } : { action, content };
     this.send({ jsonrpc: '2.0', id: rpcId, result });
     this.broadcast({ kind: 'elicitation_resolved', rpcId, action, sessionId: pending.request?.sessionId });
     return true;
@@ -1454,7 +1478,10 @@ const server = createServer(async (req, res) => {
         sendJsonError(res, 400, 'rpcId + action required'); return;
       }
       const ok = grok.respondToElicitation(body.rpcId, body.action, body.content);
-      sendJson(res, ok ? 200 : 410, { ok });
+      if (!ok) {
+        sendJsonError(res, 404, 'elicitation request not found'); return;
+      }
+      sendJson(res, 200, { ok });
     } catch (e) { sendJsonError(res, 400, e); }
     return;
   }

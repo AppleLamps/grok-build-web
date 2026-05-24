@@ -103,6 +103,82 @@ test('elicitation URL cards only open safe URLs and post continue', async () => 
   assert.equal(state.elicitationCards.get('url-2').querySelector('.open').disabled, true);
 });
 
+test('question cards submit single-choice, multi-choice, and free-text answers safely', async () => {
+  resetDomState();
+  requests.length = 0;
+
+  elicitations.addElicitationCard('question-1', {
+    mode: 'question',
+    questions: [{
+      question: 'Which UI improvement?',
+      options: [
+        { label: 'Visual polish', description: 'Improve spacing and motion.' },
+        { label: 'Mobile', description: 'Improve touch layout.' },
+      ],
+      multiSelect: false,
+    }],
+  });
+  let card = state.elicitationCards.get('question-1');
+  const radios = card.querySelectorAll('[name="question-0"]');
+  radios[1].checked = true;
+  card.querySelector('form').dispatchEvent({ type: 'submit', preventDefault() {} });
+  await delay(0);
+  assert.deepEqual(requests[0].body, {
+    rpcId: 'question-1',
+    action: 'accept',
+    content: 'Mobile',
+  });
+
+  elicitations.addElicitationCard('question-2', {
+    mode: 'question',
+    questions: [{
+      question: 'Pick areas',
+      options: [{ label: 'Polish' }, { label: 'A11y' }],
+      multiSelect: true,
+    }],
+  });
+  card = state.elicitationCards.get('question-2');
+  const checks = card.querySelectorAll('[name="question-0"]');
+  checks[0].checked = true;
+  checks[1].checked = true;
+  card.querySelector('form').dispatchEvent({ type: 'submit', preventDefault() {} });
+  await delay(0);
+  assert.equal(requests[1].body.content, 'Polish, A11y');
+
+  elicitations.addElicitationCard('question-3', {
+    mode: 'question',
+    questions: [{ question: '<img src=x onerror=alert(1)>', options: [] }],
+  });
+  card = state.elicitationCards.get('question-3');
+  assert.equal(card.textContent.includes('<img src=x onerror=alert(1)>'), true);
+  assert.equal(card.querySelector('img'), null);
+  card.querySelector('[name="question-0-text"]').value = 'Typed answer';
+  card.querySelector('form').dispatchEvent({ type: 'submit', preventDefault() {} });
+  await delay(0);
+  assert.equal(requests[2].body.content, 'Typed answer');
+});
+
+test('question card Other option submits typed details', async () => {
+  resetDomState();
+  requests.length = 0;
+
+  elicitations.addElicitationCard('question-other', {
+    mode: 'question',
+    questions: [{
+      question: 'Choose one',
+      options: [{ label: 'Default' }, { label: 'Other' }],
+      multiSelect: false,
+    }],
+  });
+  const card = state.elicitationCards.get('question-other');
+  const radios = card.querySelectorAll('[name="question-0"]');
+  radios[1].checked = true;
+  card.querySelector('[name="question-0-text"]').value = 'Custom direction';
+  card.querySelector('form').dispatchEvent({ type: 'submit', preventDefault() {} });
+  await delay(0);
+  assert.equal(requests[0].body.content, 'Custom direction');
+});
+
 function resetDomState() {
   dom.logInner.children = [];
   state.turnEl = null;

@@ -147,6 +147,49 @@ test('auto-approve cancels permission requests that have no options', async () =
   });
 });
 
+test('ask_user_question is surfaced as elicitation and replies with outcome', async () => {
+  await withTempDir('grok-web-ask-question-', async (temp) => {
+    const server = await startFakeServer({ scenario: 'ask-question', sessionsRoot: join(temp, 'sessions') });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const events = [];
+      const abort = new AbortController();
+      const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
+      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+
+      const prompt = await fetch(makeUrl(base, '/prompt'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'ask question probe' }),
+      });
+      assert.equal(prompt.status, 202);
+
+      const request = await waitForEvent(
+        events,
+        e => e.kind === 'elicitation_request' && e.request?.mode === 'question',
+        'question request',
+      );
+      assert.equal(request.request.questions[0].question, 'Which UI improvement should be prioritized?');
+
+      const answer = await fetch(makeUrl(base, '/elicitation'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ rpcId: request.rpcId, action: 'accept', content: 'mobile' }),
+      });
+      assert.equal(answer.status, 200);
+
+      await waitForEvent(events, e => e.kind === 'turn_complete', 'turn_complete');
+      const probe = events.find(e => e.kind === 'update' && e.update?.toolCallId === 'ask-question-1' && e.update?.status === 'completed');
+      assert.equal(probe?.update?.rawOutput?.questionOutcome?.outcome, 'mobile');
+
+      abort.abort();
+      await stream;
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
 test('security headers and local request guards are enforced', async () => {
   await withTempDir('grok-web-security-headers-', async (temp) => {
     const server = await startFakeServer({ sessionsRoot: join(temp, 'sessions') });
@@ -456,6 +499,7 @@ test('API bad requests return JSON error bodies', async () => {
       await assertJsonError(base, cookie, '/prompt', { text: '' }, 400, /empty prompt/);
       await assertJsonError(base, cookie, '/permission', {}, 400, /rpcId \+ optionId required/);
       await assertJsonError(base, cookie, '/elicitation', {}, 400, /rpcId \+ action required/);
+      await assertJsonError(base, cookie, '/elicitation', { rpcId: 404, action: 'accept' }, 404, /not found/);
       await assertJsonError(base, cookie, '/session/load', {}, 400, /sessionId required/);
       await assertJsonError(base, cookie, '/cli/oneshot', { text: 'x', bestOfN: 0 }, 400, /positive integer/);
 

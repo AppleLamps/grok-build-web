@@ -89,7 +89,9 @@ export function addElicitationCard(rpcId, request) {
   card.querySelector('.elicitation-title').textContent = titleFor(request);
 
   const body = card.querySelector('.elicitation-body');
-  if (request?.mode === 'url') {
+  if (request?.mode === 'question') {
+    renderQuestion(card, body, rpcId, request);
+  } else if (request?.mode === 'url') {
     renderUrl(card, body, rpcId, request);
   } else {
     renderForm(card, body, rpcId, request);
@@ -104,7 +106,7 @@ export function resolveElicitationCard(rpcId, action) {
   const card = state.elicitationCards.get(rpcId);
   if (!card) return;
   card.classList.add('resolved');
-  card.querySelectorAll('button, input, select').forEach(el => el.disabled = true);
+  card.querySelectorAll('button, input, select, textarea').forEach(el => el.disabled = true);
   card.querySelector('.resolution').textContent = `-> ${action}`;
   state.elicitationCards.delete(rpcId);
 }
@@ -164,13 +166,109 @@ function renderUrl(card, body, rpcId, request) {
   body.appendChild(actions);
 }
 
+function renderQuestion(card, body, rpcId, request) {
+  const questions = Array.isArray(request?.questions) && request.questions.length
+    ? request.questions
+    : [{ question: request?.question ?? request?.title ?? 'Question', options: [] }];
+  const form = document.createElement('form');
+  form.className = 'elicitation-form question-form';
+  questions.forEach((question, index) => addQuestion(form, question, index));
+
+  const actions = document.createElement('div');
+  actions.className = 'elicitation-actions';
+  actions.innerHTML = `
+    <button class="accept" type="submit">Submit</button>
+    <button class="cancel" type="button">Cancel</button>
+  `;
+  form.appendChild(actions);
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    respond(card, rpcId, 'accept', collectQuestionAnswer(form, questions));
+  });
+  actions.querySelector('.cancel').addEventListener('click', () => respond(card, rpcId, 'cancel'));
+  body.appendChild(form);
+}
+
+function addQuestion(form, question, index) {
+  const fieldset = document.createElement('fieldset');
+  fieldset.className = 'elicitation-field question-field';
+  const legend = document.createElement('legend');
+  legend.textContent = question?.question ?? question?.title ?? `Question ${index + 1}`;
+  fieldset.appendChild(legend);
+
+  const options = Array.isArray(question?.options) ? question.options : [];
+  const multi = !!question?.multiSelect;
+  if (options.length) {
+    options.forEach((option, optionIndex) => {
+      const label = document.createElement('label');
+      label.className = 'question-option';
+      const input = document.createElement('input');
+      input.type = multi ? 'checkbox' : 'radio';
+      input.name = `question-${index}`;
+      input.value = optionValue(option, optionIndex);
+      input.dataset.label = optionLabel(option, optionIndex);
+      input.dataset.description = option?.description ?? '';
+      input.dataset.other = isOtherOption(option) ? '1' : '';
+      if (!multi && optionIndex === 0) input.checked = true;
+      const text = document.createElement('span');
+      text.textContent = optionLabel(option, optionIndex);
+      label.append(input, text);
+      if (option?.description) {
+        const help = document.createElement('small');
+        help.textContent = option.description;
+        label.appendChild(help);
+      }
+      fieldset.appendChild(label);
+    });
+  }
+
+  if (!options.length || options.some(isOtherOption)) {
+    const textarea = document.createElement('textarea');
+    textarea.name = `question-${index}-text`;
+    textarea.rows = 2;
+    textarea.placeholder = options.length ? 'Other details' : 'Answer';
+    fieldset.appendChild(textarea);
+  }
+  form.appendChild(fieldset);
+}
+
+function collectQuestionAnswer(form, questions) {
+  const answers = questions.map((question, index) => {
+    const selectedInputs = Array.from(form.querySelectorAll(`[name="question-${index}"]`)).filter(input => input.checked);
+    const effectiveInputs = question?.multiSelect ? selectedInputs : selectedInputs.slice(-1);
+    const selected = effectiveInputs
+      .filter(input => input.checked)
+      .map(input => input.dataset.other === '1'
+        ? form.querySelector(`[name="question-${index}-text"]`)?.value?.trim() || input.dataset.label
+        : input.dataset.label || input.value)
+      .filter(Boolean);
+    const freeText = form.querySelector(`[name="question-${index}-text"]`)?.value?.trim();
+    const answer = selected.length ? selected.join(', ') : freeText || '';
+    const prompt = question?.question ?? question?.title ?? '';
+    return questions.length > 1 && prompt ? `${prompt}: ${answer}` : answer;
+  }).filter(Boolean);
+  return answers.join('\n');
+}
+
+function optionLabel(option, index) {
+  return String(option?.label ?? option?.title ?? option?.value ?? option?.id ?? `Option ${index + 1}`);
+}
+
+function optionValue(option, index) {
+  return String(option?.value ?? option?.id ?? optionLabel(option, index));
+}
+
+function isOtherOption(option) {
+  return /^other\b/i.test(optionLabel(option, 0));
+}
+
 async function respond(card, rpcId, action, content) {
-  card.querySelectorAll('button, input, select').forEach(el => el.disabled = true);
+  card.querySelectorAll('button, input, select, textarea').forEach(el => el.disabled = true);
   try {
     const r = await postElicitation(rpcId, action, content);
     if (!r.ok) throw new Error(await r.text());
   } catch (e) {
     addError(`elicitation response failed: ${e.message}`);
-    card.querySelectorAll('button, input, select').forEach(el => el.disabled = false);
+    card.querySelectorAll('button, input, select, textarea').forEach(el => el.disabled = false);
   }
 }

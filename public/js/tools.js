@@ -331,9 +331,23 @@ function contentItems(update) {
     path: out.path ?? out.filePath ?? out.file_path ?? out.output_file ?? out.outputFile ?? out.file,
     data: out.data,
     text: out.text ?? out.extracted_text,
+    duration: out.duration ?? out.duration_seconds ?? out.durationSeconds ?? out.video?.duration,
   };
   if (direct.url || direct.path || direct.data || direct.text) items.push(direct);
   return items;
+}
+
+function itemDuration(item = {}, update = {}) {
+  const raw = update.rawInput ?? {};
+  const out = update.rawOutput ?? {};
+  const value = item.duration ?? item.duration_seconds ?? item.durationSeconds
+    ?? item.video?.duration
+    ?? out.duration ?? out.duration_seconds ?? out.durationSeconds ?? out.video?.duration
+    ?? raw.duration ?? raw.duration_seconds ?? raw.durationSeconds;
+  if (value == null || value === '') return '';
+  const n = Number(value);
+  if (Number.isFinite(n) && n > 0) return `${n}s`;
+  return String(value);
 }
 
 function kindForItem(item = {}) {
@@ -411,6 +425,8 @@ function renderMultimodalDetails(update) {
     } else if (kind === 'video') {
       const safeSrc = mediaSrcFor('video', url);
       if (safeSrc) parts.push(`<div class="label">video</div><video class="tool-video" src="${escapeAttr(safeSrc)}" controls></video>`);
+      const duration = itemDuration(item, update);
+      if (duration) parts.push(`<div class="label">duration</div><code>${escapeHTML(duration)}</code>`);
       if (url) parts.push(`<div class="label">path</div><code>${escapeHTML(url)}</code>`);
       if (text) parts.push(`<div class="label">text</div><pre>${escapeHTML(text)}</pre>`);
     } else if (kind === 'pdf' || kind === 'file') {
@@ -429,6 +445,7 @@ function renderVideoDetails(update) {
   const url = out.url ?? out.video_url ?? out.path;
   const media = renderMultimodalDetails(update);
   const prompt = raw.prompt ?? raw.description ?? '';
+  const duration = itemDuration({}, update);
   if (media) {
     return `${prompt ? `<div class="label">prompt</div><pre>${escapeHTML(prompt)}</pre>` : ''}${media}`;
   }
@@ -438,6 +455,7 @@ function renderVideoDetails(update) {
     ${prompt ? `<div class="label">prompt</div><pre>${escapeHTML(prompt)}</pre>` : ''}
     <div class="label">video</div>
     <video class="tool-video" src="${escapeAttr(safeSrc)}" controls></video>
+    ${duration ? `<div class="label">duration</div><code>${escapeHTML(duration)}</code>` : ''}
     ${url ? `<div class="label">path</div><code>${escapeHTML(url)}</code>` : ''}
   `;
 }

@@ -48,6 +48,23 @@ test('markdown renders expanded formatting safely', async () => {
   assert.doesNotMatch(html, /<script>/);
 });
 
+test('markdown image links stay literal and non-clickable', async () => {
+  installDomStubs();
+  const { renderMarkdown } = await importFresh('public/js/markdown.js');
+
+  const singleLine = renderMarkdown('![preview](https://example.com/image.png)');
+  assert.doesNotMatch(singleLine, /<a href=/);
+  assert.match(singleLine, /!\[preview\]\(https:\/\/example\.com\/image\.png\)/);
+
+  const multiLine = renderMarkdown('![preview\ncaption](https://example.com/image.png)');
+  assert.doesNotMatch(multiLine, /<a href=/);
+  assert.match(multiLine, /!\[preview/);
+  assert.match(multiLine, /caption\]\(https:\/\/example\.com\/image\.png\)/);
+
+  const normalLink = renderMarkdown('[xAI](https://x.ai)');
+  assert.match(normalLink, /<a href="https:\/\/x.ai/);
+});
+
 test('multimodal read_file output renders text, image, PDF, PPT, and video', async () => {
   installDomStubs();
   const { __testRenderToolDetails } = await importFresh('public/js/tools.js');
@@ -115,9 +132,12 @@ test('generated session media paths render through authenticated media endpoint'
   const videoHtml = __testRenderToolDetails({
     kind: 'fetch',
     title: 'imagine_video',
+    rawInput: { duration: 10 },
     rawOutput: { output_file: '.grok\\sessions\\session-id\\videos\\1.mp4' },
   });
   assert.match(videoHtml, /<video class="tool-video"/);
+  assert.match(videoHtml, /duration/);
+  assert.match(videoHtml, /10s/);
   assert.match(videoHtml, /src="\/session-media\?path=/);
   assert.match(videoHtml, /\.grok\\sessions\\session-id\\videos\\1\.mp4/);
 

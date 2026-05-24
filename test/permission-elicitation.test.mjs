@@ -126,7 +126,7 @@ test('question cards submit single-choice, multi-choice, and free-text answers s
   assert.deepEqual(requests[0].body, {
     rpcId: 'question-1',
     action: 'accept',
-    content: 'Mobile: Improve touch layout.',
+    content: ['Mobile'],
   });
 
   elicitations.addElicitationCard('question-2', {
@@ -143,7 +143,7 @@ test('question cards submit single-choice, multi-choice, and free-text answers s
   checks[1].checked = true;
   card.querySelector('form').dispatchEvent({ type: 'submit', preventDefault() {} });
   await delay(0);
-  assert.equal(requests[1].body.content, 'Polish: Visual polish., A11y');
+  assert.deepEqual(requests[1].body.content, ['Polish, A11y']);
 
   elicitations.addElicitationCard('question-3', {
     mode: 'question',
@@ -155,7 +155,7 @@ test('question cards submit single-choice, multi-choice, and free-text answers s
   card.querySelector('[name="question-0-text"]').value = 'Typed answer';
   card.querySelector('form').dispatchEvent({ type: 'submit', preventDefault() {} });
   await delay(0);
-  assert.equal(requests[2].body.content, 'Typed answer');
+  assert.deepEqual(requests[2].body.content, ['Typed answer']);
 });
 
 test('question card Other option submits typed details', async () => {
@@ -176,7 +176,7 @@ test('question card Other option submits typed details', async () => {
   card.querySelector('[name="question-0-text"]').value = 'Custom direction';
   card.querySelector('form').dispatchEvent({ type: 'submit', preventDefault() {} });
   await delay(0);
-  assert.equal(requests[0].body.content, 'Custom direction');
+  assert.deepEqual(requests[0].body.content, ['Custom direction']);
 });
 
 function resetDomState() {

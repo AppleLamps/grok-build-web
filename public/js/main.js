@@ -42,8 +42,11 @@ async function ensureTabSession() {
       setTabSessionId(wantSession);
       await hydrateSessionPlan(wantSession, cwd);
       return;
-    } catch (e) { console.error('load session failed', e); }
-    setTabSessionId(null);
+    } catch (e) {
+      console.error('load session failed', e);
+      // Keep ?session= in the URL; do not fall through to postTabNew (that created duplicates).
+      return;
+    }
   }
   // ?continue=1: load the most-recent session into this tab.
   if (params.get('continue')) {

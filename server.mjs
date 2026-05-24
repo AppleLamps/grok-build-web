@@ -69,6 +69,32 @@ function agentCapabilities() {
   };
 }
 
+/** Grok CLI `_x.ai/ask_user_question` result (externally tagged enum on `outcome`). */
+function buildAskUserQuestionResult(action, content, questionCount = 0) {
+  const act = String(action ?? '').toLowerCase();
+  if (act === 'skip' || act === 'skip_interview') return { outcome: 'skip_interview' };
+  if (act === 'chat' || act === 'chat_about_this') return { outcome: 'chat_about_this' };
+  if (act === 'cancel' || act === 'decline') return { outcome: 'cancelled' };
+  if (act !== 'accept') return { outcome: 'cancelled' };
+
+  let answers;
+  if (Array.isArray(content)) {
+    answers = content.map((a) => String(a ?? '').trim());
+  } else if (content && typeof content === 'object' && Array.isArray(content.answers)) {
+    answers = content.answers.map((a) => String(a ?? '').trim());
+  } else {
+    const text = String(content ?? '').trim();
+    if (!text) answers = [];
+    else if (questionCount > 1) answers = text.split('\n').map((line) => line.trim());
+    else answers = [text];
+  }
+  if (questionCount > 0 && answers.length < questionCount) {
+    answers = [...answers, ...Array(questionCount - answers.length).fill('')];
+  }
+  const partial_answers = answers.length === 0 || answers.some((a) => !a);
+  return { outcome: 'accepted', answers, partial_answers };
+}
+
 function normalizeStderrLine(line) {
   return String(line)
     .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, '<timestamp>')
@@ -304,13 +330,15 @@ class GrokSession {
         elicitation: { form: {}, url: {} },
       },
     });
-    const res = await this.call('session/new', { cwd: this.cwd ?? CWD, mcpServers: [] });
-    this.sessionId = res.sessionId;
-    this.loadedAgentSessionId = this.sessionId;
     this.cwd = this.cwd ?? CWD;
-    this.rememberSessionCwd(this.sessionId, this.cwd);
     this.ready = true;
-    this.broadcast({ kind: 'session_ready', sessionId: this.sessionId, cwd: this.cwd, spawnOpts: { ...this.spawnOpts } });
+    // Per-tab sessions are created via POST /tab/new (createTabSession). Skipping
+    // session/new here avoids an orphan default session on every server start.
+    this.broadcast({ kind: 'agent_ready', cwd: this.cwd, spawnOpts: { ...this.spawnOpts } });
+  }
+
+  activeSessionId(sessionId = null) {
+    return sessionId ?? this.loadedAgentSessionId ?? this.sessionId;
   }
 
   async newSession(cwd) {
@@ -563,7 +591,7 @@ class GrokSession {
     const timeout = setTimeout(() => {
       if (this.pendingElicitations.has(msg.id)) {
         this.pendingElicitations.delete(msg.id);
-        this.send({ jsonrpc: '2.0', id: msg.id, result: { outcome: '' } });
+        this.send({ jsonrpc: '2.0', id: msg.id, result: { outcome: 'cancelled' } });
         this.broadcast({ kind: 'elicitation_resolved', rpcId: msg.id, action: 'timed out', sessionId });
       }
     }, ELICITATION_TIMEOUT_MS);
@@ -591,7 +619,7 @@ class GrokSession {
   notify(method, params) { this.send({ jsonrpc: '2.0', method, params }); }
 
   prompt(text, sessionId = null, opts = {}) {
-    const target = sessionId ?? this.sessionId;
+    const target = this.activeSessionId(sessionId);
     const turn = {
       turnId: `turn-${this.nextTurnId++}`,
       sessionId: target,
@@ -615,7 +643,7 @@ class GrokSession {
     if (idx >= 0) this.turnQueue.splice(idx, 1);
     if (turn.cancelled) return { cancelled: true };
     if (!this.ready) await this.readyPromise;
-    const target = turn.sessionId ?? this.sessionId;
+    const target = this.activeSessionId(turn.sessionId);
     this.activeTurn = turn;
     try {
       await this.ensureAgentSessionLoaded(target);
@@ -634,7 +662,7 @@ class GrokSession {
   }
 
   cancel(sessionId = null) {
-    const target = sessionId ?? this.sessionId;
+    const target = this.activeSessionId(sessionId);
     let queuedCancelled = 0;
     for (const turn of [...this.turnQueue]) {
       if (turn.sessionId !== target) continue;
@@ -688,7 +716,7 @@ class GrokSession {
     clearTimeout(pending.timeout);
     this.pendingElicitations.delete(rpcId);
     const result = pending.responseKind === 'ask_user_question'
-      ? { outcome: action === 'accept' ? String(content ?? '') : '' }
+      ? buildAskUserQuestionResult(action, content, pending.request?.questions?.length ?? 0)
       : content === undefined ? { action } : { action, content };
     this.send({ jsonrpc: '2.0', id: rpcId, result });
     this.broadcast({ kind: 'elicitation_resolved', rpcId, action, sessionId: pending.request?.sessionId });
@@ -707,7 +735,7 @@ class GrokSession {
     this.broadcast({ kind: 'auto_approve_changed', autoApprove: next, sessionId });
     // Also try to sync grok's own /always-approve state. The slash command is
     // sent as a normal prompt; the agent intercepts it before reaching the model.
-    const target = sessionId ?? this.sessionId;
+    const target = this.activeSessionId(sessionId);
     if (this.ready && target) {
       this.prompt(`/always-approve ${next ? 'on' : 'off'}`, target, { internal: true })
         .promise.catch(() => { /* slash command may not be supported in headless, best effort */ });
@@ -1483,7 +1511,7 @@ const server = createServer(async (req, res) => {
       if (typeof body.text !== 'string' || !body.text.trim()) {
         sendJsonError(res, 400, 'empty prompt'); return;
       }
-      const target = body.sessionId ?? grok.sessionId;
+      const target = grok.activeSessionId(body.sessionId);
       const turn = grok.prompt(body.text, target);
       turn.promise.catch((e) =>
         grok.broadcast({ kind: 'error', error: errorMessage(e), sessionId: target })
@@ -1504,7 +1532,7 @@ const server = createServer(async (req, res) => {
       }
     }
     const cancelResult = grok.cancel(sessionId);
-    sendJson(res, 202, { ok: true, sessionId: sessionId ?? grok.sessionId, ...cancelResult });
+    sendJson(res, 202, { ok: true, sessionId: grok.activeSessionId(sessionId), ...cancelResult });
     return;
   }
 
@@ -1607,7 +1635,7 @@ const server = createServer(async (req, res) => {
     if (!requireApiAuth(req, res)) return;
     try {
       const sessions = await listSessions();
-      const current = url.searchParams.get('sessionId') || grok.sessionId;
+      const current = url.searchParams.get('sessionId') || grok.activeSessionId();
       sendJson(res, 200, { sessions, current });
     } catch (e) {
       if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }

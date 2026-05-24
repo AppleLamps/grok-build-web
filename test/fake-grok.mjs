@@ -345,11 +345,16 @@ async function emitAskQuestionUpdates(sid) {
     }],
     mode: 'default',
   }, true);
+  const outcome = response.result?.outcome;
+  const accepted = outcome === 'accepted'
+    && Array.isArray(response.result?.answers)
+    && typeof response.result?.partial_answers === 'boolean';
+  const ok = outcome === 'cancelled' || outcome === 'skip_interview' || outcome === 'chat_about_this' || accepted;
   update({
     sessionUpdate: 'tool_call_update',
     toolCallId: 'ask-question-1',
     title: 'ask_user_question',
-    status: typeof response.result?.outcome === 'string' ? 'completed' : 'failed',
+    status: ok ? 'completed' : 'failed',
     rawOutput: {
       questionOutcome: response.result ?? null,
     },

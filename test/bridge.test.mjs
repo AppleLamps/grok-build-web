@@ -11,6 +11,8 @@ import {
   seedSessions,
   startFakeServer,
   waitForEvent,
+  waitForAgentReady,
+  openTestTab,
   withTempDir,
 } from './helpers.mjs';
 
@@ -44,7 +46,8 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+      await waitForAgentReady(events);
+      await openTestTab(base, cookie);
 
       const sessions = await fetch(makeUrl(base, '/sessions'), { headers: { cookie } }).then(r => r.json());
       assert.equal(sessions.sessions.length, 2);
@@ -124,7 +127,8 @@ test('auto-approve cancels permission requests that have no options', async () =
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+      await waitForAgentReady(events);
+      await openTestTab(base, cookie);
 
       const prompt = await fetch(makeUrl(base, '/prompt'), {
         method: 'POST',
@@ -155,7 +159,8 @@ test('ask_user_question is surfaced as elicitation and replies with outcome', as
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+      await waitForAgentReady(events);
+      await openTestTab(base, cookie);
 
       const prompt = await fetch(makeUrl(base, '/prompt'), {
         method: 'POST',
@@ -174,13 +179,15 @@ test('ask_user_question is surfaced as elicitation and replies with outcome', as
       const answer = await fetch(makeUrl(base, '/elicitation'), {
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ rpcId: request.rpcId, action: 'accept', content: 'mobile' }),
+        body: JSON.stringify({ rpcId: request.rpcId, action: 'accept', content: ['mobile'] }),
       });
       assert.equal(answer.status, 200);
 
       await waitForEvent(events, e => e.kind === 'turn_complete', 'turn_complete');
       const probe = events.find(e => e.kind === 'update' && e.update?.toolCallId === 'ask-question-1' && e.update?.status === 'completed');
-      assert.equal(probe?.update?.rawOutput?.questionOutcome?.outcome, 'mobile');
+      assert.equal(probe?.update?.rawOutput?.questionOutcome?.outcome, 'accepted');
+      assert.deepEqual(probe?.update?.rawOutput?.questionOutcome?.answers, ['mobile']);
+      assert.equal(probe?.update?.rawOutput?.questionOutcome?.partial_answers, false);
 
       abort.abort();
       await stream;
@@ -202,7 +209,8 @@ test('ask_user_question timeout resolves with empty outcome', async () => {
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+      await waitForAgentReady(events);
+      await openTestTab(base, cookie);
 
       const prompt = await fetch(makeUrl(base, '/prompt'), {
         method: 'POST',
@@ -214,7 +222,7 @@ test('ask_user_question timeout resolves with empty outcome', async () => {
       await waitForEvent(events, e => e.kind === 'elicitation_timeout' || e.kind === 'elicitation_resolved', 'question timeout');
       await waitForEvent(events, e => e.kind === 'turn_complete', 'turn_complete');
       const probe = events.find(e => e.kind === 'update' && e.update?.toolCallId === 'ask-question-1' && e.update?.status === 'completed');
-      assert.equal(probe?.update?.rawOutput?.questionOutcome?.outcome, '');
+      assert.equal(probe?.update?.rawOutput?.questionOutcome?.outcome, 'cancelled');
 
       abort.abort();
       await stream;
@@ -232,7 +240,8 @@ test('unknown x.ai client requests return JSON-RPC errors and diagnostic meta', 
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+      await waitForAgentReady(events);
+      await openTestTab(base, cookie);
 
       const prompt = await fetch(makeUrl(base, '/prompt'), {
         method: 'POST',
@@ -319,7 +328,8 @@ test('respawn clears stale permission timers before reused RPC IDs can resolve n
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+      await waitForAgentReady(events);
+      await openTestTab(base, cookie);
 
       const settings = await fetch(makeUrl(base, '/settings'), {
         method: 'POST',
@@ -344,7 +354,8 @@ test('respawn clears stale permission timers before reused RPC IDs can resolve n
       });
       assert.equal(respawn.status, 200);
       await waitForEvent(events, e => e.kind === 'agent_respawn', 'agent_respawn');
-      await waitForEvent(events, e => e.kind === 'session_ready' && events.indexOf(e) > 0, 'respawned session_ready');
+      await waitForAgentReady(events, 'respawned agent_ready');
+      await openTestTab(base, cookie);
 
       const secondPrompt = await fetch(makeUrl(base, '/prompt'), {
         method: 'POST',
@@ -388,7 +399,7 @@ test('tab session load is serialized with concurrent respawns', async () => {
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+      await waitForAgentReady(events);
 
       const load = fetch(makeUrl(base, '/tab/load'), {
         method: 'POST',
@@ -436,7 +447,7 @@ test('tab prompts are serialized on the shared agent connection', async () => {
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+      await waitForAgentReady(events);
 
       const tabA = await postJson(base, cookie, '/tab/new', {});
       const tabB = await postJson(base, cookie, '/tab/new', {});
@@ -482,7 +493,7 @@ test('cancel removes queued turns without sending them to the agent', async () =
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+      await waitForAgentReady(events);
 
       const tabA = await postJson(base, cookie, '/tab/new', {});
       const tabB = await postJson(base, cookie, '/tab/new', {});
@@ -519,7 +530,7 @@ test('auto-approve settings are scoped by tab session', async () => {
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+      await waitForAgentReady(events);
 
       const tabA = await postJson(base, cookie, '/tab/new', {});
       const tabB = await postJson(base, cookie, '/tab/new', {});

@@ -51,5 +51,5 @@ Grok CLI 0.1.218 is available. After updating, run `npm run test:live`, review t
 - Compaction prompt improvements match training behavior and rehydrate skills.
 - Increased macOS/Linux ulimit handling prevents ENOSPC failures that can brick the CLI.
 - Multi-line image links remain non-clickable and no longer break rendering.
-- `_x.ai/ask_user_question` renders as a browser elicitation card and replies to Grok with an `outcome` string.
+- `_x.ai/ask_user_question` renders as a browser elicitation card and replies with `{ outcome: "accepted", answers, partial_answers }` (or `cancelled` / `skip_interview` / `chat_about_this`).
 - Loading a saved session with `plan.json` hydrates the web TODO sidebar before the next live tool update.

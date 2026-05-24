@@ -8,6 +8,7 @@ import {
   readEvents,
   startFakeServer,
   waitForEvent,
+  waitForAgentReady,
   withTempDir,
 } from './helpers.mjs';
 
@@ -27,7 +28,7 @@ test('client fs requests resolve against the cwd for their sessionId', async () 
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForEvent(events, e => e.kind === 'session_ready', 'initial session_ready');
+      await waitForAgentReady(events, 'agent_ready');
 
       const tabA = await postJson(base, cookie, '/tab/new', { cwd: rootA });
       const tabB = await postJson(base, cookie, '/tab/new', { cwd: rootB });
@@ -132,7 +133,7 @@ test('client fs requests reject symlink or junction escapes from session cwd', a
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForEvent(events, e => e.kind === 'session_ready', 'initial session_ready');
+      await waitForAgentReady(events, 'agent_ready');
 
       const tab = await postJson(base, cookie, '/tab/new', { cwd: root });
       await postJson(base, cookie, '/prompt', { sessionId: tab.sessionId, text: 'fs symlink probe' }, 202);

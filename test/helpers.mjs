@@ -129,6 +129,21 @@ export async function waitForEvent(events, predicate, label = 'event') {
   throw new Error(`timed out waiting for ${label}`);
 }
 
+export async function waitForAgentReady(events, label = 'agent_ready') {
+  return waitForEvent(events, e => e.kind === 'agent_ready', label);
+}
+
+/** Create a per-tab ACP session (replaces the old init-time default session). */
+export async function openTestTab(base, cookie) {
+  const r = await fetch(makeUrl(base, '/tab/new'), {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  assert.equal(r.status, 200);
+  return r.json();
+}
+
 export function makeUrl(base, path) {
   return new URL(path, base);
 }

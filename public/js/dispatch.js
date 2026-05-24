@@ -20,6 +20,13 @@ import { resetAllToolState, setCurrentTodos } from './tool-state.js';
 
 export function dispatch(event) {
   switch (event.kind) {
+    case 'agent_ready':
+      state.currentCwd = event.cwd ?? state.currentCwd;
+      dom.crumb.textContent = event.cwd?.split(/[\\/]/).slice(-2).join(' / ') ?? 'session';
+      setBusy(false);
+      setStatus('connected', 'ready');
+      break;
+
     case 'session_ready':
       state.currentSessionId = event.sessionId;
       state.currentCwd = event.cwd ?? state.currentCwd;

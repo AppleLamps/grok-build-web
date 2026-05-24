@@ -19,7 +19,7 @@ const optionalPlugin = process.env.GROK_WEB_LIVE_PLUGIN_MCP_NAME
 
 test('live bridge bootstraps auth, SSE, sessions, settings, models, and MCP', { skip: liveOnly, timeout: LONG_TIMEOUT }, async () => {
   await withLiveServer(async ({ base, cookie, events, stderr }) => {
-    await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+    await waitForEvent(events, e => e.kind === 'agent_ready', 'agent_ready');
 
     const home = await fetch(new URL('/', base), { headers: { cookie } });
     assert.equal(home.status, 200);

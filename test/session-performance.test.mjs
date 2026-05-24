@@ -58,7 +58,7 @@ test('SSE replay uses session filters and cleared session history', async () => 
       const liveEvents = [];
       const liveAbort = new AbortController();
       const liveStream = readEvents(makeUrl(base, '/stream'), cookie, liveEvents, liveAbort.signal).catch(() => {});
-      await waitForEvent(liveEvents, e => e.kind === 'session_ready', 'initial session_ready');
+      await waitForEvent(liveEvents, e => e.kind === 'agent_ready', 'agent_ready');
 
       const tabA = await postJson(base, cookie, '/tab/new', {});
       const tabB = await postJson(base, cookie, '/tab/new', {});

@@ -7,6 +7,8 @@ import {
   readEvents,
   startFakeServer,
   waitForEvent,
+  waitForAgentReady,
+  openTestTab,
   withTempDir,
 } from './helpers.mjs';
 
@@ -18,7 +20,8 @@ test('large output and malformed stdout do not crash the bridge', async () => {
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+      await waitForAgentReady(events);
+      await openTestTab(base, cookie);
 
       const prompt = await fetch(makeUrl(base, '/prompt'), {
         method: 'POST',

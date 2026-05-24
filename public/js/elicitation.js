@@ -233,27 +233,18 @@ function addQuestion(form, question, index) {
 }
 
 function collectQuestionAnswer(form, questions) {
-  const answers = questions.map((question, index) => {
+  return questions.map((question, index) => {
     const selectedInputs = Array.from(form.querySelectorAll(`[name="question-${index}"]`)).filter(input => input.checked);
     const effectiveInputs = question?.multiSelect ? selectedInputs : selectedInputs.slice(-1);
     const selected = effectiveInputs
       .filter(input => input.checked)
       .map(input => input.dataset.other === '1'
         ? form.querySelector(`[name="question-${index}-text"]`)?.value?.trim() || input.dataset.label
-        : optionAnswerText(input))
+        : (input.dataset.label || input.value || ''))
       .filter(Boolean);
     const freeText = form.querySelector(`[name="question-${index}-text"]`)?.value?.trim();
-    const answer = selected.length ? selected.join(', ') : freeText || '';
-    const prompt = question?.question ?? question?.title ?? '';
-    return questions.length > 1 && prompt ? `${prompt}: ${answer}` : answer;
-  }).filter(Boolean);
-  return answers.join('\n');
-}
-
-function optionAnswerText(input) {
-  const label = input.dataset.label || input.value || '';
-  const description = input.dataset.description || '';
-  return description ? `${label}: ${description}` : label;
+    return selected.length ? selected.join(', ') : freeText || '';
+  });
 }
 
 function optionLabel(option, index) {

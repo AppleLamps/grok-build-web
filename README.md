@@ -267,7 +267,7 @@ Grok CLI 0.1.218 ships additional platform and media-generation fixes. Run the a
 - Compaction prompt improvements for training alignment and skill rehydration
 - Increased macOS and Linux ulimit handling to avoid ENOSPC failures that can brick the CLI
 - Multi-line image links remain non-clickable and no longer break rendering
-- `_x.ai/ask_user_question` renders as a web elicitation card and returns an `outcome` string
+- `_x.ai/ask_user_question` renders as a web elicitation card and returns `{ outcome, answers?, partial_answers? }`
 - Active TODO state hydrates from persisted `plan.json` when loading a saved session
 
 The compatibility pass should include the existing `npm run test:live` suite, plus manual checks for Windows, Linux, and macOS behaviors where those fixes are platform-specific. Review the 0.1.218 release notes in the Grok TUI during the pass.

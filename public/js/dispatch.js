@@ -18,6 +18,19 @@ import { setTabSessionId } from './state.js';
 import { getSessionPlan, postTabNew } from './api.js';
 import { resetAllToolState, setCurrentTodos } from './tool-state.js';
 
+function ensureExportTurn() {
+  if (!state._exportCurrentTurn) {
+    state._exportCurrentTurn = { user: '', thinking: '', assistant: '', tools: [], hooks: [] };
+    state.exportTurns.push(state._exportCurrentTurn);
+  }
+  return state._exportCurrentTurn;
+}
+
+export function resetExportTurns() {
+  state.exportTurns = [];
+  state._exportCurrentTurn = null;
+}
+
 export function dispatch(event) {
   switch (event.kind) {
     case 'agent_ready':
@@ -41,6 +54,7 @@ export function dispatch(event) {
       state.currentSessionId = event.sessionId;
       state.currentCwd = event.cwd ?? state.currentCwd;
       clearLog();
+      resetExportTurns();
       dom.crumb.textContent = event.cwd?.split(/[\\/]/).slice(-2).join(' / ') ?? 'session';
       if (event.loaded) hydrateTodosFromPlan(event.sessionId, event.cwd);
       else resetAllToolState();
@@ -54,6 +68,8 @@ export function dispatch(event) {
       addUserItem(event.text);
       setStatus('thinking…', 'busy');
       setBusy(true);
+      state._exportCurrentTurn = null;
+      ensureExportTurn().user = event.text;
       break;
 
     case 'turn_queued':
@@ -154,19 +170,41 @@ function handleUpdate(u) {
     return;
   }
   switch (u.sessionUpdate) {
-    case 'user_message_chunk': appendUserChunk(u.content?.text ?? ''); break;
-    case 'agent_thought_chunk': appendThought(u.content?.text ?? ''); break;
-    case 'agent_message_chunk': appendMessage(u.content?.text ?? ''); break;
-    case 'tool_call':
-    case 'tool_call_update':
-      paintTool(u);
+    case 'user_message_chunk':
+      appendUserChunk(u.content?.text ?? '');
+      ensureExportTurn().user += u.content?.text ?? '';
       break;
+    case 'agent_thought_chunk':
+      appendThought(u.content?.text ?? '');
+      ensureExportTurn().thinking += u.content?.text ?? '';
+      break;
+    case 'agent_message_chunk':
+      appendMessage(u.content?.text ?? '');
+      ensureExportTurn().assistant += u.content?.text ?? '';
+      break;
+    case 'tool_call':
+      paintTool(u);
+      ensureExportTurn().tools.push({ title: u.title ?? '', kind: u.kind ?? '', input: u.rawInput ?? u.content ?? '', output: '', status: 'in_progress' });
+      break;
+    case 'tool_call_update': {
+      paintTool(u);
+      const tools = ensureExportTurn().tools;
+      const existing = tools.find(t => t.title === (u.title ?? '') && t.status === 'in_progress');
+      if (existing) {
+        existing.status = u.status ?? 'completed';
+        existing.output = u.rawOutput ?? '';
+      } else {
+        tools.push({ title: u.title ?? '', kind: u.kind ?? '', input: u.rawInput ?? u.content ?? '', output: u.rawOutput ?? '', status: u.status ?? 'completed' });
+      }
+      break;
+    }
     case 'available_commands_update':
       setCommands(firstCommandList(u));
       break;
     case 'hook_execution':
       for (const run of (u.runs ?? [])) {
         addHookLine(u.event_name, run.name, run.status?.status, run.status?.elapsed_ms);
+        ensureExportTurn().hooks.push({ event: u.event_name, name: run.name, status: run.status?.status, elapsedMs: run.status?.elapsed_ms });
       }
       break;
     case 'session_summary_generated': {

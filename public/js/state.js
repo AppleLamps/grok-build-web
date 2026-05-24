@@ -33,6 +33,10 @@ export const state = {
   // Survives across turns until resolved.
   permCards: new Map(),  // rpcId -> .perm-card element
   elicitationCards: new Map(),  // rpcId -> .elicitation-card element
+
+  // Export accumulator: structured turn data for chat export.
+  exportTurns: [],
+  _exportCurrentTurn: null,
 };
 
 export const dom = {

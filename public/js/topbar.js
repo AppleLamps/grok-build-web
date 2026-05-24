@@ -76,9 +76,94 @@ function showShareFallback(url) {
   input.select();
 }
 
+const MAX_TOOL_IO = 2000;
+
+function formatToolIO(val) {
+  if (val == null) return '';
+  const s = typeof val === 'string' ? val : JSON.stringify(val, null, 2);
+  if (s.length <= MAX_TOOL_IO) return s;
+  return s.slice(0, MAX_TOOL_IO) + '\n… (truncated)';
+}
+
+function formatExportMarkdown() {
+  const turns = state.exportTurns;
+  if (!turns.length) return null;
+  const folder = (state.currentCwd ?? '').split(/[\\/]/).filter(Boolean).pop() ?? 'session';
+  const now = new Date().toLocaleString();
+  let md = `# Chat Export\n\n`;
+  md += `**Project:** ${state.currentCwd ?? folder}\n`;
+  md += `**Session:** ${state.currentSessionId ?? 'unknown'}\n`;
+  md += `**Exported:** ${now}\n\n---\n`;
+  let turnNum = 0;
+  for (const turn of turns) {
+    turnNum++;
+    md += `\n`;
+    if (turn.user) {
+      md += `## User\n\n${turn.user}\n\n`;
+    }
+    if (turn.thinking) {
+      md += `## Thinking\n\n${turn.thinking}\n\n`;
+    }
+    if (turn.tools.length) {
+      md += `## Tool Calls\n\n`;
+      for (const tool of turn.tools) {
+        const icon = tool.status === 'completed' ? '+' : tool.status === 'failed' ? 'x' : '~';
+        md += `### [${icon}] ${tool.title}`;
+        if (tool.kind) md += ` (${tool.kind})`;
+        md += `\n\n`;
+        if (tool.input) {
+          md += `**Input:**\n\`\`\`\n${formatToolIO(tool.input)}\n\`\`\`\n\n`;
+        }
+        if (tool.output) {
+          md += `**Output:**\n\`\`\`\n${formatToolIO(tool.output)}\n\`\`\`\n\n`;
+        }
+      }
+    }
+    if (turn.assistant) {
+      md += `## Assistant\n\n${turn.assistant}\n\n`;
+    }
+    if (turn.hooks.length) {
+      for (const hook of turn.hooks) {
+        const ms = hook.elapsedMs != null ? ` (${hook.elapsedMs}ms)` : '';
+        md += `> hook ${hook.event} → ${hook.name}: ${hook.status}${ms}\n`;
+      }
+      md += `\n`;
+    }
+    md += `---\n`;
+  }
+  return md;
+}
+
+function triggerDownload(content, filename) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function initTopbar() {
   const workspaceBtn = document.getElementById('workspace-btn');
   if (workspaceBtn) workspaceBtn.addEventListener('click', openWorkspacePicker);
+
+  const exportBtn = document.getElementById('export-btn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      const md = formatExportMarkdown();
+      if (!md) {
+        toast('No messages to export.');
+        return;
+      }
+      const folder = (state.currentCwd ?? '').split(/[\\/]/).filter(Boolean).pop() ?? 'session';
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      triggerDownload(md, `${folder}-${ts}.md`);
+      toast('Chat exported.');
+    });
+  }
 
   // Share button
   const shareBtn = document.getElementById('share-btn');

@@ -190,6 +190,70 @@ test('ask_user_question is surfaced as elicitation and replies with outcome', as
   });
 });
 
+test('ask_user_question timeout resolves with empty outcome', async () => {
+  await withTempDir('grok-web-ask-question-timeout-', async (temp) => {
+    const server = await startFakeServer({
+      scenario: 'ask-question',
+      sessionsRoot: join(temp, 'sessions'),
+      env: { GROK_WEB_ELICITATION_TIMEOUT_MS: '20' },
+    });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const events = [];
+      const abort = new AbortController();
+      const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
+      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+
+      const prompt = await fetch(makeUrl(base, '/prompt'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'ask question timeout probe' }),
+      });
+      assert.equal(prompt.status, 202);
+
+      await waitForEvent(events, e => e.kind === 'elicitation_timeout' || e.kind === 'elicitation_resolved', 'question timeout');
+      await waitForEvent(events, e => e.kind === 'turn_complete', 'turn_complete');
+      const probe = events.find(e => e.kind === 'update' && e.update?.toolCallId === 'ask-question-1' && e.update?.status === 'completed');
+      assert.equal(probe?.update?.rawOutput?.questionOutcome?.outcome, '');
+
+      abort.abort();
+      await stream;
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+test('unknown x.ai client requests return JSON-RPC errors and diagnostic meta', async () => {
+  await withTempDir('grok-web-unknown-x-', async (temp) => {
+    const server = await startFakeServer({ scenario: 'unknown-x-request', sessionsRoot: join(temp, 'sessions') });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const events = [];
+      const abort = new AbortController();
+      const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
+      await waitForEvent(events, e => e.kind === 'session_ready', 'session_ready');
+
+      const prompt = await fetch(makeUrl(base, '/prompt'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'unknown x request probe' }),
+      });
+      assert.equal(prompt.status, 202);
+      await waitForEvent(events, e => e.kind === 'turn_complete', 'turn_complete');
+
+      assert.ok(events.some(e => e.kind === 'meta' && e.method === '_x.ai/future_method' && e.unsupported === true));
+      const probe = events.find(e => e.kind === 'update' && e.update?.toolCallId === 'unknown-x-1');
+      assert.equal(probe?.update?.rawOutput?.response?.error?.code, -32601);
+
+      abort.abort();
+      await stream;
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
 test('security headers and local request guards are enforced', async () => {
   await withTempDir('grok-web-security-headers-', async (temp) => {
     const server = await startFakeServer({ sessionsRoot: join(temp, 'sessions') });
@@ -558,6 +622,70 @@ test('request body limit rejects oversized JSON and can be disabled', async () =
       assert.equal(accepted.status, 202);
     } finally {
       await disabled.stop();
+    }
+  });
+});
+
+test('session plan serves authenticated persisted todos under sessions root', async () => {
+  await withTempDir('grok-web-session-plan-', async (temp) => {
+    const sessionsRoot = join(temp, 'sessions');
+    const sessionDir = join(sessionsRoot, 'cwd', 'session-id');
+    const malformedDir = join(sessionsRoot, 'cwd', 'malformed-session');
+    const symlinkDir = join(sessionsRoot, 'cwd', 'symlink-session');
+    await mkdir(sessionDir, { recursive: true });
+    await mkdir(malformedDir, { recursive: true });
+    await mkdir(symlinkDir, { recursive: true });
+    await writeFile(join(sessionDir, 'plan.json'), JSON.stringify({
+      tasks: [
+        { id: '1', content: 'Draft persisted plan', status: 'in_progress' },
+        { id: '2', title: 'Verify hydration', state: 'pending' },
+      ],
+    }), 'utf8');
+    await writeFile(join(malformedDir, 'plan.json'), '{', 'utf8');
+    await writeFile(join(temp, 'outside-plan.json'), JSON.stringify([{ text: 'outside' }]), 'utf8');
+    let symlinkCreated = false;
+    try {
+      await symlink(join(temp, 'outside-plan.json'), join(symlinkDir, 'plan.json'));
+      symlinkCreated = true;
+    } catch {
+      symlinkCreated = false;
+    }
+
+    const server = await startFakeServer({ sessionsRoot });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const planUrl = (sessionId) => makeUrl(base, `/session/plan?sessionId=${encodeURIComponent(sessionId)}`);
+
+      const unauth = await fetch(planUrl('session-id'));
+      assert.equal(unauth.status, 401);
+
+      const ok = await fetch(planUrl('session-id'), { headers: { cookie } });
+      assert.equal(ok.status, 200);
+      assert.deepEqual(await ok.json(), {
+        sessionId: 'session-id',
+        todos: [
+          { id: '1', text: 'Draft persisted plan', status: 'in_progress' },
+          { id: '2', text: 'Verify hydration', status: 'pending' },
+        ],
+      });
+
+      const missing = await fetch(planUrl('missing-plan'), { headers: { cookie } });
+      assert.equal(missing.status, 200);
+      assert.deepEqual(await missing.json(), { sessionId: 'missing-plan', todos: [] });
+
+      const malformed = await fetch(planUrl('malformed-session'), { headers: { cookie } });
+      assert.equal(malformed.status, 200);
+      assert.deepEqual(await malformed.json(), { sessionId: 'malformed-session', todos: [] });
+
+      const traversal = await fetch(makeUrl(base, '/session/plan?sessionId=..%2Foutside'), { headers: { cookie } });
+      assert.equal(traversal.status, 403);
+
+      if (symlinkCreated) {
+        const escaped = await fetch(planUrl('symlink-session'), { headers: { cookie } });
+        assert.equal(escaped.status, 403);
+      }
+    } finally {
+      await server.stop();
     }
   });
 });

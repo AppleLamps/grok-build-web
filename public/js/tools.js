@@ -118,7 +118,8 @@ function summarizeTool(toolUpdate) {
     return { verb: 'Read memory', target: raw.id ?? raw.path ?? title };
   }
   if (/todo[_ -]?write/.test(lower)) {
-    return { verb: 'Updated todos', target: `(${(raw.todos ?? []).length} items)` };
+    const count = extractTodoUpdate(toolUpdate)?.todos.length ?? 0;
+    return { verb: 'Updated todos', target: count ? `(${count} items)` : '' };
   }
   if (/browser[_ -]?tab/.test(lower)) {
     return { verb: 'Browsed', target: raw.url ?? raw.action ?? title };

@@ -199,6 +199,10 @@ async function emitScenario(sid) {
     await emitAskQuestionUpdates(sid);
     return;
   }
+  if (scenario === 'unknown-x-request') {
+    await emitUnknownXRequest(sid);
+    return;
+  }
   if (scenario === 'quiet') {
     return;
   }
@@ -348,6 +352,22 @@ async function emitAskQuestionUpdates(sid) {
     status: typeof response.result?.outcome === 'string' ? 'completed' : 'failed',
     rawOutput: {
       questionOutcome: response.result ?? null,
+    },
+  }, sid);
+}
+
+async function emitUnknownXRequest(sid) {
+  const response = await request('_x.ai/future_method', {
+    sessionId: sid,
+    value: true,
+  }, true);
+  update({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'unknown-x-1',
+    title: 'unknown_x_probe',
+    status: response.error ? 'completed' : 'failed',
+    rawOutput: {
+      response,
     },
   }, sid);
 }

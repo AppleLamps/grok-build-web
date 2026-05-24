@@ -39,9 +39,9 @@ Keep these checks in the manual pass when validating future Grok CLI updates:
 - If testing Linux, paste an image into the TUI separately for CLI validation; Grok Build Web still only supports text-file attachments in the browser.
 - If testing a repo with an empty git index, verify `grok -w` no longer crashes in the CLI and that the web Worktrees panel still lists worktrees normally.
 
-## Grok 0.1.218 Compatibility Watch
+## Grok 0.1.218 Compatibility Status
 
-As of the last local check, `grok update --check --json` reported current and latest stable as `0.1.217`, so `0.1.218` was not available yet. When `0.1.218` lands, run `npm run test:live`, review the release notes in the Grok TUI, and manually verify:
+Grok CLI 0.1.218 is available. After updating, run `npm run test:live`, review the release notes in the Grok TUI, and manually verify:
 
 - Windows Ctrl+X default shortcut help binding.
 - Linux image pasting and shortcut keybinding behavior.
@@ -51,3 +51,5 @@ As of the last local check, `grok update --check --json` reported current and la
 - Compaction prompt improvements match training behavior and rehydrate skills.
 - Increased macOS/Linux ulimit handling prevents ENOSPC failures that can brick the CLI.
 - Multi-line image links remain non-clickable and no longer break rendering.
+- `_x.ai/ask_user_question` renders as a browser elicitation card and replies to Grok with an `outcome` string.
+- Loading a saved session with `plan.json` hydrates the web TODO sidebar before the next live tool update.

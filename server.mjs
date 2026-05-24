@@ -478,6 +478,15 @@ class GrokSession {
         return;
       }
       default:
+        if (String(msg.method ?? '').startsWith('_x.ai/')) {
+          if (!this.unhandledClientRequests.has(msg.method)) {
+            this.unhandledClientRequests.add(msg.method);
+            console.error('[grok-web] unsupported x.ai client request:', msg.method);
+          }
+          this.sendError(msg.id, -32601, `unsupported client request: ${msg.method}`);
+          this.broadcast({ kind: 'meta', method: msg.method, params: msg.params, sessionId, unsupported: true });
+          return;
+        }
         if (!this.unhandledClientRequests.has(msg.method)) {
           this.unhandledClientRequests.add(msg.method);
           console.error('[grok-web] unhandled client request:', msg.method);
@@ -981,6 +990,90 @@ function cloneSessionList(sessions) {
 
 function invalidateSessionsCache() {
   sessionsListCache.clear();
+}
+
+async function readSessionPlan(sessionId, cwd = null) {
+  if (typeof sessionId !== 'string' || !sessionId.trim()) throw mediaPathError(400, 'sessionId required');
+  if (hasPathTraversal(sessionId) || /[\\/]/.test(sessionId)) throw mediaPathError(403, 'invalid sessionId');
+  const sessionDir = await findSessionDir(sessionId, cwd);
+  if (!sessionDir) return { sessionId, todos: [] };
+  const planPath = join(sessionDir, 'plan.json');
+  let planReal;
+  try {
+    planReal = await realpath(planPath);
+  } catch (e) {
+    if (e?.code === 'ENOENT') return { sessionId, todos: [] };
+    throw e;
+  }
+  if (!isWithinPath(sessionDir, planReal)) throw mediaPathError(403, 'plan path outside session');
+  let data;
+  try {
+    data = JSON.parse(await readFile(planReal, 'utf8'));
+  } catch {
+    return { sessionId, todos: [] };
+  }
+  return { sessionId, todos: normalizePlanTodos(data) };
+}
+
+async function findSessionDir(sessionId, cwd = null) {
+  let rootReal;
+  try { rootReal = await realpath(SESSIONS_ROOT); } catch { return null; }
+  let cwdDirs;
+  try { cwdDirs = await readdir(rootReal, { withFileTypes: true }); } catch { return null; }
+  const wantedCwd = typeof cwd === 'string' && cwd.trim() ? cwd : null;
+  for (const cwdDir of cwdDirs) {
+    if (!cwdDir.isDirectory()) continue;
+    const cwdPath = join(rootReal, cwdDir.name);
+    let sessionDirs;
+    try { sessionDirs = await readdir(cwdPath, { withFileTypes: true }); } catch { continue; }
+    for (const sd of sessionDirs) {
+      if (!sd.isDirectory() || sd.name !== sessionId) continue;
+      const candidate = join(cwdPath, sd.name);
+      const candidateReal = await realpath(candidate);
+      if (!isWithinPath(rootReal, candidateReal)) throw mediaPathError(403, 'session path outside sessions root');
+      if (wantedCwd && !(await sessionCwdMatches(candidateReal, wantedCwd))) continue;
+      return candidateReal;
+    }
+  }
+  return null;
+}
+
+async function sessionCwdMatches(sessionDir, cwd) {
+  try {
+    const summary = JSON.parse(await readFile(join(sessionDir, 'summary.json'), 'utf8'));
+    const stored = summary.info?.cwd ?? summary.cwd;
+    return !stored || stored === cwd;
+  } catch {
+    return true;
+  }
+}
+
+function normalizePlanTodos(plan) {
+  const source = Array.isArray(plan)
+    ? plan
+    : Array.isArray(plan?.todos)
+      ? plan.todos
+      : Array.isArray(plan?.tasks)
+        ? plan.tasks
+        : Array.isArray(plan?.items)
+          ? plan.items
+          : [];
+  return source.slice(0, 500).map((todo, index) => normalizePlanTodo(todo, index)).filter(Boolean);
+}
+
+function normalizePlanTodo(todo, index) {
+  if (typeof todo === 'string') {
+    const text = todo.trim();
+    return text ? { id: String(index + 1), text, status: 'pending' } : null;
+  }
+  if (!todo || typeof todo !== 'object') return null;
+  const text = String(todo.text ?? todo.content ?? todo.task ?? todo.title ?? todo.description ?? '').trim();
+  if (!text) return null;
+  return {
+    id: todo.id == null ? String(index + 1) : String(todo.id),
+    text,
+    status: String(todo.status ?? todo.state ?? 'pending'),
+  };
 }
 
 // ─── HTTP server ────────────────────────────────────────────────────────────
@@ -1519,6 +1612,20 @@ const server = createServer(async (req, res) => {
     } catch (e) {
       if (isRequestBodyTooLarge(e)) { sendJsonError(res, 400, e); return; }
       sendJsonError(res, 500, e);
+    }
+    return;
+  }
+
+  // Read persisted task state for a session. This is confined to
+  // ~/.grok/sessions/*/<session-id>/plan.json and never serves project files.
+  if (req.method === 'GET' && url.pathname === '/session/plan') {
+    if (!requireApiAuth(req, res)) return;
+    try {
+      const sessionId = url.searchParams.get('sessionId');
+      const cwd = url.searchParams.get('cwd');
+      sendJson(res, 200, await readSessionPlan(sessionId, cwd));
+    } catch (e) {
+      sendJsonError(res, e?.status ?? 500, e);
     }
     return;
   }

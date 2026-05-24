@@ -71,3 +71,25 @@ test('api getSettings includes current tab session id', async () => {
   assert.deepEqual(await api.getSettings(), { autoApprove: false });
   assert.deepEqual(calls, ['/settings?sessionId=tab-123']);
 });
+
+test('api getSessionPlan includes tab session id and cwd when provided', async () => {
+  const calls = [];
+  installDomStubs({
+    storage: { 'grokweb.tabSessionId': 'tab-123' },
+    fetchImpl: async (url) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify({ sessionId: 'tab-123', todos: [] }), { status: 200 });
+    },
+  });
+
+  const api = await importFresh('public/js/api.js');
+  assert.deepEqual(await api.getSessionPlan(), { sessionId: 'tab-123', todos: [] });
+  assert.deepEqual(
+    await api.getSessionPlan('session-2', 'C:\\Users\\lucas\\project'),
+    { sessionId: 'tab-123', todos: [] },
+  );
+  assert.deepEqual(calls, [
+    '/session/plan?sessionId=tab-123',
+    '/session/plan?sessionId=session-2&cwd=C%3A%5CUsers%5Clucas%5Cproject',
+  ]);
+});

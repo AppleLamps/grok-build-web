@@ -126,14 +126,14 @@ test('question cards submit single-choice, multi-choice, and free-text answers s
   assert.deepEqual(requests[0].body, {
     rpcId: 'question-1',
     action: 'accept',
-    content: 'Mobile',
+    content: 'Mobile: Improve touch layout.',
   });
 
   elicitations.addElicitationCard('question-2', {
     mode: 'question',
     questions: [{
       question: 'Pick areas',
-      options: [{ label: 'Polish' }, { label: 'A11y' }],
+      options: [{ label: 'Polish', description: 'Visual polish.' }, { label: 'A11y' }],
       multiSelect: true,
     }],
   });
@@ -143,7 +143,7 @@ test('question cards submit single-choice, multi-choice, and free-text answers s
   checks[1].checked = true;
   card.querySelector('form').dispatchEvent({ type: 'submit', preventDefault() {} });
   await delay(0);
-  assert.equal(requests[1].body.content, 'Polish, A11y');
+  assert.equal(requests[1].body.content, 'Polish: Visual polish., A11y');
 
   elicitations.addElicitationCard('question-3', {
     mode: 'question',

@@ -13,6 +13,12 @@ test('main bootstrap adopts explicit session URLs and loads cwd metadata', async
         }), { status: 200 });
       }
       if (String(url) === '/tab/load') return new Response(JSON.stringify({ sessionId: 'session-2' }), { status: 200 });
+      if (String(url).startsWith('/session/plan')) {
+        return new Response(JSON.stringify({
+          sessionId: 'session-2',
+          todos: [{ id: '1', text: 'Hydrated task', status: 'in_progress' }],
+        }), { status: 200 });
+      }
       return new Response(JSON.stringify({ sessionId: 'new-session' }), { status: 200 });
     },
   });
@@ -28,5 +34,7 @@ test('main bootstrap adopts explicit session URLs and loads cwd metadata', async
     url: '/tab/load',
     body: { sessionId: 'session-2', cwd: 'C:\\Users\\lucas\\project' },
   });
+  assert.equal(calls[2].url, '/session/plan?sessionId=session-2&cwd=C%3A%5CUsers%5Clucas%5Cproject');
   assert.equal(storage['grokweb.tabSessionId'], 'session-2');
+  assert.match(document.getElementById('todo-list').innerHTML, /Hydrated task/);
 });

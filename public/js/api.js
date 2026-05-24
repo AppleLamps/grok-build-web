@@ -99,6 +99,14 @@ export async function listSessions() {
   return readJsonResponse(r, 'sessions');
 }
 
+export async function getSessionPlan(sessionId = TAB_SESSION_ID, cwd = null) {
+  const u = new URL(url('/session/plan'), location.origin);
+  if (sessionId) u.searchParams.set('sessionId', sessionId);
+  if (cwd) u.searchParams.set('cwd', cwd);
+  const r = await fetch(u.pathname + u.search);
+  return readJsonResponse(r, 'session plan');
+}
+
 // Legacy single-default-session endpoints. The browser UI should use
 // postTabNew/postTabLoad so multi-tab session isolation is preserved.
 export async function postNewSession(body = {}) {

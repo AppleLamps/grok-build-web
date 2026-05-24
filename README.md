@@ -253,11 +253,11 @@ $env:GROK_WEB_LIVE_X_SEARCH='1'; npm run test:live
 $env:GROK_WEB_LIVE_PLUGIN_MCP_NAME='<server-name>'; npm run test:live
 ```
 
-### Upcoming 0.1.218 Compatibility Checks
+### Grok 0.1.218 Compatibility Checks
 
-Grok CLI 0.1.218 is expected to ship additional platform and media-generation fixes. Once the update is available, run the automated live suite and manual compatibility checks again against the installed CLI.
+Grok CLI 0.1.218 ships additional platform and media-generation fixes. Run the automated live suite and manual compatibility checks against the installed CLI after updating.
 
-Expected 0.1.218 items to verify:
+0.1.218 items to verify:
 
 - Windows Ctrl+X default shortcut help binding
 - Linux image pasting and shortcut keybinding behavior
@@ -267,8 +267,10 @@ Expected 0.1.218 items to verify:
 - Compaction prompt improvements for training alignment and skill rehydration
 - Increased macOS and Linux ulimit handling to avoid ENOSPC failures that can brick the CLI
 - Multi-line image links remain non-clickable and no longer break rendering
+- `_x.ai/ask_user_question` renders as a web elicitation card and returns an `outcome` string
+- Active TODO state hydrates from persisted `plan.json` when loading a saved session
 
-The compatibility pass should include the existing `npm run test:live` suite, plus manual checks for Windows, Linux, and macOS behaviors where those fixes are platform-specific. The 0.1.218 release notes should also be reviewed in the Grok TUI when available.
+The compatibility pass should include the existing `npm run test:live` suite, plus manual checks for Windows, Linux, and macOS behaviors where those fixes are platform-specific. Review the 0.1.218 release notes in the Grok TUI during the pass.
 
 Feature touch points:
 

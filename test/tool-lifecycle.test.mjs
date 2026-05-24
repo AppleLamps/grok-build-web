@@ -5,6 +5,7 @@ import { importPublic, installDomStubs } from './helpers.mjs';
 installDomStubs();
 const { state, dom } = await importPublic('public/js/state.js');
 const { paintTool, resetAllToolState } = await importPublic('public/js/tools.js');
+const { setCurrentTodos } = await importPublic('public/js/tool-state.js');
 const { clearLog } = await importPublic('public/js/chat.js');
 
 test('tool groups expand, collapse, and keep their header', async () => {
@@ -167,6 +168,44 @@ test('completed todo summary refreshes the full sidebar list', async () => {
   assert.equal(dom.todoPanel.hidden, false);
   assert.match(dom.todoList.innerHTML, /Draft the page/);
   assert.match(dom.todoList.innerHTML, /Verify layout/);
+});
+
+test('todo summary count uses extracted todos and empty updates do not show zero', async () => {
+  resetDomState();
+
+  paintTool({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'todo-count',
+    title: 'todo_write',
+    rawInput: {
+      merge: true,
+      todos: [
+        { id: '1', content: 'Draft the page', status: 'pending' },
+        { id: '2', content: 'Verify layout', status: 'pending' },
+      ],
+    },
+  });
+  assert.equal(state.turnEl.querySelector('.target').textContent, '(2 items)');
+
+  paintTool({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'todo-empty',
+    title: 'todo_write',
+    rawInput: { merge: true },
+  });
+  assert.equal(state.turnEl.querySelectorAll('.target')[1].textContent, '');
+});
+
+test('empty todo hydration clears stale sidebar state', async () => {
+  resetDomState();
+
+  setCurrentTodos([{ id: 'stale', text: 'Stale task', status: 'pending' }], { merge: false });
+  assert.equal(dom.todoPanel.hidden, false);
+  assert.match(dom.todoList.innerHTML, /Stale task/);
+
+  setCurrentTodos([], { merge: false });
+  assert.equal(dom.todoPanel.hidden, true);
+  assert.equal(dom.todoList.innerHTML, '');
 });
 
 test('clearLog resets transient tool state synchronously', async () => {

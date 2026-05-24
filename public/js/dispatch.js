@@ -15,7 +15,8 @@ import { renderRecents, loadRecents } from './sidebar.js';
 import { setBusy, renderModePill } from './composer.js';
 import { setCommands } from './slashcommands.js';
 import { setTabSessionId } from './state.js';
-import { postTabNew } from './api.js';
+import { getSessionPlan, postTabNew } from './api.js';
+import { resetAllToolState, setCurrentTodos } from './tool-state.js';
 
 export function dispatch(event) {
   switch (event.kind) {
@@ -23,6 +24,7 @@ export function dispatch(event) {
       state.currentSessionId = event.sessionId;
       state.currentCwd = event.cwd ?? state.currentCwd;
       dom.crumb.textContent = event.cwd?.split(/[\\/]/).slice(-2).join(' / ') ?? 'session';
+      if (event.loaded) hydrateTodosFromPlan(event.sessionId, event.cwd);
       setBusy(false);
       setStatus('ready', 'ready');
       renderRecents();
@@ -33,6 +35,8 @@ export function dispatch(event) {
       state.currentCwd = event.cwd ?? state.currentCwd;
       clearLog();
       dom.crumb.textContent = event.cwd?.split(/[\\/]/).slice(-2).join(' / ') ?? 'session';
+      if (event.loaded) hydrateTodosFromPlan(event.sessionId, event.cwd);
+      else resetAllToolState();
       setBusy(false);
       setStatus(event.loaded ? 'session loaded' : 'new session', 'ready');
       renderRecents();
@@ -186,4 +190,10 @@ function firstCommandList(update) {
     if (Array.isArray(update?.[key])) return update[key];
   }
   return [];
+}
+
+function hydrateTodosFromPlan(sessionId, cwd = null) {
+  getSessionPlan(sessionId, cwd)
+    .then(plan => setCurrentTodos(plan.todos ?? [], { merge: false }))
+    .catch(e => addError(`session plan load failed: ${e.message}`));
 }

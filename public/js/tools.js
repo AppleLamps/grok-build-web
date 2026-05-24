@@ -14,9 +14,12 @@ import {
   enterSubagent,
   exitSubagent,
   getBackgroundTask,
+  getCurrentTodos,
   getSubagentDepth,
+  resetAllToolState,
   resetTransientToolState,
   setBackgroundTask,
+  setCurrentTodos,
 } from './tool-state.js';
 
 // ─── ANSI escape parser (minimal — colors + bold only) ───────────────────
@@ -202,7 +205,7 @@ function currentToolGroup() {
   return g;
 }
 
-export { resetTransientToolState };
+export { resetAllToolState, resetTransientToolState };
 
 function getToolEl(id) {
   let el = state.toolEls.get(id);
@@ -829,14 +832,17 @@ function renderSchedulerDetails(update) {
 }
 
 function renderTodos(update) {
-  const todos = update.rawInput?.todos;
-  if (!Array.isArray(todos)) return null;
-  // Also update the sidebar panel.
-  renderTodoSidebar(todos);
+  const extracted = extractTodoUpdate(update);
+  if (!extracted) return null;
+  const { todos, merge } = extracted;
+  const current = todos.length > 0
+    ? setCurrentTodos(todos, { merge })
+    : getCurrentTodos();
+  const renderList = current.length > 0 ? current : todos;
   return `
     <div class="label">todos</div>
     <ul class="todo-inline">
-      ${todos.map(t => {
+      ${renderList.map(t => {
         const status = safeStatusClass(t.status ?? t.state ?? 'pending');
         const text = t.text ?? t.content ?? t.task ?? '';
         return `<li class="todo-item ${status}">${escapeHTML(text)}</li>`;
@@ -845,14 +851,38 @@ function renderTodos(update) {
   `;
 }
 
-function renderTodoSidebar(todos) {
-  if (!dom.todoPanel || !dom.todoList) return;
-  dom.todoPanel.hidden = todos.length === 0;
-  dom.todoList.innerHTML = todos.map(t => {
-    const status = safeStatusClass(t.status ?? t.state ?? 'pending');
-    const text = t.text ?? t.content ?? t.task ?? '';
-    return `<div class="todo-item ${status}" title="${escapeAttr(status)}">${escapeHTML(text)}</div>`;
-  }).join('');
+function isTodoUpdate(update, title) {
+  return /todo[_ -]?write/.test(title)
+    || update.rawInput?.variant === 'TodoWrite'
+    || update.rawOutput?.type === 'Todo'
+    || !!update.rawOutput?.TodosUpdated;
+}
+
+function extractTodoUpdate(update) {
+  const rawInput = update.rawInput ?? {};
+  const rawOutput = update.rawOutput ?? {};
+  const inputTodos = Array.isArray(rawInput.todos) ? rawInput.todos : null;
+  if (inputTodos) return { todos: inputTodos, merge: rawInput.merge !== false };
+  const outputTodos = Array.isArray(rawOutput.todos) ? rawOutput.todos : null;
+  if (outputTodos) return { todos: outputTodos, merge: rawOutput.merge !== false };
+  const summary = rawOutput.TodosUpdated?.summary_for_prompt
+    ?? rawOutput.summary_for_prompt
+    ?? rawOutput.output_for_prompt
+    ?? rawOutput.output;
+  const summaryTodos = parseTodoSummary(summary);
+  if (summaryTodos.length) return { todos: summaryTodos, merge: false };
+  return null;
+}
+
+function parseTodoSummary(value) {
+  if (typeof value !== 'string' || !value.includes('[')) return [];
+  const todos = [];
+  for (const line of value.split(/\r?\n/)) {
+    const match = line.match(/^\s*[-*]\s+\[([^\]]+)\]\s+([^:]+):\s*(.+?)\s*$/);
+    if (!match) continue;
+    todos.push({ status: match[1].trim(), id: match[2].trim(), text: match[3].trim() });
+  }
+  return todos;
 }
 
 function normalizedToolStatus(update) {
@@ -867,14 +897,15 @@ function normalizedToolStatus(update) {
 
 function backgroundTargetId(update, titleLc) {
   if (/kill[_ -]?(command|subagent)/.test(titleLc)) {
-    return update.rawInput?.id ?? update.rawInput?.pid ?? update.rawOutput?.id ?? update.toolCallId;
+    return update.rawInput?.task_id ?? update.rawInput?.id ?? update.rawInput?.pid ?? update.rawOutput?.task_id ?? update.rawOutput?.id ?? update.toolCallId;
   }
-  return update.rawOutput?.id ?? update.rawInput?.id ?? update.toolCallId;
+  return update.rawOutput?.task_id ?? update.rawOutput?.id ?? update.rawInput?.task_id ?? update.rawInput?.id ?? update.toolCallId;
 }
 
 function updateBackgroundTask(update, titleLc) {
-  const isBg = update.rawInput?.is_background
-    || /background|run_terminal_command|command_or_subagent|subagent/.test(titleLc);
+  const isBg = update.rawInput?.is_background === true
+    || update.rawOutput?.type === 'BackgroundTaskStarted'
+    || /^(kill|get|wait)[_ -]?(command|commands|subagent|subagents)/.test(titleLc);
   if (!isBg) return;
   const id = backgroundTargetId(update, titleLc);
   const command = update.rawInput?.command
@@ -885,6 +916,8 @@ function updateBackgroundTask(update, titleLc) {
     ?? id;
   const status = /kill[_ -]?(command|subagent)/.test(titleLc)
     ? 'killed'
+    : update.rawOutput?.status === 'running'
+      ? 'in_progress'
     : normalizedToolStatus(update) || 'running';
   const prior = getBackgroundTask(id) ?? { id, command, status: 'running' };
   setBackgroundTask(id, { ...prior, command: prior.command ?? command, status });
@@ -927,7 +960,7 @@ export function paintTool(update) {
   const title = (update.title ?? '').toLowerCase();
   let specialHTML = null;
   if (update.kind === 'edit') specialHTML = renderEditDetails(update);
-  else if (/todo[_ -]?write/.test(title)) specialHTML = renderTodos(update);
+  else if (isTodoUpdate(update, title)) specialHTML = renderTodos(update);
   else if (/browser[_ -]?(tab|network)/.test(title)) specialHTML = renderBrowserDetails(update);
   else if (update.kind === 'execute' || /run_terminal_command/.test(title)) specialHTML = renderTerminalDetails(update);
   else if (/video[_ -]?gen|imagine[_ -]?video/.test(title)) specialHTML = renderVideoDetails(update);
@@ -969,7 +1002,7 @@ export function paintTool(update) {
 export function __testRenderToolDetails(update) {
   const title = (update.title ?? '').toLowerCase();
   if (update.kind === 'edit') return renderEditDetails(update);
-  if (/todo[_ -]?write/.test(title)) return renderTodos(update);
+  if (isTodoUpdate(update, title)) return renderTodos(update);
   if (/browser[_ -]?(tab|network)/.test(title)) return renderBrowserDetails(update);
   if (update.kind === 'execute' || /run_terminal_command/.test(title)) return renderTerminalDetails(update);
   if (/video[_ -]?gen|imagine[_ -]?video/.test(title)) return renderVideoDetails(update);

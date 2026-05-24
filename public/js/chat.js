@@ -5,7 +5,7 @@
 
 import { state, dom } from './state.js';
 import { renderMarkdown, escapeHTML } from './markdown.js';
-import { resetTransientToolState } from './tool-state.js';
+import { resetAllToolState, resetTransientToolState } from './tool-state.js';
 
 let assistantRenderPending = false;
 let assistantRenderHandle = null;
@@ -55,7 +55,7 @@ export function clearLog() {
   state.toolEls.clear();
   state.planCards.clear();
   state.permCards.clear();
-  resetTransientToolState();
+  resetAllToolState();
 }
 
 export function addUserItem(text) {

@@ -12,6 +12,7 @@
 </head>
 <body>
 
+<a class="skip-link" href="#main-content">Skip to main content</a>
 <aside id="sidebar">
   <div class="brand">
     <div>
@@ -45,7 +46,7 @@
       <button class="icon-btn" id="show-empty-sessions" title="Show empty sessions" aria-label="Show empty sessions" aria-pressed="false">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2"/></svg>
       </button>
-      <button class="icon-btn" id="refresh-recents" title="Refresh">
+      <button class="icon-btn" id="refresh-recents" title="Refresh" aria-label="Refresh projects">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
       </button>
     </span>
@@ -117,7 +118,7 @@
 </aside>
 <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
 
-<main>
+<main id="main-content" tabindex="-1">
   <div class="topbar">
     <button class="mobile-sidebar-toggle" id="mobile-sidebar-toggle" type="button" aria-label="Open sidebar" aria-controls="sidebar" aria-expanded="false">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -131,7 +132,7 @@
       <span class="usage-num" id="usage-num"></span>
     </div>
     <div class="actions">
-      <button id="workspace-btn" title="Change workspace">
+      <button id="workspace-btn" title="Change workspace" aria-label="Change workspace">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 12h6M15 9v6"/></svg>
       </button>
       <button id="share-btn" title="Share" aria-label="Share current session">
@@ -174,7 +175,7 @@
       <div class="input-wrap">
         <textarea id="input" rows="1" placeholder="Type / for commands"></textarea>
         <div class="action-row">
-          <span class="mode-pill auto" id="mode-pill" title="Click to toggle. Auto = run tools without asking; Manual = ask before each tool">Auto-approve</span>
+          <span class="mode-pill auto" id="mode-pill" role="button" tabindex="0" aria-pressed="true" title="Click to toggle. Auto = run tools without asking; Manual = ask before each tool">Auto-approve</span>
           <button type="button" class="icon-btn" id="attach-btn" title="Attach text files" aria-label="Attach text files">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
           </button>
@@ -188,8 +189,8 @@
             <option value="best5">Best of 5 (headless)</option>
           </select>
           <button class="model-tag" id="model-tag" type="button" title="Change model">grok-build</button>
-          <button class="send-btn" id="send" type="submit" disabled>Send</button>
-          <button class="stop-btn" id="stop" type="button" style="display:none" title="Cancel the running turn">Stop</button>
+          <button class="send-btn" id="send" type="submit" disabled aria-label="Send prompt">Send</button>
+          <button class="stop-btn" id="stop" type="button" style="display:none" title="Cancel the running turn" aria-label="Cancel running turn">Stop</button>
         </div>
       </div>
     </form>

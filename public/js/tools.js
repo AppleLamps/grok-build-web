@@ -978,11 +978,30 @@ export function renderPlanCard(u) {
         <button class="plan-edit">Suggest edits…</button>
         <button class="plan-reject">Reject</button>
       </div>
+      <div class="plan-edit-wrap" hidden>
+        <textarea class="plan-edit-text" rows="3" placeholder="Describe the revision you want"></textarea>
+        <div class="plan-edit-actions">
+          <button class="plan-edit-submit" type="button">Send edits</button>
+          <button class="plan-edit-cancel" type="button">Cancel</button>
+        </div>
+      </div>
     `;
     card.querySelector('.plan-accept').addEventListener('click', () => sendPlanResponse('Proceed with the plan as written.'));
     card.querySelector('.plan-edit').addEventListener('click', () => {
-      const text = prompt('How should the plan change?');
-      if (text) sendPlanResponse('Revise the plan: ' + text);
+      const wrap = card.querySelector('.plan-edit-wrap');
+      wrap.hidden = false;
+      card.querySelector('.plan-edit-text')?.focus?.();
+    });
+    card.querySelector('.plan-edit-submit').addEventListener('click', () => {
+      const input = card.querySelector('.plan-edit-text');
+      const text = input?.value?.trim();
+      if (!text) return;
+      input.value = '';
+      card.querySelector('.plan-edit-wrap').hidden = true;
+      sendPlanResponse('Revise the plan: ' + text);
+    });
+    card.querySelector('.plan-edit-cancel').addEventListener('click', () => {
+      card.querySelector('.plan-edit-wrap').hidden = true;
     });
     card.querySelector('.plan-reject').addEventListener('click', () => sendPlanResponse('Reject the plan. Start over with a different approach.'));
     state.turnEl.appendChild(card);

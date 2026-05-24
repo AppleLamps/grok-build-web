@@ -11,7 +11,9 @@ let assistantRenderPending = false;
 let assistantRenderHandle = null;
 let assistantRenderCancel = null;
 let assistantRenderGeneration = 0;
+let lastAssistantRenderAt = 0;
 const AUTO_SCROLL_NEAR_BOTTOM_PX = 120;
+const ASSISTANT_RENDER_INTERVAL_MS = 32;
 
 export function autoScroll() {
   const nearBottom = dom.log.scrollHeight - dom.log.scrollTop - dom.log.clientHeight < AUTO_SCROLL_NEAR_BOTTOM_PX;
@@ -20,6 +22,7 @@ export function autoScroll() {
 
 export function newTurn() {
   invalidateAssistantRender();
+  lastAssistantRenderAt = 0;
   // First user prompt clears the welcome screen.
   if (dom.welcome && !dom.welcome.hidden) dom.welcome.hidden = true;
   state.turnEl = document.createElement('div');
@@ -38,6 +41,7 @@ export function newTurn() {
 
 export function clearLog() {
   invalidateAssistantRender();
+  lastAssistantRenderAt = 0;
   dom.logInner.innerHTML = '';
   // Restore the welcome screen so users see starter prompts in a fresh session.
   if (dom.welcome) {
@@ -56,10 +60,8 @@ export function clearLog() {
 
 export function addUserItem(text) {
   newTurn();
-  const div = document.createElement('div');
-  div.className = 'user-msg';
+  const div = appendUserMessageElement(state.turnEl);
   div.textContent = text;
-  state.turnEl.appendChild(div);
   dom.crumb.textContent = text.slice(0, 80);
   autoScroll();
 }
@@ -107,6 +109,7 @@ function renderAssistantNow() {
   if (!state.assistantEl) return;
   state.assistantEl.innerHTML = renderMarkdown(state.assistantBuf);
   state.assistantEl.classList.add('streaming');
+  lastAssistantRenderAt = Date.now();
   autoScroll();
 }
 
@@ -128,6 +131,12 @@ function scheduleAssistantRender() {
     assistantRenderPending = false;
     renderAssistantNow();
   };
+  const delay = Math.max(0, ASSISTANT_RENDER_INTERVAL_MS - (Date.now() - lastAssistantRenderAt));
+  if (delay > 0) {
+    assistantRenderCancel = clearTimeout;
+    assistantRenderHandle = setTimeout(run, delay);
+    return;
+  }
   const raf = globalThis.requestAnimationFrame ?? globalThis.window?.requestAnimationFrame;
   const cancelRaf = globalThis.cancelAnimationFrame ?? globalThis.window?.cancelAnimationFrame;
   if (typeof raf === 'function') {
@@ -158,13 +167,22 @@ function invalidateAssistantRender() {
 export function appendUserChunk(text) {
   if (!state.turnEl || (state.assistantEl || state.thinkingEl || state.toolEls.size > 0)) newTurn();
   let userEl = state.turnEl.querySelector('.user-msg');
-  if (!userEl) {
-    userEl = document.createElement('div');
-    userEl.className = 'user-msg';
-    state.turnEl.appendChild(userEl);
-  }
+  if (!userEl) userEl = appendUserMessageElement(state.turnEl);
   userEl.textContent += text;
   autoScroll();
+}
+
+function appendUserMessageElement(turnEl) {
+  let row = turnEl.querySelector('.user-msg-row');
+  if (!row) {
+    row = document.createElement('div');
+    row.className = 'user-msg-row';
+    turnEl.appendChild(row);
+  }
+  const div = document.createElement('div');
+  div.className = 'user-msg';
+  row.appendChild(div);
+  return div;
 }
 
 export function addError(msg) {
@@ -182,8 +200,8 @@ export function setStatus(text, cls = '') {
 }
 
 // Token-usage strip in the topbar. Called from dispatch on turn_complete.
-const COPY_ICON = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-const CHECK_ICON = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+const COPY_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const CHECK_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
 
 export function updateUsage(meta) {
   if (!meta || !dom.usage) return;
@@ -205,25 +223,27 @@ function formatTokens(n) {
   return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
 }
 
-// Event-delegated copy buttons on any <pre> inside the log. The button is
-// injected on first hover so we don't add DOM weight to every code block.
-dom.log?.addEventListener('mouseover', (e) => {
-  const pre = e.target.closest?.('pre');
-  if (!pre || pre.querySelector('.copy-btn')) return;
-  if (pre.closest('.tool .details')) return; // tool detail blocks have their own
-  const btn = document.createElement('button');
-  btn.className = 'copy-btn';
-  btn.title = 'Copy';
-  btn.innerHTML = COPY_ICON;
-  btn.addEventListener('click', async (ev) => {
-    ev.stopPropagation();
-    const txt = pre.innerText;
-    try { await navigator.clipboard.writeText(txt); btn.innerHTML = CHECK_ICON; btn.classList.add('copied'); }
-    catch { btn.title = 'copy failed'; }
-    setTimeout(() => { btn.innerHTML = COPY_ICON; btn.classList.remove('copied'); }, 1400);
-  });
-  pre.appendChild(btn);
-});
+dom.log?.addEventListener('click', handleCodeCopyClick);
+
+export async function handleCodeCopyClick(e) {
+  const btn = e.target.closest?.('.code-block-copy');
+  if (!btn) return;
+  e.stopPropagation?.();
+  const block = btn.closest('.code-block');
+  const pre = block?.querySelector('pre');
+  if (!pre) return;
+  try {
+    await navigator.clipboard.writeText(pre.innerText ?? pre.textContent ?? '');
+    btn.innerHTML = `${CHECK_ICON}<span>Copied</span>`;
+    btn.classList.add('copied');
+  } catch {
+    btn.textContent = 'Failed';
+  }
+  setTimeout(() => {
+    btn.innerHTML = `${COPY_ICON}<span>Copy</span>`;
+    btn.classList.remove('copied');
+  }, 2000);
+}
 
 const HOOK_ICONS = {
   success: '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',

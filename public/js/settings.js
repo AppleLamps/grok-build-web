@@ -11,6 +11,7 @@ import { mergeModelIds } from './model-ids.js';
 let panel = null;
 let current = {};
 let bridgeCurrent = {};
+let settingsPreviousFocus = null;
 
 const FIELDS = [
   { key: 'effort', label: 'Effort', type: 'select',
@@ -161,9 +162,14 @@ async function populateModelSelect(selectEl) {
 }
 
 async function open() {
+  settingsPreviousFocus = document.activeElement;
   if (!panel) {
     panel = document.createElement('div');
     panel.className = 'settings-panel';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-label', 'Session settings');
+    panel.setAttribute('tabindex', '-1');
     document.body.appendChild(panel);
   }
   const results = await Promise.allSettled([getSpawnOpts(), getSettings()]);
@@ -184,7 +190,7 @@ async function open() {
   panel.innerHTML = `
     <div class="settings-head">
       <strong>Session settings</strong>
-      <button class="close" title="Close">×</button>
+      <button class="close" title="Close" aria-label="Close settings">×</button>
     </div>
     ${envHint}
     <div class="settings-body"></div>
@@ -209,9 +215,13 @@ async function open() {
   panel.querySelector('.cancel').addEventListener('click', close);
   panel.querySelector('.apply').addEventListener('click', apply);
   panel.classList.add('open');
+  panel.querySelector('.close')?.focus?.();
 }
 
-function close() { panel?.classList.remove('open'); }
+function close() {
+  panel?.classList.remove('open');
+  settingsPreviousFocus?.focus?.();
+}
 
 async function apply() {
   const values = collectValues();

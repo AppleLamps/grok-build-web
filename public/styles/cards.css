@@ -66,12 +66,12 @@
 
 /* ─── Permission request card ─────────────────────────────────────────── */
 .perm-card {
-  background: #FBF4DF; border: 1px solid #E9D87E;
+  background: #F8F8F8; border: 1px solid #E5E5E5;
   border-radius: 10px; padding: 14px 16px;
   margin: 10px 0; max-width: 780px;
 }
 .perm-card .perm-head {
-  font-size: 12px; font-weight: 600; color: #87651E;
+  font-size: 12px; font-weight: 600; color: #6B6B6B;
   text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px;
 }
 .perm-card .perm-tool {
@@ -91,9 +91,9 @@
   border: 0; padding: 7px 14px; border-radius: 7px;
   font: inherit; font-weight: 500; font-size: 13px; cursor: pointer;
 }
-.perm-card .allow      { background: var(--accent); color: white; }
-.perm-card .allow-once { background: #E5DEF6; color: #4938A8; }
-.perm-card .deny       { background: #F4E2E7; color: var(--red); }
+.perm-card .allow      { background: var(--btn-primary-bg); color: var(--btn-primary-text); }
+.perm-card .allow-once { background: #EEEEEE; color: #333333; }
+.perm-card .deny       { background: #FCE8E8; color: var(--red); }
 .perm-card button:disabled { opacity: .5; cursor: default; }
 .perm-card.resolved { opacity: .55; }
 .perm-card.resolved .perm-actions { display: none; }
@@ -105,12 +105,12 @@
 
 /* ─── Elicitation request card ───────────────────────────────────────── */
 .elicitation-card {
-  background: #EEF2FE; border: 1px solid #CBD7FA;
+  background: #F5F5FF; border: 1px solid #D0D0F0;
   border-radius: 10px; padding: 14px 16px;
   margin: 10px 0; max-width: 780px;
 }
 .elicitation-card .elicitation-head {
-  font-size: 12px; font-weight: 600; color: #2F4DA2;
+  font-size: 12px; font-weight: 600; color: #3B3B8F;
   text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px;
 }
 .elicitation-card .elicitation-title {
@@ -142,10 +142,10 @@
   border: 0; padding: 7px 14px; border-radius: 7px;
   font: inherit; font-weight: 500; font-size: 13px; cursor: pointer;
 }
-.elicitation-card .accept { background: var(--accent); color: white; }
-.elicitation-card .open { background: #E5DEF6; color: #4938A8; }
+.elicitation-card .accept { background: var(--btn-primary-bg); color: var(--btn-primary-text); }
+.elicitation-card .open { background: #EEEEEE; color: #333333; }
 .elicitation-card .decline,
-.elicitation-card .cancel { background: #F4E2E7; color: var(--red); }
+.elicitation-card .cancel { background: #FCE8E8; color: var(--red); }
 .elicitation-card button:disabled,
 .elicitation-card input:disabled,
 .elicitation-card select:disabled { opacity: .5; cursor: default; }
@@ -286,8 +286,8 @@
 }
 .term-pill.ok   { background: #E5F4E5; color: #1F6022; }
 .term-pill.fail { background: #FCE9EE; color: var(--red); }
-.term-pill.warn { background: #FFF3D1; color: #87651E; }
-.term-pill.bg   { background: #E5DEF6; color: #4938A8; }
+.term-pill.warn { background: #FFF4D6; color: #73530A; }
+.term-pill.bg   { background: #EEEEEE; color: #333333; }
 .term-cwd {
   font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
   font-size: 11px; color: var(--faint); margin-left: 4px;
@@ -314,7 +314,7 @@
   margin: 2px 0 8px; font-size: 13px;
 }
 .browser-action-verb {
-  background: #EEF2FE; color: #2F4DA2;
+  background: #F5F5FF; color: #3B3B8F;
   padding: 3px 9px; border-radius: 5px;
   font-weight: 500; font-size: 12px;
   display: inline-flex; align-items: center; gap: 5px;
@@ -384,12 +384,12 @@
 
 /* ─── Plan mode card ──────────────────────────────────────────────────── */
 .plan-card {
-  background: #EEF2FE; border: 1px solid #C5D3FA;
+  background: #F5F5FF; border: 1px solid #D0D0F0;
   border-radius: 10px; padding: 14px 18px;
   margin: 12px 0; max-width: 820px;
 }
 .plan-card .plan-head {
-  font-size: 12px; font-weight: 600; color: #2F4DA2;
+  font-size: 12px; font-weight: 600; color: #3B3B8F;
   text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px;
   display: flex; align-items: center; gap: 6px;
 }
@@ -408,9 +408,46 @@
   border: 0; padding: 7px 14px; border-radius: 7px;
   font: inherit; font-weight: 500; font-size: 13px; cursor: pointer;
 }
-.plan-card .plan-accept { background: #2F4DA2; color: white; }
-.plan-card .plan-edit   { background: #E5DEF6; color: #4938A8; }
-.plan-card .plan-reject { background: #F4E2E7; color: var(--red); }
+.plan-card .plan-accept { background: var(--btn-primary-bg); color: var(--btn-primary-text); }
+.plan-card .plan-edit   { background: #EEEEEE; color: #333333; }
+.plan-card .plan-reject { background: #FCE8E8; color: var(--red); }
+.plan-edit-wrap {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.plan-edit-wrap[hidden] { display: none; }
+.plan-edit-text {
+  width: 100%;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  padding: 9px 10px;
+  resize: vertical;
+}
+.plan-edit-text:focus {
+  outline: 0;
+  border-color: var(--focus-line);
+  box-shadow: 0 0 0 1px var(--focus-line);
+}
+.plan-edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.plan-edit-actions button {
+  border: 0;
+  padding: 7px 14px;
+  border-radius: 7px;
+  font: inherit;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+}
+.plan-edit-submit { background: var(--btn-primary-bg); color: var(--btn-primary-text); }
+.plan-edit-cancel { background: none; color: var(--mute); border: 1px solid var(--line) !important; }
 
 /* Subagent nesting: when a tool call is spawned by use_tool, indent it */
 .tool.subagent-child { margin-left: 24px; border-left: 2px solid var(--line-soft); padding-left: 10px; }

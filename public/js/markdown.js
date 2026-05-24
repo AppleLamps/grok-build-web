@@ -40,9 +40,39 @@ function renderInline(s) {
   s = s.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
   s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener">$1</a>');
   return s;
+}
+
+function isHorizontalRule(line) {
+  return /^(-{3,}|_{3,}|\*{3,})$/.test(line.trim());
+}
+
+function renderList(lines, start) {
+  const first = lines[start];
+  const ordered = /^\s*\d+\.\s+/.test(first);
+  const prefixRe = ordered ? /^\s*\d+\.\s+/ : /^\s*[-*+]\s+/;
+  const items = [];
+  let i = start;
+  while (i < lines.length && prefixRe.test(lines[i])) {
+    let itemText = lines[i].replace(prefixRe, '');
+    i++;
+    while (i < lines.length && /^\s{2,}/.test(lines[i]) && !prefixRe.test(lines[i])) {
+      itemText += '\n' + lines[i].replace(/^\s{2,}/, '');
+      i++;
+    }
+    const task = itemText.match(/^\[([ xX])\]\s+([\s\S]*)$/);
+    if (task) {
+      const checked = task[1].toLowerCase() === 'x' ? ' checked' : '';
+      items.push(`<li class="task-item"><input type="checkbox" disabled${checked}>${renderInline(task[2])}</li>`);
+    } else {
+      items.push(`<li>${renderInline(itemText)}</li>`);
+    }
+  }
+  const tag = ordered ? 'ol' : 'ul';
+  return { next: i, html: `<${tag}>${items.join('')}</${tag}>` };
 }
 
 function splitTableRow(line) {
@@ -109,7 +139,16 @@ export function renderMarkdown(src) {
       const code = [];
       while (i < lines.length && !/^```\s*$/.test(lines[i])) { code.push(lines[i]); i++; }
       i++;
-      out.push(`<pre><code class="lang-${escapeHTML(lang)}">${escapeHTML(code.join('\n'))}</code></pre>`);
+      const safeLang = escapeAttr(lang);
+      const label = lang ? escapeHTML(lang) : 'code';
+      out.push(`<div class="code-block" data-lang="${safeLang}">`
+        + '<div class="code-block-header">'
+        + `<span class="code-block-lang">${label}</span>`
+        + '<button class="code-block-copy" type="button" aria-label="Copy code">'
+        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+        + '<span>Copy</span></button></div>'
+        + `<pre><code class="lang-${safeLang}">${escapeHTML(code.join('\n'))}</code></pre>`
+        + '</div>');
       continue;
     }
     const table = renderTable(lines, i);
@@ -119,20 +158,40 @@ export function renderMarkdown(src) {
       continue;
     }
     const h = line.match(/^(#{1,6})\s+(.+)$/);
-    if (h) { out.push(`<p><strong>${renderInline(h[2])}</strong></p>`); i++; continue; }
-    if (/^\s*[-*]\s+/.test(line)) {
-      const items = [];
-      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) {
-        items.push(`<li>${renderInline(lines[i].replace(/^\s*[-*]\s+/, ''))}</li>`);
-        i++;
-      }
-      out.push(`<ul>${items.join('')}</ul>`);
+    if (h) {
+      const level = Math.min(h[1].length + 2, 6);
+      out.push(`<h${level}>${renderInline(h[2])}</h${level}>`);
+      i++;
       continue;
     }
+    if (/^\s*[-*+]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)) {
+      const list = renderList(lines, i);
+      out.push(list.html);
+      i = list.next;
+      continue;
+    }
+    if (/^>\s?/.test(line)) {
+      const quoteLines = [];
+      while (i < lines.length && /^>\s?/.test(lines[i])) {
+        quoteLines.push(lines[i].replace(/^>\s?/, ''));
+        i++;
+      }
+      out.push(`<blockquote>${renderMarkdown(quoteLines.join('\n'))}</blockquote>`);
+      continue;
+    }
+    if (isHorizontalRule(line)) { out.push('<hr>'); i++; continue; }
     if (line.trim() === '') { i++; continue; }
     const para = [line];
     i++;
-    while (i < lines.length && lines[i].trim() !== '' && !/^```/.test(lines[i]) && !/^(#{1,6})\s+/.test(lines[i]) && !/^\s*[-*]\s+/.test(lines[i]) && !renderTable(lines, i)) {
+    while (i < lines.length
+      && lines[i].trim() !== ''
+      && !/^```/.test(lines[i])
+      && !/^(#{1,6})\s+/.test(lines[i])
+      && !/^\s*[-*+]\s+/.test(lines[i])
+      && !/^\s*\d+\.\s+/.test(lines[i])
+      && !/^>\s?/.test(lines[i])
+      && !isHorizontalRule(lines[i])
+      && !renderTable(lines, i)) {
       para.push(lines[i]); i++;
     }
     out.push(`<p>${renderInline(para.join('\n'))}</p>`);

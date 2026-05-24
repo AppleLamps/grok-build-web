@@ -51,6 +51,9 @@ const modelIds = await importPublic('public/js/model-ids.js');
 test('settings display-name-only changes avoid respawn and skip unsupported permissionMode', async () => {
   requests.length = 0;
   const panel = await settings.__testOpenSettings();
+  assert.equal(panel.getAttribute('role'), 'dialog');
+  assert.equal(panel.getAttribute('aria-modal'), 'true');
+  assert.equal(panel.getAttribute('aria-label'), 'Session settings');
   panel.querySelector('[data-key]').value = 'Private';
 
   await settings.__testApplySettings();

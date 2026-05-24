@@ -19,6 +19,7 @@ export function renderModePill() {
     dom.modePill.textContent = 'Manual approval';
     dom.modePill.className = 'mode-pill manual';
   }
+  dom.modePill?.setAttribute('aria-pressed', String(!!state.autoApprove));
 }
 
 function autoSize() {
@@ -95,12 +96,18 @@ export function initComposer() {
     });
   });
 
-  dom.modePill.addEventListener('click', async () => {
+  const toggleMode = async () => {
     try {
       const data = await setSettings({ autoApprove: !state.autoApprove });
       state.autoApprove = data.autoApprove;
       renderModePill();
     } catch (e) { addError(`setting toggle failed: ${e.message}`); }
+  };
+  dom.modePill.addEventListener('click', toggleMode);
+  dom.modePill.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    toggleMode();
   });
 
   dom.stopBtn.addEventListener('click', async () => {
@@ -123,4 +130,30 @@ export function initComposer() {
     state.autoApprove = d.autoApprove;
     renderModePill();
   }).catch(() => {});
+
+  document.addEventListener('keydown', handleGlobalShortcut);
+}
+
+export function handleGlobalShortcut(e) {
+  if (isEditableTarget(e.target)) return;
+  if ((e.ctrlKey || e.metaKey) && e.key?.toLowerCase() === 'k') {
+    e.preventDefault();
+    dom.input.focus();
+    return;
+  }
+  if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    dom.input.value = '/';
+    dom.input.focus();
+    try {
+      dom.input.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch {
+      dom.input.dispatchEvent({ type: 'input' });
+    }
+  }
+}
+
+function isEditableTarget(target) {
+  const tag = target?.tagName?.toLowerCase?.();
+  return target?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
 }

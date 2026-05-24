@@ -11,6 +11,43 @@ test('markdown tables render safe links and escape unsafe HTML', async () => {
   assert.match(html, /<a href="https:\/\/x.ai/);
 });
 
+test('markdown renders expanded formatting safely', async () => {
+  installDomStubs();
+  const { renderMarkdown } = await importFresh('public/js/markdown.js');
+  const html = renderMarkdown([
+    '# Heading',
+    '',
+    '1. First',
+    '2. Second',
+    '',
+    '+ Plus bullet',
+    '- [x] Done',
+    '- [ ] Later',
+    '',
+    '> quoted **text**',
+    '',
+    '~~removed~~',
+    '',
+    '---',
+    '',
+    '```js',
+    '<script>alert(1)</script>',
+    '```',
+  ].join('\n'));
+
+  assert.match(html, /<h3>Heading<\/h3>/);
+  assert.match(html, /<ol><li>First<\/li><li>Second<\/li><\/ol>/);
+  assert.match(html, /<ul><li>Plus bullet<\/li><li class="task-item"><input type="checkbox" disabled checked>Done<\/li><li class="task-item"><input type="checkbox" disabled>Later<\/li><\/ul>/);
+  assert.match(html, /<blockquote><p>quoted <strong>text<\/strong><\/p><\/blockquote>/);
+  assert.match(html, /<del>removed<\/del>/);
+  assert.match(html, /<hr>/);
+  assert.match(html, /<div class="code-block" data-lang="js">/);
+  assert.match(html, /<span class="code-block-lang">js<\/span>/);
+  assert.match(html, /class="code-block-copy"/);
+  assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.doesNotMatch(html, /<script>/);
+});
+
 test('multimodal read_file output renders text, image, PDF, PPT, and video', async () => {
   installDomStubs();
   const { __testRenderToolDetails } = await importFresh('public/js/tools.js');

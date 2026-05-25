@@ -5,7 +5,6 @@ Live list. Items that get fixed are removed; items get added as they're discover
 ## Functional gaps
 
 - **Permission mode is mostly binary on the current CLI.** The composer pill toggles between auto-approve and manual approval. Settings includes a guarded `permissionMode` field, but it stays disabled until the installed `grok agent --help` advertises `--permission-mode`.
-- **Loading a session whose original cwd was deleted fails.** Agent returns `Path not found.` and the error renders in the log. There's no fallback to "load anyway in current cwd."
 - **`/cli/oneshot` (headless `--check` / Best-of-N) requires xAI credits.** Returns a structured error if the account is rate-limited or out of credits. The endpoint's parser surfaces the error to the chat log, but the underlying need to pay is on the user.
 
 ## Visual / data quirks

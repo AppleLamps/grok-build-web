@@ -914,6 +914,63 @@ textarea::placeholder { color: var(--faint); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+/* Recovery / bootstrap error banner */
+.recovery-slot {
+  border-bottom: 1px solid var(--line-soft);
+  background: #fff7ed;
+  padding: 8px 28px;
+}
+.recovery-banner {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--mute);
+  font-size: 12.5px;
+}
+.recovery-banner .recovery-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #c2410c;
+  box-shadow: 0 0 0 3px rgba(194, 65, 12, .12);
+}
+.recovery-banner strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.recovery-banner .recovery-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.recovery-banner .recovery-action {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.recovery-banner .recovery-action:hover {
+  background: var(--hover);
+}
+.recovery-banner .close {
+  border: 0;
+  background: transparent;
+  color: var(--mute);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+.recovery-banner .close:hover {
+  color: var(--ink);
+}
+
 /* Update available banner */
 .update-slot {
   border-bottom: 1px solid var(--line-soft);

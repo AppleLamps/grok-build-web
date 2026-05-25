@@ -161,17 +161,26 @@ browser  -> POST /prompt -> server.mjs -> stdin  -> grok agent stdio
 browser  <- SSE /stream  <- server.mjs <- stdout <- grok agent stdio
 ```
 
-The Grok CLI exposes Agent Client Protocol over `grok agent stdio`. `server.mjs` spawns the CLI as a child process and bridges ACP messages to the browser through HTTP and Server-Sent Events.
+The Grok CLI exposes Agent Client Protocol over `grok agent stdio`. `server.mjs` lazily spawns one `grok agent stdio` child per browser tab ACP session and bridges ACP messages to the browser through HTTP and Server-Sent Events.
 
 Multiple browser tabs are supported. Each tab keeps its own ACP `sessionId` in the URL and localStorage. The bridge tags events with `sessionId`, so each tab receives only its own stream.
 
-The bridge uses one shared Grok CLI child process. Per-tab prompts, session loads, approval-mode syncs, and respawns are serialized through the bridge so one tab cannot race another on the shared JSON-RPC pipe.
+Each tab gets its own agent process, lazy-spawned on `/tab/new` or `/tab/load`. Prompts on different tabs run in parallel; only prompts queued on the same tab share one agent's JSON-RPC pipe. Idle agents are evicted after `GROK_WEB_AGENT_IDLE_MS` (default 30 minutes), capped by `GROK_WEB_MAX_ACTIVE_AGENTS`.
 
 ## Repository Map
 
 ```text
 grok-web/
-|-- server.mjs                 Node bridge, HTTP routes, ACP client, CLI shell-outs
+|-- server.mjs                 Thin boot + HTTP listener
+|-- lib/                       Bridge modules (ACP, routes, sessions, CLI)
+|   |-- grok-bridge.mjs        Multi-agent pool (one stdio child per tab session)
+|   |-- agent-connection.mjs   Single ACP stdio child + prompt queue
+|   |-- grok-session.mjs       Re-export alias for GrokBridge
+|   |-- sessions-store.mjs     Session list + plan.json reads
+|   |-- cli-runner.mjs         One-shot grok CLI shell-outs
+|   `-- http/
+|       |-- router.mjs         Request dispatch
+|       `-- routes/            Per-domain HTTP handlers
 |-- public/
 |   |-- index.html             Page shell
 |   |-- styles/
@@ -182,7 +191,8 @@ grok-web/
 |       |-- api.js             Fetch wrappers
 |       |-- state.js           Shared client state and DOM refs
 |       |-- chat.js            Turn rendering and assistant output
-|       |-- tools.js           Tool call rendering
+|       |-- tools.js           Barrel re-export for tool rendering
+|       |-- tools/             Per-tool renderers + details registry
 |       |-- settings.js        Settings panel
 |       |-- identity.js        Sidebar identity display
 |       |-- sidebar.js         Project drawer and recents
@@ -274,12 +284,13 @@ The compatibility pass should include the existing `npm run test:live` suite, pl
 
 Feature touch points:
 
-- New tool renderer: `public/js/tools.js`
+- New tool renderer: add a file under `public/js/tools/` and register it in `public/js/tools/details-registry.mjs`
 - New event type: `public/js/dispatch.js`
 - New permission UI: `public/js/permissions.js`
 - New elicitation UI: `public/js/elicitation.js`
-- New launch flag: `public/js/settings.js` and `server.mjs`
-- New CLI panel: `server.mjs`, `public/js/api.js`, and `public/js/panels.js`
+- New launch flag: `public/js/settings.js` and `lib/grok-session.mjs`
+- New HTTP route: add a handler in `lib/http/routes/` and register it in `lib/http/router.mjs`
+- New CLI panel: `lib/http/routes/cli.mjs`, `public/js/api.js`, and `public/js/panels.js`
 - Sidebar or layout polish: `public/styles/main.css`
 - Tool card polish: `public/styles/cards.css`
 
@@ -291,7 +302,7 @@ HTTP responses include a local-app security baseline: CSP with `frame-ancestors 
 
 The bridge can read and write files only through ACP requests from the agent, and those filesystem handlers are confined to the request's session workspace. Generated media previews are served only through the authenticated `/session-media` endpoint, which is confined to Grok session storage and does not expose arbitrary local files. Per-tab session APIs keep workspace cwd in per-session state so one tab cannot silently change another tab's fallback cwd.
 
-Agent restarts, session loads, and prompts share one serialized mutation queue over the single Grok CLI child process. Permission and elicitation timeout handles are cleared across respawns, and SSE reconnect replay is delivered with response backpressure and listener cleanup.
+Agent restarts and session loads are serialized per agent and through a small bridge operation queue. Permission and elicitation timeout handles are cleared across respawns, and SSE reconnect replay is delivered with response backpressure and listener cleanup.
 
 ## Related
 

@@ -3,7 +3,7 @@
 
 import { initComposer } from './composer.js';
 import { initSidebar } from './sidebar.js';
-import { initSSE } from './sse.js';
+import { initSSE, reconnectSSE, isSSEActive } from './sse.js';
 import { initSlash } from './slashcommands.js';
 import { initTopbar } from './topbar.js';
 import { initSettings } from './settings.js';
@@ -15,6 +15,8 @@ import { initIdentity } from './identity.js';
 import { TAB_SESSION_ID, setTabSessionId } from './state.js';
 import { postTabNew, postTabLoad, listSessions, getSessionPlan } from './api.js';
 import { resetAllToolState, setCurrentTodos } from './tool-state.js';
+import { setStatus } from './chat.js';
+import { hideRecoveryBanner, showRecoveryBanner } from './recovery.mjs';
 
 export async function hydrateSessionPlan(sessionId = TAB_SESSION_ID, cwd = null) {
   if (!sessionId) {
@@ -29,62 +31,88 @@ export async function hydrateSessionPlan(sessionId = TAB_SESSION_ID, cwd = null)
   }
 }
 
+async function adoptLoadedSession(sessionId, cwd) {
+  const tab = await postTabLoad(sessionId, cwd);
+  setTabSessionId(sessionId);
+  await hydrateSessionPlan(sessionId, tab.cwd ?? cwd);
+}
+
 async function ensureTabSession() {
   const params = new URLSearchParams(location.search);
-  // Explicit ?session=<sid>: load it on the bridge then adopt.
   const wantSession = params.get('session');
   if (wantSession) {
     try {
       const data = await listSessions();
       const meta = (data.sessions ?? []).find(x => x.id === wantSession);
       const cwd = params.get('cwd') ?? meta?.cwd;
-      await postTabLoad(wantSession, cwd);
-      setTabSessionId(wantSession);
-      await hydrateSessionPlan(wantSession, cwd);
-      return;
+      await adoptLoadedSession(wantSession, cwd);
+      return { ok: true };
     } catch (e) {
       console.error('load session failed', e);
       // Keep ?session= in the URL; do not fall through to postTabNew (that created duplicates).
-      return;
+      return { ok: false, error: `Could not load session: ${e.message}` };
     }
   }
-  // ?continue=1: load the most-recent session into this tab.
   if (params.get('continue')) {
     try {
       const data = await listSessions();
       const s = (data.sessions ?? [])[0];
       if (s) {
-        await postTabLoad(s.id, s.cwd);
-        setTabSessionId(s.id);
-        await hydrateSessionPlan(s.id, s.cwd);
-        return;
+        await adoptLoadedSession(s.id, s.cwd);
+        return { ok: true };
       }
-    } catch (e) { console.error('continue failed', e); }
+    } catch (e) {
+      console.error('continue failed', e);
+      return { ok: false, error: `Could not continue previous session: ${e.message}` };
+    }
   }
-  // Already have one from URL or localStorage.
   if (TAB_SESSION_ID) {
-    // Make sure the bridge has this session loaded (it may not, e.g. fresh server start).
     try {
       const data = await listSessions();
       const meta = (data.sessions ?? []).find(x => x.id === TAB_SESSION_ID);
-      await postTabLoad(TAB_SESSION_ID, meta?.cwd);
-      await hydrateSessionPlan(TAB_SESSION_ID, meta?.cwd);
-      return;
-    } catch { /* may be fresh — ignore */ }
-    setTabSessionId(null);
+      await adoptLoadedSession(TAB_SESSION_ID, meta?.cwd);
+      return { ok: true };
+    } catch (e) {
+      console.error('restore tab session failed', e);
+      setTabSessionId(null);
+    }
   }
-  // No session at all — create one on the bridge.
   try {
     const tab = await postTabNew();
     setTabSessionId(tab.sessionId);
     resetAllToolState();
+    return { ok: true };
   } catch (e) {
     console.error('tab/new failed', e);
+    return { ok: false, error: `Could not start a session: ${e.message}` };
   }
 }
 
+function showBootstrapFailure(error) {
+  setStatus('session setup failed', 'disconnected');
+  showRecoveryBanner({
+    title: 'Session setup failed',
+    message: error,
+    actionLabel: 'Retry',
+    onAction: () => { retryBootstrap(); },
+  });
+}
+
+async function startStreamAfterSession() {
+  hideRecoveryBanner();
+  if (isSSEActive()) reconnectSSE();
+  else initSSE();
+}
+
+export async function retryBootstrap() {
+  setStatus('connecting…');
+  const result = await ensureTabSession();
+  if (result.ok) await startStreamAfterSession();
+  else showBootstrapFailure(result.error);
+  return result;
+}
+
 export async function bootstrapApp() {
-  await ensureTabSession();
   initComposer();
   initAttachments();
   initVoiceInput();
@@ -95,7 +123,10 @@ export async function bootstrapApp() {
   initTopbar();
   initSettings();
   initToolsMenu();
-  initSSE();
+
+  const result = await ensureTabSession();
+  if (result.ok) await startStreamAfterSession();
+  else showBootstrapFailure(result.error);
 }
 
 export async function __testEnsureTabSession() {

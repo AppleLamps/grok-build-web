@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const roots = ['server.mjs', 'public', 'test'];
+const roots = ['server.mjs', 'lib', 'public', 'test'];
 const files = [];
 
 for (const root of roots) collect(root);

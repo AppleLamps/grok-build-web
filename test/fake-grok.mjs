@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { randomUUID } from 'node:crypto';
+
 const args = process.argv.slice(2);
 const scenario = process.env.FAKE_GROK_SCENARIO ?? 'normal';
 const delaySessionLoadMs = Number(process.env.FAKE_GROK_DELAY_SESSION_LOAD_MS ?? 0);
@@ -86,6 +88,10 @@ function result(id, value) {
   send({ jsonrpc: '2.0', id, result: value });
 }
 
+function rpcError(id, message) {
+  send({ jsonrpc: '2.0', id, error: { code: -32000, message } });
+}
+
 function update(updateValue, sid = sessionId) {
   send({
     jsonrpc: '2.0',
@@ -130,12 +136,18 @@ async function handle(msg) {
     return;
   }
   if (msg.method === 'session/new') {
-    sessionId = `fake-session-${msg.id}`;
+    sessionId = `fake-session-${randomUUID()}`;
     result(msg.id, { sessionId });
     return;
   }
   if (msg.method === 'session/load') {
     if (delaySessionLoadMs > 0) await delay(delaySessionLoadMs);
+    const cwd = msg.params?.cwd;
+    const bridgeCwd = process.env.GROK_CWD ?? process.cwd();
+    if (scenario === 'missing-cwd' && cwd && cwd !== bridgeCwd) {
+      rpcError(msg.id, 'Path not found.');
+      return;
+    }
     sessionId = msg.params.sessionId;
     result(msg.id, { sessionId });
     return;

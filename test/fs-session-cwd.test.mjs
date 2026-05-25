@@ -8,7 +8,6 @@ import {
   readEvents,
   startFakeServer,
   waitForEvent,
-  waitForAgentReady,
   withTempDir,
 } from './helpers.mjs';
 
@@ -28,10 +27,11 @@ test('client fs requests resolve against the cwd for their sessionId', async () 
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForAgentReady(events, 'agent_ready');
 
       const tabA = await postJson(base, cookie, '/tab/new', { cwd: rootA });
       const tabB = await postJson(base, cookie, '/tab/new', { cwd: rootB });
+      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tabA.sessionId, 'tab A ready');
+      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tabB.sessionId, 'tab B ready');
 
       await postJson(base, cookie, '/prompt', { sessionId: tabA.sessionId, text: 'fs probe A' }, 202);
       const updateA = await waitForEvent(events, e =>
@@ -133,9 +133,9 @@ test('client fs requests reject symlink or junction escapes from session cwd', a
       const events = [];
       const abort = new AbortController();
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
-      await waitForAgentReady(events, 'agent_ready');
 
       const tab = await postJson(base, cookie, '/tab/new', { cwd: root });
+      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tab.sessionId, 'tab ready');
       await postJson(base, cookie, '/prompt', { sessionId: tab.sessionId, text: 'fs symlink probe' }, 202);
       const update = await waitForEvent(events, e =>
         e.kind === 'update' &&

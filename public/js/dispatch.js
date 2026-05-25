@@ -15,8 +15,10 @@ import { renderRecents, loadRecents } from './sidebar.js';
 import { setBusy, renderModePill } from './composer.js';
 import { setCommands } from './slashcommands.js';
 import { setTabSessionId } from './state.js';
-import { getSessionPlan, postTabNew } from './api.js';
+import { getSessionPlan, postRespawn, postTabNew } from './api.js';
 import { resetAllToolState, setCurrentTodos } from './tool-state.js';
+import { reconnectSSE } from './sse.js';
+import { hideRecoveryBanner, showRecoveryBanner } from './recovery.mjs';
 
 function ensureExportTurn() {
   if (!state._exportCurrentTurn) {
@@ -34,6 +36,7 @@ export function resetExportTurns() {
 export function dispatch(event) {
   switch (event.kind) {
     case 'agent_ready':
+      hideRecoveryBanner();
       state.currentCwd = event.cwd ?? state.currentCwd;
       dom.crumb.textContent = event.cwd?.split(/[\\/]/).slice(-2).join(' / ') ?? 'session';
       setBusy(false);
@@ -121,19 +124,25 @@ export function dispatch(event) {
       break;
 
     case 'agent_respawn':
-      // The previous child died — all sessions on it are gone. Drop this
-      // tab's stale sid and let main.js's ensureTabSession bootstrap a new
-      // one against the new child. We do it by clearing localStorage +
-      // URL sid and creating a fresh tab session right here so the user
-      // doesn't have to reload.
-      clearLog();
+      if (event.sessionId && event.sessionId !== TAB_SESSION_ID) break;
+      // The previous child died — bridge sessions on it are gone. Create a
+      // fresh tab session and reconnect SSE without reloading the page.
+      hideRecoveryBanner();
       setStatus('agent restarting…', 'busy');
       setTabSessionId(null);
       postTabNew().then((tab) => {
         setTabSessionId(tab.sessionId);
-        // Reload so the SSE stream subscribes filtered to the new sid.
-        location.reload();
-      }).catch((e) => addError(`failed to start a new session after respawn: ${e.message}`));
+        reconnectSSE();
+        setStatus('reconnected', 'ready');
+      }).catch((e) => {
+        addError(`failed to start a new session after respawn: ${e.message}`);
+        showRecoveryBanner({
+          title: 'Agent restarted but session setup failed',
+          message: e.message,
+          actionLabel: 'Retry',
+          onAction: () => recoverAfterRespawn(),
+        });
+      });
       break;
 
     case 'sessions_changed':
@@ -141,8 +150,15 @@ export function dispatch(event) {
       break;
 
     case 'agent_exit':
+      if (event.sessionId && event.sessionId !== TAB_SESSION_ID) break;
       setStatus(`agent exited (code ${event.code})`, 'disconnected');
       setBusy(false);
+      showRecoveryBanner({
+        title: 'Agent disconnected',
+        message: `The Grok agent exited unexpectedly (code ${event.code ?? 'unknown'}).`,
+        actionLabel: 'Restart agent',
+        onAction: () => restartAgent(),
+      });
       break;
 
     case 'error':
@@ -241,4 +257,40 @@ function hydrateTodosFromPlan(sessionId, cwd = null) {
   getSessionPlan(sessionId, cwd)
     .then(plan => setCurrentTodos(plan.todos ?? [], { merge: false }))
     .catch(e => addError(`session plan load failed: ${e.message}`));
+}
+
+async function recoverAfterRespawn() {
+  hideRecoveryBanner();
+  setStatus('agent restarting…', 'busy');
+  setTabSessionId(null);
+  try {
+    const tab = await postTabNew();
+    setTabSessionId(tab.sessionId);
+    reconnectSSE();
+    setStatus('reconnected', 'ready');
+  } catch (e) {
+    addError(`failed to start a new session after respawn: ${e.message}`);
+    showRecoveryBanner({
+      title: 'Agent restarted but session setup failed',
+      message: e.message,
+      actionLabel: 'Retry',
+      onAction: () => recoverAfterRespawn(),
+    });
+  }
+}
+
+async function restartAgent() {
+  hideRecoveryBanner();
+  setStatus('restarting agent…', 'busy');
+  try {
+    await postRespawn();
+  } catch (e) {
+    addError(`failed to restart agent: ${e.message}`);
+    showRecoveryBanner({
+      title: 'Agent disconnected',
+      message: e.message,
+      actionLabel: 'Restart agent',
+      onAction: () => restartAgent(),
+    });
+  }
 }

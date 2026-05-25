@@ -14,6 +14,14 @@ export function initSSE() {
   connect();
 }
 
+export function reconnectSSE() {
+  connect();
+}
+
+export function isSSEActive() {
+  return es != null;
+}
+
 function connect() {
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);

@@ -99,7 +99,7 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 ## Bridge plumbing (web-only, but required for parity)
 
 - **[done] SSE reconnect with backoff** — `[plumbing]` Exponential backoff capped at 15s; visible "disconnected · retry in Xs" status.
-- **[done] Per-tab sessions** — `[plumbing]` Each browser tab has its own `sessionId` stored in URL (`?session=`) + `localStorage`. The shared agent process hosts multiple ACP sessions via `session/new`; the bridge tags every broadcast with `sessionId` and SSE subscribers filter to one session. Per-tab cwd is stored by session instead of mutating the bridge default cwd. Prompts, session loads, approval-mode syncs, and respawns are serialized on the shared Grok process to avoid cross-tab JSON-RPC races. Endpoints: `POST /tab/new`, `POST /tab/load`, `GET /stream?sessionId=...`. Verified: tab A and tab B have 0 event leakage between them.
+- **[done] Per-tab sessions** — `[plumbing]` Each browser tab has its own `sessionId` stored in URL (`?session=`) + `localStorage`. The bridge lazy-spawns one `grok agent stdio` child per tab session; events are tagged with `sessionId` and SSE subscribers filter to one session. Per-tab cwd and auto-approve settings are stored by session. Prompts on different tabs run in parallel; only same-tab prompts share one agent queue. Endpoints: `POST /tab/new`, `POST /tab/load`, `GET /stream?sessionId=...`. Verified: tab A and tab B have 0 event leakage between them.
 - **[done] Local HTTP hardening** — `[plumbing]` Adds CSP, frame blocking, `nosniff`, local Host validation, same-origin checks for mutating browser requests, and backpressure-aware SSE replay with listener cleanup.
 - **[done] Update notifications** — `[cli update --check]` Yellow banner on page load if `grok update --check --json` reports a newer version.
 - **[done] Inspect view** — `[cli inspect --json]` Sidebar Tools → "Inspect config" shows the discovered config as JSON.
@@ -114,12 +114,13 @@ Dark-mode toggle, per-cwd pinned sessions, themes-per-project, generic toasts (n
 
 These weren't features in the original list but unlock most of the rest:
 
-- **Modular client** — 23 JS modules, 2 CSS files. Each module owns one domain.
-- **CLI shell-out helper** — async `runGrokCli(args)` in `server.mjs` + ten `/cli/*` endpoints (inspect, update-check, models, share, trace, mcp, worktree, login, oneshot, import). Any new grok subcommand integration is ~10 lines.
-- **Respawn machinery** — serialized `GrokSession.respawn(newOpts)` + `POST /session/respawn`; session-load mutations share the same queue when a load needs a restore-code respawn. Any new launch-time flag becomes a Settings field with no other code changes.
+- **Modular client** — 23+ JS modules under `public/js/` (including `public/js/tools/` renderers), 2 CSS files. Each module owns one domain.
+- **Modular bridge** — thin `server.mjs` entry plus `lib/` modules for multi-agent ACP (`grok-bridge.mjs`, `agent-connection.mjs`), HTTP routes (`lib/http/routes/`), sessions, and CLI shell-outs.
+- **CLI shell-out helper** — `createCliRunner()` in `lib/cli-runner.mjs` + ten `/cli/*` endpoints in `lib/http/routes/cli.mjs`. Any new grok subcommand integration is ~10 lines.
+- **Respawn machinery** — per-agent and global `GrokBridge.respawn(newOpts)` in `lib/grok-bridge.mjs` + `POST /session/respawn`; bridge operations share a queue for tab loads vs respawns. Any new launch-time flag becomes a Settings field with no other code changes.
 - **Generic modal** — `modal(title, body)` in `modal.js`. Used by every Tools panel.
-- **Tool dispatch** — `summarizeTool()` recognizes ~17 tool kinds; specialized detail renderers plug in cleanly.
-- **Sessions file watcher** — Server `fs.watch(SESSIONS_ROOT, {recursive:true})` → broadcast `sessions_changed` → client `loadRecents()`.
+- **Tool dispatch** — `summarizeTool()` and a shared `details-registry.mjs` recognize ~17 tool kinds; specialized detail renderers plug in cleanly.
+- **Sessions file watcher** — `watchSessionsRoot()` in `lib/sessions-store.mjs` → broadcast `sessions_changed` → client `loadRecents()`.
 - **Regression tests** — `npm test` runs fake ACP, bridge, renderer, sidebar/settings, lifecycle, API, bootstrap, slash-command, and session-edge tests. `npm run test:live` runs real CLI integration checks for bootstrap/SSE/endpoints, web search, multimodal `read_file`, and cancellation, with opt-in X search and plugin MCP auth checks.
 
 ## Remaining items

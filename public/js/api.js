@@ -67,28 +67,26 @@ export async function postTabNew(cwd = null) {
   const r = await fetch(url('/tab/new'), {
     method: 'POST', headers: json, body: JSON.stringify(withSid(cwd ? { cwd } : {})),
   });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
+  return readJsonResponse(r, 'tab/new');
 }
 
 export async function postTabLoad(sessionId, cwd = null) {
   const r = await fetch(url('/tab/load'), {
     method: 'POST', headers: json, body: JSON.stringify({ sessionId, cwd }),
   });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
+  return readJsonResponse(r, 'tab/load');
 }
 
 export async function postPermission(rpcId, optionId) {
   return fetch(url('/permission'), {
-    method: 'POST', headers: json, body: JSON.stringify({ rpcId, optionId }),
+    method: 'POST', headers: json, body: JSON.stringify(withSid({ rpcId, optionId })),
   });
 }
 
 export async function postElicitation(rpcId, action, content) {
   const body = content === undefined ? { rpcId, action } : { rpcId, action, content };
   return fetch(url('/elicitation'), {
-    method: 'POST', headers: json, body: JSON.stringify(body),
+    method: 'POST', headers: json, body: JSON.stringify(withSid(body)),
   });
 }
 

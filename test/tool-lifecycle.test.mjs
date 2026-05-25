@@ -4,8 +4,8 @@ import { importPublic, installDomStubs } from './helpers.mjs';
 
 installDomStubs();
 const { state, dom } = await importPublic('public/js/state.js');
-const { paintTool, resetAllToolState } = await importPublic('public/js/tools.js');
-const { setCurrentTodos } = await importPublic('public/js/tool-state.js');
+const { paintTool } = await importPublic('public/js/tools.js');
+const { setCurrentTodos, resetAllToolState } = await importPublic('public/js/tool-state.js');
 const { clearLog } = await importPublic('public/js/chat.js');
 
 test('tool groups expand, collapse, and keep their header', async () => {

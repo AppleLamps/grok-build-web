@@ -43,6 +43,10 @@ test('SSE reconnect keeps only one pending reconnect timer', async () => {
     assert.equal(timers.length, 2);
     timers[1].fn();
     assert.equal(sources.length, 3);
+
+    sse.reconnectSSE();
+    assert.equal(sources[2].closed, true);
+    assert.equal(sources.length, 4);
   } finally {
     globalThis.EventSource = originalEventSource;
     globalThis.setTimeout = originalSetTimeout;

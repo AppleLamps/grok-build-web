@@ -19,7 +19,7 @@ const optionalPlugin = process.env.GROK_WEB_LIVE_PLUGIN_MCP_NAME
 
 test('live bridge bootstraps auth, SSE, sessions, settings, models, and MCP', { skip: liveOnly, timeout: LONG_TIMEOUT }, async () => {
   await withLiveServer(async ({ base, cookie, events, stderr }) => {
-    await waitForEvent(events, e => e.kind === 'agent_ready', 'agent_ready');
+    await waitForEvent(events, e => e.kind === 'agent_ready' || e.kind === 'session_ready', 'tab agent ready');
 
     const home = await fetch(new URL('/', base), { headers: { cookie } });
     assert.equal(home.status, 200);
@@ -94,9 +94,9 @@ test('live cancel recovers from a running background-style task', { skip: liveOn
 });
 
 test('live X search streams an X-specific search tool update', { skip: liveOnly || optionalX, timeout: LONG_TIMEOUT }, async () => {
-  await withLiveServer(async ({ base, cookie, events }) => {
+  await withLiveServer(async ({ base, cookie, events, sessionId }) => {
     const before = events.length;
-    await postPrompt(base, cookie, [
+    await postPrompt(base, cookie, sessionId, [
       'Use X search exactly once.',
       'Search X for recent posts from skcd42 about Grok Build.',
       'After the tool result, answer in one short sentence.',
@@ -214,7 +214,7 @@ async function postPrompt(base, cookie, sessionId, text) {
   const r = await fetch(sessionUrl(base, '/prompt', sessionId), {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, sessionId }),
   });
   assert.equal(r.status, 202);
 }

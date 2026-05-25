@@ -130,18 +130,26 @@ export async function waitForEvent(events, predicate, label = 'event') {
 }
 
 export async function waitForAgentReady(events, label = 'agent_ready') {
-  return waitForEvent(events, e => e.kind === 'agent_ready', label);
+  return waitForEvent(events, e => e.kind === 'agent_ready' || e.kind === 'session_ready', label);
 }
 
 /** Create a per-tab ACP session (replaces the old init-time default session). */
-export async function openTestTab(base, cookie) {
+export async function openTestTab(base, cookie, events = null) {
   const r = await fetch(makeUrl(base, '/tab/new'), {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({}),
   });
   assert.equal(r.status, 200);
-  return r.json();
+  const tab = await r.json();
+  if (events) {
+    await waitForEvent(
+      events,
+      e => (e.kind === 'session_ready' || e.kind === 'agent_ready') && e.sessionId === tab.sessionId,
+      'tab agent ready',
+    );
+  }
+  return tab;
 }
 
 export function makeUrl(base, path) {

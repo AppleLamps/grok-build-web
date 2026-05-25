@@ -55,8 +55,13 @@
   <div class="recents-search">
     <input id="recents-search" type="text" placeholder="Search projects…" />
   </div>
-  <div class="recents" id="recents">
-    <div class="empty">Loading…</div>
+  <div class="recents" id="recents" aria-busy="true" aria-live="polite">
+    <div class="recents-skeleton" aria-hidden="true">
+      <div class="recent-skel"></div>
+      <div class="recent-skel"></div>
+      <div class="recent-skel"></div>
+      <div class="recent-skel short"></div>
+    </div>
   </div>
   <div class="sidebar-tools collapsed" aria-label="Tools">
     <button class="section-head tools-toggle" id="tools-toggle" type="button" aria-expanded="false" aria-controls="tools-nav">
@@ -165,18 +170,30 @@
         <p class="welcome-sub">Pick a starter or type your own prompt below.</p>
         <div class="welcome-tiles">
           <button class="welcome-tile" data-prompt="Give me a high-level tour of this codebase. What are the entry points and how do the pieces fit?">
+            <span class="welcome-tile-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13"/><path d="M3 12h9"/><path d="M3 18h13"/><path d="M19 6l2 2-2 2"/><path d="M19 14l2 2-2 2"/></svg>
+            </span>
             <strong>Tour the codebase</strong>
             <span>Map the structure and entry points</span>
           </button>
           <button class="welcome-tile" data-prompt="Find and explain any recent commits or uncommitted changes in this directory.">
+            <span class="welcome-tile-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 8v8"/><path d="M8 6h7a3 3 0 0 1 3 3v1"/></svg>
+            </span>
             <strong>Review recent changes</strong>
             <span>Commits, diffs, work in progress</span>
           </button>
           <button class="welcome-tile" data-prompt="Run the project's tests and report what passes, what fails, and where to look.">
+            <span class="welcome-tile-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/><path d="M7 14h10"/></svg>
+            </span>
             <strong>Run the tests</strong>
             <span>See what's passing and what's broken</span>
           </button>
           <button class="welcome-tile" data-prompt="Audit the dependencies in this project for outdated or vulnerable packages.">
+            <span class="welcome-tile-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>
+            </span>
             <strong>Audit dependencies</strong>
             <span>Outdated or vulnerable packages</span>
           </button>
@@ -191,7 +208,7 @@
       <div class="input-wrap">
         <textarea id="input" rows="1" placeholder="Type / for commands"></textarea>
         <div class="action-row">
-          <span class="mode-pill auto" id="mode-pill" role="button" tabindex="0" aria-pressed="true" title="Click to toggle. Auto = run tools without asking; Manual = ask before each tool">Auto-approve</span>
+          <button type="button" class="mode-pill auto" id="mode-pill" aria-pressed="true" title="Click to toggle. Auto = run tools without asking; Manual = ask before each tool">Auto-approve</button>
           <button type="button" class="icon-btn" id="attach-btn" title="Attach text files" aria-label="Attach text files">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
           </button>

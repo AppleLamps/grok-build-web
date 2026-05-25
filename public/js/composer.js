@@ -104,11 +104,6 @@ export function initComposer() {
     } catch (e) { addError(`setting toggle failed: ${e.message}`); }
   };
   dom.modePill.addEventListener('click', toggleMode);
-  dom.modePill.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter' && e.key !== ' ') return;
-    e.preventDefault();
-    toggleMode();
-  });
 
   dom.stopBtn.addEventListener('click', async () => {
     dom.stopBtn.disabled = true;

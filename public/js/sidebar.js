@@ -183,6 +183,7 @@ export function renderRecents() {
   if (signature === lastRecentsRenderSignature) return;
   lastRecentsRenderSignature = signature;
 
+  dom.recentsEl.removeAttribute?.('aria-busy');
   if (!state.recentsCache.length) {
     dom.recentsEl.innerHTML = '<div class="empty">No prior sessions</div>';
     renderEmptyToggle();
@@ -250,19 +251,21 @@ export function renderRecents() {
     });
     const sessionsEl = project.querySelector('.project-sessions');
     for (const s of group.sessions.slice(0, MAX_PROJECT_SESSIONS)) {
-      const div = document.createElement('div');
-      div.className = 'recent' + (s.id === state.currentSessionId ? ' active live' : '');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'recent' + (s.id === state.currentSessionId ? ' active live' : '');
       const folder = (s.cwd ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '';
-      div.innerHTML = `
+      btn.innerHTML = `
         <span class="branch-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v8a2 2 0 0 0 2 2h6"/></svg></span>
         <span class="title"></span>
         <span class="age"></span>
       `;
-      div.querySelector('.title').textContent = s.title || folder || '(untitled)';
-      div.querySelector('.age').textContent = timeAgo(s.lastActive);
-      div.title = `${s.title}\n${s.cwd}\nUpdated ${timeAgo(s.lastActive)} · ${s.numMessages} msgs`;
-      div.addEventListener('click', () => loadSessionAction(s.id, s.cwd));
-      sessionsEl.appendChild(div);
+      btn.querySelector('.title').textContent = s.title || folder || '(untitled)';
+      btn.querySelector('.age').textContent = timeAgo(s.lastActive);
+      btn.title = `${s.title}\n${s.cwd}\nUpdated ${timeAgo(s.lastActive)} · ${s.numMessages} msgs`;
+      if (s.id === state.currentSessionId) btn.setAttribute('aria-current', 'page');
+      btn.addEventListener('click', () => loadSessionAction(s.id, s.cwd));
+      sessionsEl.appendChild(btn);
     }
     dom.recentsEl.appendChild(project);
   }
@@ -331,6 +334,7 @@ export async function loadRecents() {
     renderRecents();
   } catch (e) {
     const message = String(e?.message ?? e);
+    dom.recentsEl.removeAttribute?.('aria-busy');
     if (!state.recentsCache.length) {
       dom.recentsEl.innerHTML = `<div class="empty">Failed to load: ${escapeHTML(message)}</div>`;
     } else {

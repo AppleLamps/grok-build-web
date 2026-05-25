@@ -269,6 +269,19 @@ export function addError(msg) {
 export function setStatus(text, cls = '') {
   dom.statusEl.textContent = text;
   dom.statusEl.className = 'status ' + cls;
+  // Make the disabled-Send state legible: surface "why" via the button's
+  // tooltip so users aren't staring at a faded button with no explanation.
+  if (dom.sendBtn) {
+    if (cls === 'disconnected') {
+      dom.sendBtn.title = `Disconnected — ${text}`;
+    } else if (cls === 'busy') {
+      dom.sendBtn.title = `Busy — ${text}`;
+    } else if (cls === 'ready') {
+      dom.sendBtn.title = 'Send prompt (Enter)';
+    } else {
+      dom.sendBtn.title = text || 'Send prompt';
+    }
+  }
 }
 
 // Token-usage strip in the topbar. Called from dispatch on turn_complete.

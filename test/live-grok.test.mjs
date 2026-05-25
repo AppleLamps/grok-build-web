@@ -44,9 +44,9 @@ test('live bridge bootstraps auth, SSE, sessions, settings, models, and MCP', { 
 });
 
 test('live web search streams a real search tool update', { skip: liveOnly, timeout: LONG_TIMEOUT }, async () => {
-  await withLiveServer(async ({ base, cookie, events }) => {
+  await withLiveServer(async ({ base, cookie, events, sessionId }) => {
     const before = events.length;
-    await postPrompt(base, cookie, [
+    await postPrompt(base, cookie, sessionId, [
       'Use the web search tool exactly once.',
       'Search for the current xAI homepage.',
       'After the tool result, answer in one short sentence.',
@@ -61,26 +61,26 @@ test('live read_file streams multimodal file tool updates for image, PDF, and PP
   await withTempWorkspace(async (cwd) => {
     await writeMediaFixtures(cwd);
     for (const fileName of ['live.png', 'live.jpg', 'live.pdf', 'live.pptx']) {
-      await withLiveServer(async ({ base, cookie, events }) => {
+      await withLiveServer(async ({ base, cookie, events, sessionId }) => {
         const before = events.length;
-        await postPrompt(base, cookie, `Use read_file on ${fileName} in the current working directory. Stop after reading it.`);
+        await postPrompt(base, cookie, sessionId, `Use read_file on ${fileName} in the current working directory. Stop after reading it.`);
         await waitForReadFile(events, before, fileName);
-        await postCancel(base, cookie);
+        await postCancel(base, cookie, sessionId);
       }, { cwd });
     }
   });
 });
 
 test('live cancel recovers from a running background-style task', { skip: liveOnly, timeout: LONG_TIMEOUT }, async () => {
-  await withLiveServer(async ({ base, cookie, events }) => {
+  await withLiveServer(async ({ base, cookie, events, sessionId }) => {
     const before = events.length;
-    await postPrompt(base, cookie, [
+    await postPrompt(base, cookie, sessionId, [
       'Run a terminal command that waits for 60 seconds.',
       'Use a background-capable command if available.',
       'Do not do anything else until the command is running.',
     ].join(' '));
     await delay(2000);
-    const cancel = await fetch(new URL('/cancel', base), {
+    const cancel = await fetch(sessionUrl(base, '/cancel', sessionId), {
       method: 'POST',
       headers: { cookie, 'content-type': 'application/json' },
       body: JSON.stringify({}),
@@ -120,7 +120,7 @@ async function withLiveServer(fn, { cwd = null } = {}) {
   const server = await startLiveServer({ cwd });
   const abort = new AbortController();
   const events = [];
-  const stream = readEvents(new URL('/stream', server.base), server.cookie, events, abort.signal).catch((e) => {
+  const stream = readEvents(sessionUrl(server.base, '/stream', server.sessionId), server.cookie, events, abort.signal).catch((e) => {
     if (!abort.signal.aborted) throw e;
   });
   try {
@@ -153,10 +153,13 @@ async function startLiveServer({ cwd = null } = {}) {
   assert.equal(first.status, 302);
   const cookie = first.headers.get('set-cookie')?.split(';')[0];
   assert.ok(cookie, 'live bootstrap cookie is set');
+  const base = new URL(launchUrl);
+  const tab = await postJson(base, cookie, '/tab/new', {});
   return {
     child,
-    base: new URL(launchUrl),
+    base,
     cookie,
+    sessionId: tab.sessionId,
     stderr: () => stderr,
     async stop() {
       if (child.exitCode !== null) return;
@@ -207,8 +210,8 @@ async function readEvents(url, cookie, events, signal) {
   }
 }
 
-async function postPrompt(base, cookie, text) {
-  const r = await fetch(new URL('/prompt', base), {
+async function postPrompt(base, cookie, sessionId, text) {
+  const r = await fetch(sessionUrl(base, '/prompt', sessionId), {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({ text }),
@@ -216,8 +219,8 @@ async function postPrompt(base, cookie, text) {
   assert.equal(r.status, 202);
 }
 
-async function postCancel(base, cookie) {
-  const r = await fetch(new URL('/cancel', base), {
+async function postCancel(base, cookie, sessionId) {
+  const r = await fetch(sessionUrl(base, '/cancel', sessionId), {
     method: 'POST',
     headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({}),
@@ -229,6 +232,22 @@ async function getJson(base, cookie, path) {
   const r = await fetch(new URL(path, base), { headers: { cookie } });
   assert.equal(r.status, 200);
   return r.json();
+}
+
+async function postJson(base, cookie, path, body) {
+  const r = await fetch(new URL(path, base), {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  assert.equal(r.status, 200);
+  return r.json();
+}
+
+function sessionUrl(base, path, sessionId) {
+  const url = new URL(path, base);
+  url.searchParams.set('session', sessionId);
+  return url;
 }
 
 async function getText(base, cookie, path) {

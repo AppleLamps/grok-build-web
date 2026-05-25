@@ -41,7 +41,7 @@ function renderInline(s) {
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
   s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
-  s = s.replace(/(^|[^!])\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+  s = s.replace(/(^|[^!])\[([^\]]+)\]\((https?:\/\/[^\s()]+(?:\([^\s)]*\)[^\s()]*)*)\)/g,
     '$1<a href="$3" target="_blank" rel="noopener">$2</a>');
   return s;
 }

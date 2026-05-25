@@ -54,6 +54,7 @@ test('settings display-name-only changes avoid respawn and skip unsupported perm
   assert.equal(panel.getAttribute('role'), 'dialog');
   assert.equal(panel.getAttribute('aria-modal'), 'true');
   assert.equal(panel.getAttribute('aria-label'), 'Session settings');
+  assert.equal(panel.getAttribute('aria-describedby'), 'settings-warn');
   panel.querySelector('[data-key]').value = 'Private';
 
   await settings.__testApplySettings();
@@ -62,6 +63,48 @@ test('settings display-name-only changes avoid respawn and skip unsupported perm
   const settingsPost = requests.find(r => r.url === '/settings' && r.body);
   assert.deepEqual(settingsPost.body, { displayName: 'Private' });
   assert.equal(requests.some(r => r.url === '/session/respawn'), false);
+});
+
+test('settings traps tab focus inside the dialog', async () => {
+  requests.length = 0;
+  const panel = await settings.__testOpenSettings();
+  const close = panel.querySelector('.close');
+  const cancel = panel.querySelector('.cancel');
+  const apply = panel.querySelector('.apply');
+
+  let prevented = false;
+  close.focus();
+  panel.dispatchEvent({
+    type: 'keydown',
+    key: 'Tab',
+    shiftKey: true,
+    preventDefault() { prevented = true; },
+  });
+  assert.equal(prevented, true);
+  assert.equal(document.activeElement, cancel);
+
+  prevented = false;
+  cancel.focus();
+  panel.dispatchEvent({
+    type: 'keydown',
+    key: 'Tab',
+    shiftKey: false,
+    preventDefault() { prevented = true; },
+  });
+  assert.equal(prevented, true);
+  assert.equal(document.activeElement, close);
+
+  prevented = false;
+  close.focus();
+  panel.dispatchEvent({
+    type: 'keydown',
+    key: 'Tab',
+    shiftKey: false,
+    preventDefault() { prevented = true; },
+  });
+  assert.equal(prevented, false);
+  assert.equal(document.activeElement, close);
+  assert.ok(apply);
 });
 
 test('settings launch changes respawn without unsupported permissionMode', async () => {

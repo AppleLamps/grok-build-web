@@ -58,6 +58,18 @@ async function showImport() {
 }
 
 export function initToolsMenu() {
+  const toolsWrap = document.querySelector('.sidebar-tools');
+  const toolsToggle = document.getElementById('tools-toggle');
+  const toolsNav = document.getElementById('tools-nav');
+  if (toolsWrap && toolsToggle && toolsNav) {
+    toolsToggle.addEventListener('click', () => {
+      const expanded = toolsToggle.getAttribute('aria-expanded') === 'true';
+      toolsToggle.setAttribute('aria-expanded', String(!expanded));
+      toolsWrap.classList.toggle('collapsed', expanded);
+      toolsNav.hidden = expanded;
+    });
+  }
+
   wire('tool-inspect',   showInspect);
   wire('tool-mcp',       showMcp);
   wire('tool-worktrees', showWorktrees);

@@ -16,6 +16,7 @@ const { state, dom } = await importPublic('public/js/state.js');
 const chat = await importPublic('public/js/chat.js');
 const composer = await importPublic('public/js/composer.js');
 const tools = await importPublic('public/js/tools.js');
+const toolsMenu = await importPublic('public/js/tools-menu.js');
 const { modal } = await importPublic('public/js/modal.js');
 
 test('user messages render in right-aligned rows', () => {
@@ -91,6 +92,34 @@ test('modal exposes dialog semantics and keeps hostile string bodies as text', (
   assert.equal(el.getAttribute('aria-label'), 'Title');
   assert.equal(modalBody.textContent, '<img src=x onerror=alert(1)>');
   assert.equal(body.querySelectorAll('img').length, 0);
+});
+
+test('sidebar tools start collapsed and toggle open', () => {
+  const wrap = document.createElement('div');
+  wrap.className = 'sidebar-tools collapsed';
+  const toggle = document.getElementById('tools-toggle');
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-controls', 'tools-nav');
+  const nav = document.getElementById('tools-nav');
+  nav.hidden = true;
+  wrap.appendChild(toggle);
+  wrap.appendChild(nav);
+  document.body.appendChild(wrap);
+
+  toolsMenu.initToolsMenu();
+  assert.equal(nav.hidden, true);
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(wrap.classList.contains('collapsed'), true);
+
+  toggle.click();
+  assert.equal(nav.hidden, false);
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(wrap.classList.contains('collapsed'), false);
+
+  toggle.click();
+  assert.equal(nav.hidden, true);
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(wrap.classList.contains('collapsed'), true);
 });
 
 test('plan edit uses inline textarea and sends escaped user revision', async () => {

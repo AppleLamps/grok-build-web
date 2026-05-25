@@ -65,6 +65,15 @@ test('markdown image links stay literal and non-clickable', async () => {
   assert.match(normalLink, /<a href="https:\/\/x.ai/);
 });
 
+test('markdown links keep URL parentheses inside the href', async () => {
+  installDomStubs();
+  const { renderMarkdown } = await importFresh('public/js/markdown.js');
+
+  const html = renderMarkdown('[Wiki](https://en.wikipedia.org/wiki/Foo_(bar))');
+  assert.match(html, /href="https:\/\/en\.wikipedia\.org\/wiki\/Foo_\(bar\)"/);
+  assert.doesNotMatch(html, /href="[^"]*Foo_\(bar"/);
+});
+
 test('multimodal read_file output renders text, image, PDF, PPT, and video', async () => {
   installDomStubs();
   const { __testRenderToolDetails } = await importFresh('public/js/tools.js');

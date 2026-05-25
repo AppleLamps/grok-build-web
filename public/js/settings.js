@@ -13,6 +13,15 @@ let current = {};
 let bridgeCurrent = {};
 let settingsPreviousFocus = null;
 
+const FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  '[href]',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
 const FIELDS = [
   { key: 'effort', label: 'Effort', type: 'select',
     options: ['', 'low', 'medium', 'high', 'xhigh', 'max'],
@@ -169,7 +178,9 @@ async function open() {
     panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-modal', 'true');
     panel.setAttribute('aria-label', 'Session settings');
+    panel.setAttribute('aria-describedby', 'settings-warn');
     panel.setAttribute('tabindex', '-1');
+    panel.addEventListener('keydown', onPanelKeydown);
     document.body.appendChild(panel);
   }
   const results = await Promise.allSettled([getSpawnOpts(), getSettings()]);
@@ -197,7 +208,7 @@ async function open() {
     <div class="settings-foot">
       <button class="apply">Apply settings</button>
       <button class="cancel">Cancel</button>
-      <div class="settings-warn">Launch flag changes restart the grok agent child. Display name changes apply immediately.</div>
+      <div class="settings-warn" id="settings-warn">Launch flag changes restart the grok agent child. Display name changes apply immediately.</div>
     </div>
   `;
   const body = panel.querySelector('.settings-body');
@@ -216,6 +227,26 @@ async function open() {
   panel.querySelector('.apply').addEventListener('click', apply);
   panel.classList.add('open');
   panel.querySelector('.close')?.focus?.();
+}
+
+function onPanelKeydown(e) {
+  if (e.key !== 'Tab') return;
+  const focusable = Array.from(panel.querySelectorAll(FOCUSABLE_SELECTOR))
+    .filter(el => !el.hidden && el.getAttribute('aria-hidden') !== 'true');
+  if (!focusable.length) {
+    e.preventDefault();
+    panel.focus?.();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus?.();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus?.();
+  }
 }
 
 function close() {

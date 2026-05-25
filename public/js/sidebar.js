@@ -178,7 +178,7 @@ function wireProjectRename(project, cwd) {
 }
 
 export function renderRecents() {
-  const signature = recentsRenderSignature();
+  const { signature, groups, currentCwd } = recentsRenderState();
   if (signature === lastRecentsRenderSignature) return;
   lastRecentsRenderSignature = signature;
 
@@ -188,14 +188,12 @@ export function renderRecents() {
     return;
   }
   dom.recentsEl.innerHTML = '';
-  const groups = groupedRecents();
   if (!groups.length) {
     dom.recentsEl.innerHTML = '<div class="empty">No sessions with user messages</div>';
     renderEmptyToggle();
     return;
   }
   for (const group of groups) {
-    const currentCwd = currentRecentsCwd();
     const isCurrent = group.cwd === currentCwd || group.sessions.some(s => s.id === state.currentSessionId);
     if (isCurrent && !seededCurrentProject) {
       openProjects.add(group.cwd);
@@ -358,7 +356,7 @@ function currentRecentsCwd() {
   return state.currentCwd ?? state.recentsCache.find(s => s.id === state.currentSessionId)?.cwd;
 }
 
-function recentsRenderSignature() {
+function recentsRenderState() {
   const currentCwd = currentRecentsCwd();
   const groups = groupedRecents();
   const currentGroup = groups.find(group => group.cwd === currentCwd || group.sessions.some(s => s.id === state.currentSessionId));
@@ -367,26 +365,22 @@ function recentsRenderSignature() {
     seededCurrentProject = true;
   }
   const visibleCwds = groups.map(g => g.cwd);
-  const aliases = Object.fromEntries(visibleCwds.map(cwd => [cwd, projectAlias(cwd)]));
+  const visibleOpenProjects = [...openProjects].filter(cwd => visibleCwds.includes(cwd)).sort();
   const minuteBucket = Math.floor(Date.now() / 60000);
-  return JSON.stringify({
-    currentSessionId: state.currentSessionId ?? null,
-    currentCwd: currentCwd ?? null,
+  const parts = [
+    state.currentSessionId ?? '',
+    currentCwd ?? '',
     searchQuery,
-    showEmptySessions,
+    showEmptySessions ? '1' : '0',
     minuteBucket,
-    openProjects: [...openProjects].filter(cwd => visibleCwds.includes(cwd)).sort(),
-    aliases,
-    sessions: groups.map(group => ({
-      cwd: group.cwd,
-      sessions: group.sessions.slice(0, MAX_PROJECT_SESSIONS).map(s => ({
-        id: s.id,
-        title: s.title ?? '',
-        cwd: s.cwd ?? '',
-        lastActive: s.lastActive ?? '',
-        numMessages: s.numMessages ?? 0,
-      })),
-    })),
-    totalRecents: state.recentsCache.length,
-  });
+    state.recentsCache.length,
+    visibleOpenProjects.join('\u001f'),
+  ];
+  for (const group of groups) {
+    parts.push(group.cwd, projectAlias(group.cwd));
+    for (const s of group.sessions.slice(0, MAX_PROJECT_SESSIONS)) {
+      parts.push(s.id, s.title ?? '', s.cwd ?? '', s.lastActive ?? '', String(s.numMessages ?? 0));
+    }
+  }
+  return { signature: parts.join('\u001e'), groups, currentCwd };
 }

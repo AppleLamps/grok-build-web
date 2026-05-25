@@ -281,7 +281,10 @@ export class TestElement {
     return true;
   }
   click() { this.dispatchEvent({ type: 'click' }); }
-  focus() { this.focused = true; }
+  focus() {
+    this.focused = true;
+    if (globalThis.document) globalThis.document.activeElement = this;
+  }
   select() { this.selected = true; }
   querySelector(selector) {
     return findElement(this, selector);
@@ -325,6 +328,7 @@ export function installDomStubs({ storage = {}, fetchImpl = null } = {}) {
   if (fetchImpl) globalThis.fetch = fetchImpl;
   globalThis.document = {
     body,
+    activeElement: body,
     createElement(tag) { return new TestElement(tag); },
     getElementById(id) {
       if (!elements.has(id)) {
@@ -399,6 +403,11 @@ function walk(root, fn) {
 function matchesSelector(el, selector) {
   if (!el) return false;
   if (selector.includes(',')) return selector.split(',').some(part => matchesSelector(el, part.trim()));
+  const notAttr = selector.match(/^(.+):not\(\[([^=\]]+)(?:="([^"]*)")?\]\)$/);
+  if (notAttr) {
+    if (matchesSelector(el, `[${notAttr[2]}${notAttr[3] === undefined ? '' : `="${notAttr[3]}"`}]`)) return false;
+    return matchesSelector(el, notAttr[1]);
+  }
   const classTag = selector.match(/^([a-z]+)\.([a-zA-Z0-9_-]+)$/);
   if (classTag) return el.tagName.toLowerCase() === classTag[1].toLowerCase() && el.classList.contains(classTag[2]);
   const nameAttr = selector.match(/^([a-z]+)?\[name="([^"]+)"\]$/);
@@ -407,6 +416,11 @@ function matchesSelector(el, selector) {
     return tagOk && el.name === nameAttr[2];
   }
   if (selector === '[data-key]') return !!el.dataset?.key;
+  const attr = selector.match(/^\[([^=\]]+)(?:="([^"]*)")?\]$/);
+  if (attr) {
+    const value = el.getAttribute(attr[1]);
+    return attr[2] === undefined ? value !== null : value === attr[2];
+  }
   if (selector.startsWith('.')) return el.classList.contains(selector.slice(1));
   if (selector.startsWith('#')) return el.id === selector.slice(1);
   if (/^[a-z]+$/i.test(selector)) return el.tagName.toLowerCase() === selector.toLowerCase();

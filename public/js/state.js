@@ -40,32 +40,55 @@ export const state = {
   _exportCurrentTurn: null,
 };
 
-export const dom = {
-  logInner:           document.getElementById('log-inner'),
-  log:                document.getElementById('log'),
-  form:               document.getElementById('form'),
-  input:              document.getElementById('input'),
-  sendBtn:            document.getElementById('send'),
-  stopBtn:            document.getElementById('stop'),
-  statusEl:           document.getElementById('status'),
-  crumb:              document.getElementById('crumb'),
-  recentsEl:          document.getElementById('recents'),
-  recentsSearch:      document.getElementById('recents-search'),
-  newSessionBtn:      document.getElementById('new-session-btn'),
-  refreshRecentsBtn:  document.getElementById('refresh-recents'),
-  showEmptySessionsBtn: document.getElementById('show-empty-sessions'),
-  modePill:           document.getElementById('mode-pill'),
-  todoPanel:          document.getElementById('todo-panel'),
-  todoList:           document.getElementById('todo-list'),
-  bgPanel:            document.getElementById('bg-panel'),
-  bgList:             document.getElementById('bg-list'),
-  sendMode:           document.getElementById('send-mode'),
-  attachBtn:          document.getElementById('attach-btn'),
-  voiceBtn:           document.getElementById('voice-btn'),
-  modelTag:           document.getElementById('model-tag'),
-  footerModel:        document.getElementById('footer-model'),
-  welcome:            document.getElementById('welcome'),
-  usage:              document.getElementById('usage'),
-  usageFill:          document.getElementById('usage-fill'),
-  usageNum:           document.getElementById('usage-num'),
+const DOM_IDS = {
+  logInner: 'log-inner',
+  log: 'log',
+  form: 'form',
+  input: 'input',
+  sendBtn: 'send',
+  stopBtn: 'stop',
+  statusEl: 'status',
+  crumb: 'crumb',
+  recentsEl: 'recents',
+  recentsSearch: 'recents-search',
+  newSessionBtn: 'new-session-btn',
+  refreshRecentsBtn: 'refresh-recents',
+  showEmptySessionsBtn: 'show-empty-sessions',
+  modePill: 'mode-pill',
+  todoPanel: 'todo-panel',
+  todoList: 'todo-list',
+  bgPanel: 'bg-panel',
+  bgList: 'bg-list',
+  sendMode: 'send-mode',
+  attachBtn: 'attach-btn',
+  voiceBtn: 'voice-btn',
+  modelTag: 'model-tag',
+  footerModel: 'footer-model',
+  welcome: 'welcome',
+  usage: 'usage',
+  usageFill: 'usage-fill',
+  usageNum: 'usage-num',
 };
+
+const domCache = new Map();
+
+function getDomRef(key) {
+  const id = DOM_IDS[key];
+  if (!id) return undefined;
+  if (!domCache.has(key)) {
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`Missing required DOM element #${id} for dom.${key}`);
+    domCache.set(key, el);
+  }
+  return domCache.get(key);
+}
+
+export const dom = new Proxy({}, {
+  get(_target, key) {
+    if (typeof key !== 'string') return undefined;
+    return getDomRef(key);
+  },
+  has(_target, key) {
+    return typeof key === 'string' && Object.hasOwn(DOM_IDS, key);
+  },
+});

@@ -25,6 +25,7 @@ export const state = {
   // Per-turn rendering state — reset by chat.newTurn().
   turnEl: null,
   thinkingEl: null,
+  thinkingBuf: '',
   assistantEl: null,
   assistantBuf: '',
   toolEls: new Map(),    // toolCallId -> .tool element

@@ -12,8 +12,14 @@ let assistantRenderHandle = null;
 let assistantRenderCancel = null;
 let assistantRenderGeneration = 0;
 let lastAssistantRenderAt = 0;
+let thinkingRenderPending = false;
+let thinkingRenderHandle = null;
+let thinkingRenderCancel = null;
+let thinkingRenderGeneration = 0;
+let lastThinkingRenderAt = 0;
 const AUTO_SCROLL_NEAR_BOTTOM_PX = 120;
 const ASSISTANT_RENDER_INTERVAL_MS = 32;
+const THINKING_RENDER_INTERVAL_MS = 48;
 
 export function autoScroll() {
   const nearBottom = dom.log.scrollHeight - dom.log.scrollTop - dom.log.clientHeight < AUTO_SCROLL_NEAR_BOTTOM_PX;
@@ -22,13 +28,16 @@ export function autoScroll() {
 
 export function newTurn() {
   invalidateAssistantRender();
+  invalidateThinkingRender();
   lastAssistantRenderAt = 0;
+  lastThinkingRenderAt = 0;
   // First user prompt clears the welcome screen.
   if (dom.welcome && !dom.welcome.hidden) dom.welcome.hidden = true;
   state.turnEl = document.createElement('div');
   state.turnEl.className = 'turn';
   dom.logInner.appendChild(state.turnEl);
   state.thinkingEl = null;
+  state.thinkingBuf = '';
   state.assistantEl = null;
   state.assistantBuf = '';
   state.toolEls.clear();
@@ -41,7 +50,9 @@ export function newTurn() {
 
 export function clearLog() {
   invalidateAssistantRender();
+  invalidateThinkingRender();
   lastAssistantRenderAt = 0;
+  lastThinkingRenderAt = 0;
   dom.logInner.innerHTML = '';
   // Restore the welcome screen so users see starter prompts in a fresh session.
   if (dom.welcome) {
@@ -50,6 +61,7 @@ export function clearLog() {
   }
   state.turnEl = null;
   state.thinkingEl = null;
+  state.thinkingBuf = '';
   state.assistantEl = null;
   state.assistantBuf = '';
   state.toolEls.clear();
@@ -83,13 +95,14 @@ export function appendThought(text) {
     });
     state.turnEl.appendChild(state.thinkingEl);
   }
-  state.thinkingEl.querySelector('.body').textContent += text;
-  autoScroll();
+  state.thinkingBuf += text;
+  scheduleThinkingRender();
 }
 
 // Auto-collapse the thinking block of the most recent turn when its turn ends.
 export function collapseLastThinking() {
   if (!state.turnEl) return;
+  finishThinkingRender();
   const t = state.turnEl.querySelector('.thinking');
   if (t) t.classList.add('collapsed');
 }
@@ -113,7 +126,17 @@ function renderAssistantNow() {
   autoScroll();
 }
 
+function renderThinkingNow() {
+  if (!state.thinkingEl) return;
+  const body = state.thinkingEl.querySelector('.body');
+  if (!body) return;
+  body.innerHTML = renderMarkdown(state.thinkingBuf);
+  lastThinkingRenderAt = Date.now();
+  autoScroll();
+}
+
 export function finishStreaming() {
+  finishThinkingRender();
   if (!state.assistantEl) return;
   cancelPendingAssistantRender();
   renderAssistantNow();
@@ -148,6 +171,34 @@ function scheduleAssistantRender() {
   }
 }
 
+function scheduleThinkingRender() {
+  if (thinkingRenderPending) return;
+  thinkingRenderPending = true;
+  const generation = thinkingRenderGeneration;
+  const run = () => {
+    thinkingRenderHandle = null;
+    thinkingRenderCancel = null;
+    if (!thinkingRenderPending || generation !== thinkingRenderGeneration) return;
+    thinkingRenderPending = false;
+    renderThinkingNow();
+  };
+  const delay = Math.max(0, THINKING_RENDER_INTERVAL_MS - (Date.now() - lastThinkingRenderAt));
+  if (delay > 0) {
+    thinkingRenderCancel = clearTimeout;
+    thinkingRenderHandle = setTimeout(run, delay);
+    return;
+  }
+  const raf = globalThis.requestAnimationFrame ?? globalThis.window?.requestAnimationFrame;
+  const cancelRaf = globalThis.cancelAnimationFrame ?? globalThis.window?.cancelAnimationFrame;
+  if (typeof raf === 'function') {
+    thinkingRenderCancel = typeof cancelRaf === 'function' ? cancelRaf : null;
+    thinkingRenderHandle = raf(run);
+  } else {
+    thinkingRenderCancel = clearTimeout;
+    thinkingRenderHandle = setTimeout(run, 16);
+  }
+}
+
 function cancelPendingAssistantRender() {
   if (!assistantRenderPending) return;
   assistantRenderPending = false;
@@ -158,9 +209,30 @@ function cancelPendingAssistantRender() {
   assistantRenderCancel = null;
 }
 
+function cancelPendingThinkingRender() {
+  if (!thinkingRenderPending) return;
+  thinkingRenderPending = false;
+  if (thinkingRenderHandle != null && thinkingRenderCancel) {
+    try { thinkingRenderCancel(thinkingRenderHandle); } catch {}
+  }
+  thinkingRenderHandle = null;
+  thinkingRenderCancel = null;
+}
+
+function finishThinkingRender() {
+  if (!state.thinkingEl) return;
+  cancelPendingThinkingRender();
+  renderThinkingNow();
+}
+
 function invalidateAssistantRender() {
   assistantRenderGeneration++;
   cancelPendingAssistantRender();
+}
+
+function invalidateThinkingRender() {
+  thinkingRenderGeneration++;
+  cancelPendingThinkingRender();
 }
 
 // Replay marker (loaded sessions emit user_message_chunk to delimit turns).

@@ -182,6 +182,10 @@ test('question card Other option submits typed details', async () => {
 function resetDomState() {
   dom.logInner.children = [];
   state.turnEl = null;
+  state.thinkingEl = null;
+  state.thinkingBuf = '';
+  state.assistantEl = null;
+  state.assistantBuf = '';
   state.permCards.clear();
   state.elicitationCards.clear();
 }

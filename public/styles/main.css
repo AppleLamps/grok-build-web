@@ -602,8 +602,112 @@ main {
   cursor: pointer; user-select: none;
 }
 .thinking .label svg { transition: transform .15s; opacity: .6; }
-.thinking .body { display: block; white-space: pre-wrap; }
-.thinking.collapsed .body { display: none; }
+.thinking .body {
+  display: block;
+  max-height: 40vh;
+  overflow-y: auto;
+  padding-right: 6px;
+  font-style: normal;
+  line-height: 1.5;
+}
+.thinking .body p { margin: 0 0 8px; }
+.thinking .body p:last-child,
+.thinking .body ul:last-child,
+.thinking .body ol:last-child,
+.thinking .body blockquote:last-child,
+.thinking .body .code-block:last-child {
+  margin-bottom: 0;
+}
+.thinking .body strong { color: var(--ink-2); font-weight: 600; }
+.thinking .body em { font-style: italic; }
+.thinking .body code {
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  background: var(--paper-3);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--ink-2);
+  border: 1px solid var(--line-soft);
+}
+.thinking .body ul,
+.thinking .body ol {
+  margin: 4px 0 10px 20px;
+  padding: 0;
+}
+.thinking .body ul { list-style: disc; }
+.thinking .body ol { list-style: decimal; }
+.thinking .body li { margin: 2px 0; }
+.thinking .body .task-item {
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-left: -18px;
+}
+.thinking .body .task-item input[type="checkbox"] {
+  accent-color: var(--green);
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+.thinking .body blockquote {
+  border-left: 2px solid var(--line);
+  margin: 8px 0;
+  padding: 3px 0 3px 10px;
+  color: var(--mute);
+  font-style: italic;
+}
+.thinking .body h3,
+.thinking .body h4,
+.thinking .body h5,
+.thinking .body h6 {
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  margin: 10px 0 5px;
+}
+.thinking .body a { color: var(--accent); text-decoration: none; }
+.thinking .body a:hover { text-decoration: underline; }
+.thinking .body hr {
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  margin: 10px 0;
+}
+.thinking .body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 6px 0 10px;
+  font-size: 12px;
+}
+.thinking .body th,
+.thinking .body td {
+  border-bottom: 1px solid var(--line-soft);
+  padding: 4px 7px;
+  text-align: left;
+  vertical-align: top;
+}
+.thinking .body .code-block {
+  margin: 8px 0;
+  border-radius: 6px;
+}
+.thinking .body .code-block-header { padding: 4px 8px; }
+.thinking .body .code-block pre {
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.thinking .body .code-block pre code {
+  color: inherit;
+  border: 0;
+  padding: 0;
+  background: none;
+}
+.thinking.collapsed .body {
+  display: block;
+  max-height: 3.2em;
+  overflow: hidden;
+  opacity: .58;
+  pointer-events: none;
+}
 .thinking.collapsed .label svg { transform: rotate(-90deg); }
 .thinking .label:hover { color: var(--ink-2); }
 

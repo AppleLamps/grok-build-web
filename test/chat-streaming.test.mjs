@@ -24,7 +24,7 @@ globalThis.window.requestAnimationFrame = requestFrame;
 globalThis.window.cancelAnimationFrame = cancelFrame;
 
 const { state, dom } = await importPublic('public/js/state.js');
-const { appendMessage, clearLog, finishStreaming } = await importPublic('public/js/chat.js');
+const { appendMessage, appendThought, clearLog, finishStreaming } = await importPublic('public/js/chat.js');
 
 test('appendMessage batches markdown rendering to one frame', () => {
   resetDomState();
@@ -60,6 +60,40 @@ test('finishStreaming renders pending content synchronously', () => {
   assert.equal(state.assistantEl.classList.contains('streaming'), false);
 });
 
+test('appendThought batches markdown rendering to one frame', () => {
+  resetDomState();
+
+  appendThought('Thinking with ');
+  appendThought('**structure**');
+  appendThought('\n- one');
+
+  assert.equal(activeFrameCount(), 1);
+  assert.equal(state.thinkingBuf, 'Thinking with **structure**\n- one');
+  assert.equal(state.thinkingEl.querySelector('.body').innerHTML, '');
+
+  flushFrames();
+
+  const html = state.thinkingEl.querySelector('.body').innerHTML;
+  assert.equal(activeFrameCount(), 0);
+  assert.match(html, /<strong>structure<\/strong>/);
+  assert.match(html, /<ul><li>one<\/li><\/ul>/);
+});
+
+test('finishStreaming renders pending thinking without assistant output', () => {
+  resetDomState();
+
+  appendThought('<unsafe> **safe**');
+  assert.equal(activeFrameCount(), 1);
+
+  finishStreaming();
+
+  assert.equal(activeFrameCount(), 0);
+  const html = state.thinkingEl.querySelector('.body').innerHTML;
+  assert.match(html, /&lt;unsafe&gt;/);
+  assert.match(html, /<strong>safe<\/strong>/);
+  assert.equal(state.assistantEl, null);
+});
+
 test('clearLog prevents stale scheduled assistant renders', () => {
   resetDomState();
 
@@ -83,6 +117,7 @@ function resetDomState() {
   }
   state.turnEl = null;
   state.thinkingEl = null;
+  state.thinkingBuf = '';
   state.assistantEl = null;
   state.assistantBuf = '';
   state.toolEls.clear();

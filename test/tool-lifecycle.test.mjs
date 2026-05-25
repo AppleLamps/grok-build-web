@@ -262,6 +262,7 @@ function resetDomState() {
   dom.todoPanel.hidden = true;
   state.turnEl = null;
   state.thinkingEl = null;
+  state.thinkingBuf = '';
   state.assistantEl = null;
   state.assistantBuf = '';
   state.toolEls.clear();

@@ -122,6 +122,7 @@ function resetChatState() {
   dom.logInner.children = [];
   state.turnEl = null;
   state.thinkingEl = null;
+  state.thinkingBuf = '';
   state.assistantEl = null;
   state.assistantBuf = '';
   state.toolEls.clear();

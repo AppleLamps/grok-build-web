@@ -12,7 +12,7 @@ Live list. Items that get fixed are removed; items get added as they're discover
 
 - **Empty-titled sessions** show the folder name instead of a title. Grok generates `generated_title` after a few turns, so freshly-created sessions look bare until they have enough content to summarize.
 - **MCP server `ruflo` spawn errors** appear in stderr at every agent startup (`Failed to spawn MCP server 'ruflo': program not found`). User has it configured in `config.toml` but the binary isn't installed. Repeated identical lines are rate-limited, so the first error remains visible without flooding the terminal.
-- **Markdown renderer is intentionally small.** Handles bold/italic/inline-code/fenced-code/headings/lists/links and basic pipe tables. Doesn't handle: blockquotes, nested lists, task lists, strikethrough, or syntax highlighting.
+- **Markdown renderer is intentionally small.** Assistant output, plan bodies, and thinking traces share the same safe renderer for bold/italic/inline-code/fenced-code/headings/lists/task lists/links/blockquotes/strikethrough and basic pipe tables. It still doesn't handle nested lists, lazy blockquote continuation, soft line-break preservation, or syntax highlighting.
 - **Browser tool rendering is still partial.** URL, action, page text, screenshots, console errors, cookies, and network tables render when the agent provides structured data. DOM snapshots and richer browser replay views are still generic text output.
 
 ## Operational

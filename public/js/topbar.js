@@ -76,23 +76,25 @@ function showShareFallback(url) {
   input.select();
 }
 
-const MAX_TOOL_IO = 2000;
+const MAX_TOOL_IO = 20000;
 
-function formatToolIO(val) {
+export function formatToolIO(val, limit = MAX_TOOL_IO) {
   if (val == null) return '';
   const s = typeof val === 'string' ? val : JSON.stringify(val, null, 2);
-  if (s.length <= MAX_TOOL_IO) return s;
-  return s.slice(0, MAX_TOOL_IO) + '\n… (truncated)';
+  if (s.length <= limit) return s;
+  const omitted = s.length - limit;
+  return `${s.slice(0, limit)}\n… (display truncated; ${omitted.toLocaleString()} of ${s.length.toLocaleString()} chars omitted from this export — the agent received and wrote the full payload)`;
 }
 
-function formatExportMarkdown() {
-  const turns = state.exportTurns;
-  if (!turns.length) return null;
-  const folder = (state.currentCwd ?? '').split(/[\\/]/).filter(Boolean).pop() ?? 'session';
-  const now = new Date().toLocaleString();
+export function formatExportMarkdown(turns = state.exportTurns, meta = {}) {
+  if (!turns?.length) return null;
+  const cwd = meta.cwd ?? state.currentCwd;
+  const sessionId = meta.sessionId ?? state.currentSessionId;
+  const folder = (cwd ?? '').split(/[\\/]/).filter(Boolean).pop() ?? 'session';
+  const now = meta.now ?? new Date().toLocaleString();
   let md = `# Chat Export\n\n`;
-  md += `**Project:** ${state.currentCwd ?? folder}\n`;
-  md += `**Session:** ${state.currentSessionId ?? 'unknown'}\n`;
+  md += `**Project:** ${cwd ?? folder}\n`;
+  md += `**Session:** ${sessionId ?? 'unknown'}\n`;
   md += `**Exported:** ${now}\n\n---\n`;
   let turnNum = 0;
   for (const turn of turns) {
@@ -153,7 +155,7 @@ export function initTopbar() {
   const exportBtn = document.getElementById('export-btn');
   if (exportBtn) {
     exportBtn.addEventListener('click', () => {
-      const md = formatExportMarkdown();
+      const md = formatExportMarkdown(state.exportTurns);
       if (!md) {
         toast('No messages to export.');
         return;

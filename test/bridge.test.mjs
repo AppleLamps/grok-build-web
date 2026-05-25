@@ -32,11 +32,14 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
       assert.equal(home.status, 200);
       assert.match(await home.text(), /grok web/);
 
-      const staticJs = await fetch(makeUrl(base, '/static/js/api.js'));
+      const staticUnauthed = await fetch(makeUrl(base, '/static/js/api.js'));
+      assert.equal(staticUnauthed.status, 401);
+
+      const staticJs = await fetch(makeUrl(base, '/static/js/api.js'), { headers: { cookie } });
       assert.equal(staticJs.status, 200);
       assert.match(await staticJs.text(), /export async function listSessions/);
       for (const path of ['/static/%5c..%5cserver.mjs', '/static/..%5cserver.mjs', '/static/%2e%2e/server.mjs']) {
-        const r = await fetch(makeUrl(base, path));
+        const r = await fetch(makeUrl(base, path), { headers: { cookie } });
         const text = await r.text();
         assert.notEqual(r.status, 200, `${path} should not serve repo files`);
         assert.doesNotMatch(text, /grok-web: HTTP\+SSE bridge/);
@@ -268,7 +271,7 @@ test('security headers and local request guards are enforced', async () => {
       assertSecurityHeaders(home.headers);
       assert.match(home.headers.get('content-security-policy'), /frame-ancestors 'none'/);
 
-      const staticJs = await fetch(makeUrl(base, '/static/js/api.js'));
+      const staticJs = await fetch(makeUrl(base, '/static/js/api.js'), { headers: { cookie } });
       assert.equal(staticJs.status, 200);
       assertSecurityHeaders(staticJs.headers);
 

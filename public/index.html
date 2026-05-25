@@ -64,7 +64,7 @@
         <span class="tools-chevron">›</span>
         <span>Tools</span>
       </span>
-      <span class="tools-count">9</span>
+      <span class="tools-count">11</span>
     </button>
     <div class="nav tools-nav" id="tools-nav" hidden>
       <button id="tool-inspect" title="grok inspect --json">
@@ -86,6 +86,14 @@
       <button id="tool-routines" title="Manage scheduled routines">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
         <span>Routines</span>
+      </button>
+      <button id="tool-memory" title="Browse cross-session memory files">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C7 2 3 5 3 9c0 2 1 4 3 5v6l3-2 3 2 3-2 3 2v-6c2-1 3-3 3-5 0-4-4-7-9-7z"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/></svg>
+        <span>Memory</span>
+      </button>
+      <button id="tool-session-info" title="Show session info">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v.01M11 12h1v5h1"/></svg>
+        <span>Session info</span>
       </button>
       <button id="tool-hooks" title="hooks help">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10H7z"/><path d="M4 12h3M17 12h3M12 4v3M12 17v3"/></svg>
@@ -131,10 +139,10 @@
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
     </span>
     <span class="crumb" id="crumb">starting…</span>
-    <div class="usage" id="usage" hidden>
-      <div class="usage-bar" title="context usage"><span id="usage-fill"></span></div>
+    <button class="usage" id="usage" hidden type="button" title="Click for session info" aria-label="Show session info">
+      <div class="usage-bar"><span id="usage-fill"></span></div>
       <span class="usage-num" id="usage-num"></span>
-    </div>
+    </button>
     <div class="actions">
       <button id="workspace-btn" title="Change workspace" aria-label="Change workspace">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 12h6M15 9v6"/></svg>

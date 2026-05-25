@@ -6,6 +6,7 @@ installDomStubs();
 const { state, dom } = await importPublic('public/js/state.js');
 const { paintTool } = await importPublic('public/js/tools.js');
 const { setCurrentTodos, resetAllToolState } = await importPublic('public/js/tool-state.js');
+const { parseTodoSummary } = await importPublic('public/js/tools/render-todos.mjs');
 const { clearLog } = await importPublic('public/js/chat.js');
 
 test('tool groups expand, collapse, and keep their header', async () => {
@@ -206,6 +207,52 @@ test('empty todo hydration clears stale sidebar state', async () => {
   setCurrentTodos([], { merge: false });
   assert.equal(dom.todoPanel.hidden, true);
   assert.equal(dom.todoList.innerHTML, '');
+});
+
+test('renderTodos clears the sidebar when the agent sends an empty todo list', async () => {
+  resetDomState();
+
+  paintTool({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'todo-seed',
+    title: 'todo_write',
+    rawInput: { merge: false, todos: [{ id: '1', content: 'Existing task', status: 'pending' }] },
+  });
+  assert.equal(dom.todoPanel.hidden, false);
+  assert.match(dom.todoList.innerHTML, /Existing task/);
+
+  paintTool({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'todo-clear',
+    title: 'todo_write',
+    rawInput: { merge: false, todos: [] },
+  });
+  assert.equal(dom.todoPanel.hidden, true);
+  assert.equal(dom.todoList.innerHTML, '');
+});
+
+test('parseTodoSummary parses well-formed lines and drops malformed ones without throwing', async () => {
+  const summary = [
+    '- [pending] 1: First task',
+    '* [in_progress] two: Second task with : colon in text',
+    'not a todo line at all',
+    '- [completed] 3:',
+    '- malformed without brackets',
+    '  - [completed]   4:   Trimmed surrounding whitespace   ',
+    '',
+  ].join('\n');
+
+  const parsed = parseTodoSummary(summary);
+
+  assert.deepEqual(parsed, [
+    { status: 'pending', id: '1', text: 'First task' },
+    { status: 'in_progress', id: 'two', text: 'Second task with : colon in text' },
+    { status: 'completed', id: '4', text: 'Trimmed surrounding whitespace' },
+  ]);
+
+  assert.deepEqual(parseTodoSummary(null), []);
+  assert.deepEqual(parseTodoSummary(''), []);
+  assert.deepEqual(parseTodoSummary('no brackets here'), []);
 });
 
 test('clearLog resets transient tool state synchronously', async () => {

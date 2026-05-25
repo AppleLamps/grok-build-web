@@ -181,3 +181,21 @@ export async function cliModels() {
   const r = await fetch(url('/cli/models'));
   return r.text();
 }
+export async function cliMemoryList() {
+  const r = await fetch(url('/cli/memory/list'));
+  return readJsonResponse(r, 'memory list');
+}
+export async function cliMemoryRead(path) {
+  const u = new URL(url('/cli/memory/read'), location.origin);
+  u.searchParams.set('path', path);
+  const r = await fetch(u.pathname + u.search);
+  return readJsonResponse(r, 'memory read');
+}
+export async function cliSessionsSearch(query, limit = null) {
+  const body = { query };
+  if (limit) body.limit = limit;
+  const r = await fetch(url('/cli/sessions/search'), {
+    method: 'POST', headers: json, body: JSON.stringify(body),
+  });
+  return readJsonResponse(r, 'sessions search');
+}

@@ -287,6 +287,8 @@ export function updateUsage(meta) {
   dom.usageFill.dataset.warn = pct > 75 ? '1' : '';
   dom.usageNum.textContent = `${formatTokens(total)} / ${formatTokens(ctx)}`;
   dom.usage.hidden = false;
+  state.lastUsage = { totalTokens: total, contextTokens: ctx, percent: pct, raw: meta };
+  state.turnCount += 1;
 }
 
 function formatTokens(n) {

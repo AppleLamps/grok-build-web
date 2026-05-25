@@ -1,10 +1,11 @@
 // Read-only panels backed by `/cli/*` endpoints: Inspect, MCP, Worktrees,
 // Plugins, Hooks, Models. Wired to a "Tools" menu in the sidebar.
 
-import { cliInspect, cliMcp, cliWorktree, cliModels, cliTrace } from './api.js';
+import { cliInspect, cliMcp, cliWorktree, cliModels, cliTrace, cliMemoryList, cliMemoryRead, getSpawnOpts, getSettings } from './api.js';
 import { modal } from './modal.js';
 import { toast } from './toast.js';
-import { state } from './state.js';
+import { state, TAB_SESSION_ID } from './state.js';
+import { escapeHTML } from './markdown.js';
 
 async function showJsonPanel(title, fetcher) {
   const { body } = modal(title, panelMessage('div', 'panel-loading', 'Loading…'));
@@ -30,6 +31,147 @@ export function showInspect()   { return showJsonPanel('Grok inspect (current cw
 export function showMcp()       { return showJsonPanel('MCP servers', cliMcp); }
 export function showWorktrees() { return showJsonPanel('Worktrees', cliWorktree); }
 export function showModels()    { return showJsonPanel('Available models', cliModels); }
+
+export async function showSessionInfo() {
+  const { body } = modal('Session info', panelMessage('div', 'panel-loading', 'Loading…'));
+  const sid = state.currentSessionId ?? TAB_SESSION_ID ?? null;
+  const cwd = state.currentCwd ?? null;
+  const titleRecord = state.recentsCache.find((s) => s.id === sid);
+  const usage = state.lastUsage;
+  let spawnOpts = {};
+  let settings = {};
+  try { [spawnOpts, settings] = await Promise.all([getSpawnOpts().catch(() => ({})), getSettings().catch(() => ({}))]); } catch {}
+
+  body.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.className = 'session-info-grid';
+  const rows = [
+    ['Session ID', sid || '(none)'],
+    ['Title', titleRecord?.title || '(no recent metadata)'],
+    ['CWD', cwd || '(not yet known)'],
+    ['Model', spawnOpts.model || '(default)'],
+    ['Effort', spawnOpts.effort ?? '(default)'],
+    ['Reasoning effort', spawnOpts.reasoningEffort ?? '(default)'],
+    ['Max turns', spawnOpts.maxTurns ?? '(unlimited)'],
+    ['Always approve', String(settings.autoApprove ?? spawnOpts.alwaysApprove ?? false)],
+    ['Permission mode', spawnOpts.permissionMode ?? '(default)'],
+    ['Sandbox', spawnOpts.sandbox ?? '(none)'],
+    ['Memory flag', flagSummary(spawnOpts)],
+    ['Turns this tab', String(state.turnCount)],
+    ['Last total tokens', usage ? formatTokens(usage.totalTokens) : '(none yet)'],
+    ['Context window', usage ? formatTokens(usage.contextTokens) : '(unknown)'],
+    ['Context usage', usage ? `${usage.percent.toFixed(1)}%` : '(none yet)'],
+    ['Messages in session', titleRecord?.numMessages != null ? String(titleRecord.numMessages) : '(unknown)'],
+    ['Last activity', titleRecord?.lastActive ? new Date(titleRecord.lastActive).toLocaleString() : '(unknown)'],
+  ];
+  for (const [label, value] of rows) {
+    const dt = document.createElement('div'); dt.className = 'session-info-key'; dt.textContent = label;
+    const dd = document.createElement('div'); dd.className = 'session-info-val'; dd.textContent = String(value);
+    grid.appendChild(dt); grid.appendChild(dd);
+  }
+  body.appendChild(grid);
+}
+
+function flagSummary(opts) {
+  const flags = [];
+  if (opts.experimentalMemory) flags.push('experimental-memory');
+  if (opts.noMemory) flags.push('no-memory');
+  if (opts.noSubagents) flags.push('no-subagents');
+  if (opts.restoreCode) flags.push('restore-code');
+  return flags.length ? flags.join(', ') : '(none)';
+}
+
+function formatTokens(n) {
+  if (n == null) return '?';
+  if (n < 1000) return String(n);
+  if (n < 1000000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return (n / 1000000).toFixed(2).replace(/\.00$/, '') + 'M';
+}
+
+export async function showMemory() {
+  const wrap = document.createElement('div');
+  wrap.className = 'memory-browser';
+  wrap.innerHTML = `
+    <div class="memory-list" id="memory-list"><div class="panel-loading">Loading…</div></div>
+    <div class="memory-preview"><div class="panel-loading">Pick a file</div></div>
+  `;
+  modal('Memory', wrap);
+  const listEl = wrap.querySelector('.memory-list');
+  const previewEl = wrap.querySelector('.memory-preview');
+  let activeBtn = null;
+
+  async function selectFile(path, btn) {
+    if (activeBtn) activeBtn.classList.remove('active');
+    btn.classList.add('active');
+    activeBtn = btn;
+    previewEl.innerHTML = '<div class="panel-loading">Loading…</div>';
+    try {
+      const data = await cliMemoryRead(path);
+      previewEl.innerHTML = '';
+      const head = document.createElement('div');
+      head.className = 'memory-preview-head';
+      head.innerHTML = `<code></code><span class="memory-preview-meta"></span>`;
+      head.querySelector('code').textContent = path;
+      head.querySelector('.memory-preview-meta').textContent =
+        `${(data.size / 1024).toFixed(1)} KB · ${new Date(data.mtime).toLocaleString()}`;
+      previewEl.appendChild(head);
+      const pre = document.createElement('pre');
+      pre.className = 'panel-content';
+      pre.textContent = data.content;
+      previewEl.appendChild(pre);
+    } catch (e) {
+      previewEl.innerHTML = `<div class="panel-error">${escapeHTML(String(e?.message ?? e))}</div>`;
+    }
+  }
+
+  function makeFileButton(path, label, sub = '') {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'memory-file';
+    btn.innerHTML = `<span class="memory-file-label"></span>${sub ? '<span class="memory-file-sub"></span>' : ''}`;
+    btn.querySelector('.memory-file-label').textContent = label;
+    if (sub) btn.querySelector('.memory-file-sub').textContent = sub;
+    btn.addEventListener('click', () => selectFile(path, btn));
+    return btn;
+  }
+
+  try {
+    const tree = await cliMemoryList();
+    listEl.innerHTML = '';
+    if (!tree.global && !tree.workspaces?.length) {
+      listEl.innerHTML = `<div class="empty">No memory files under ${escapeHTML(tree.root ?? '')}</div>`;
+      return;
+    }
+    if (tree.global) {
+      const head = sectionHead('Global');
+      listEl.appendChild(head);
+      listEl.appendChild(makeFileButton(tree.global.path, tree.global.name,
+        `${(tree.global.size / 1024).toFixed(1)} KB`));
+    }
+    for (const ws of tree.workspaces ?? []) {
+      listEl.appendChild(sectionHead(ws.name));
+      for (const f of ws.files) {
+        listEl.appendChild(makeFileButton(f.path, f.name, `${(f.size / 1024).toFixed(1)} KB`));
+      }
+      if (ws.sessions.length) {
+        listEl.appendChild(sectionHead(`${ws.name} · sessions`, 'sub'));
+        for (const f of ws.sessions) {
+          const date = new Date(f.mtime).toLocaleDateString();
+          listEl.appendChild(makeFileButton(f.path, f.name, date));
+        }
+      }
+    }
+  } catch (e) {
+    listEl.innerHTML = `<div class="panel-error">${escapeHTML(String(e?.message ?? e))}</div>`;
+  }
+
+  function sectionHead(label, variant = '') {
+    const h = document.createElement('div');
+    h.className = 'memory-section-head' + (variant ? ` ${variant}` : '');
+    h.textContent = label;
+    return h;
+  }
+}
 
 // Hooks / Plugins are triggered via slash commands. Open the input pre-filled.
 export function showHooks() {

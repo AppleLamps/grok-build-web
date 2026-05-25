@@ -21,6 +21,8 @@ export const state = {
   currentCwd: null,
   recentsCache: [],
   autoApprove: true,
+  lastUsage: null,
+  turnCount: 0,
 
   // Per-turn rendering state — reset by chat.newTurn().
   turnEl: null,

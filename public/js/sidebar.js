@@ -3,11 +3,12 @@
 // server broadcasts session_replaced (handled in dispatch.js).
 
 import { state, dom, setTabSessionId } from './state.js';
-import { listSessions, postTabNew, postTabLoad } from './api.js';
+import { listSessions, postTabNew, postTabLoad, cliSessionsSearch } from './api.js';
 import { setStatus, addError } from './chat.js';
 import { escapeHTML } from './markdown.js';
 import { setBusy } from './composer.js';
 import { toast } from './toast.js';
+import { modal } from './modal.js';
 
 function timeAgo(iso) {
   if (!iso) return '';
@@ -189,7 +190,20 @@ export function renderRecents() {
   }
   dom.recentsEl.innerHTML = '';
   if (!groups.length) {
-    dom.recentsEl.innerHTML = '<div class="empty">No sessions with user messages</div>';
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = searchQuery
+      ? `No cached sessions match "${searchQuery}"`
+      : 'No sessions with user messages';
+    dom.recentsEl.appendChild(empty);
+    if (searchQuery) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'search-all-btn';
+      btn.textContent = 'Search all sessions';
+      btn.addEventListener('click', () => searchAllSessionsModal(searchQuery));
+      dom.recentsEl.appendChild(btn);
+    }
     renderEmptyToggle();
     return;
   }
@@ -253,6 +267,60 @@ export function renderRecents() {
     dom.recentsEl.appendChild(project);
   }
   renderEmptyToggle();
+}
+
+async function searchAllSessionsModal(query) {
+  const { body, close } = modal(`Search all sessions: "${query}"`, 'Searching…');
+  try {
+    const data = await cliSessionsSearch(query, 50);
+    body.innerHTML = '';
+    if (data.error && !data.results?.length) {
+      const err = document.createElement('div');
+      err.className = 'panel-error';
+      err.textContent = data.error;
+      body.appendChild(err);
+      return;
+    }
+    if (!data.results?.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'No matches';
+      body.appendChild(empty);
+      return;
+    }
+    const list = document.createElement('div');
+    list.className = 'search-results';
+    for (const r of data.results) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'search-result';
+      row.innerHTML = `
+        <div class="search-result-head">
+          <span class="search-result-title"></span>
+          ${r.remote ? '<span class="search-result-tag">remote</span>' : ''}
+          ${r.score != null ? `<span class="search-result-score">score ${r.score.toFixed(2)}</span>` : ''}
+        </div>
+        <div class="search-result-meta"></div>
+        <div class="search-result-snippet"></div>
+      `;
+      row.querySelector('.search-result-title').textContent = r.title || '(untitled)';
+      row.querySelector('.search-result-meta').textContent = r.date;
+      row.querySelector('.search-result-snippet').textContent = r.snippet;
+      row.title = `${r.id}\n${r.title}`;
+      row.addEventListener('click', () => {
+        close();
+        loadSessionAction(r.id, null);
+      });
+      list.appendChild(row);
+    }
+    body.appendChild(list);
+  } catch (e) {
+    body.innerHTML = '';
+    const err = document.createElement('div');
+    err.className = 'panel-error';
+    err.textContent = String(e?.message ?? e);
+    body.appendChild(err);
+  }
 }
 
 export async function loadRecents() {

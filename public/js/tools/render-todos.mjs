@@ -1,6 +1,5 @@
 import {
   getBackgroundTask,
-  getCurrentTodos,
   setBackgroundTask,
   setCurrentTodos,
 } from '../tool-state.js';
@@ -29,7 +28,7 @@ export function extractTodoUpdate(update) {
   return null;
 }
 
-function parseTodoSummary(value) {
+export function parseTodoSummary(value) {
   if (typeof value !== 'string' || !value.includes('[')) return [];
   const todos = [];
   for (const line of value.split(/\r?\n/)) {
@@ -82,10 +81,7 @@ export function renderTodos(update) {
   const extracted = extractTodoUpdate(update);
   if (!extracted) return null;
   const { todos, merge } = extracted;
-  const current = todos.length > 0
-    ? setCurrentTodos(todos, { merge })
-    : getCurrentTodos();
-  const renderList = current.length > 0 ? current : todos;
+  const renderList = setCurrentTodos(todos, { merge });
   return `
     <div class="label">todos</div>
     <ul class="todo-inline">

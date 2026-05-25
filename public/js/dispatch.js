@@ -33,6 +33,73 @@ export function resetExportTurns() {
   state._exportCurrentTurn = null;
 }
 
+// Merge tool_call + tool_call_update events into one export entry per toolCallId.
+// Without this, the agent's typical 2-3 events per call (initial in-progress,
+// streamed content, completed) produce duplicate "### tool" headers in the export.
+export function recordToolForExport(update, { initial } = {}) {
+  const turn = ensureExportTurn();
+  const id = update.toolCallId ?? null;
+  let entry = id ? turn.tools.find((t) => t.toolCallId === id) : null;
+  if (!entry) {
+    entry = {
+      toolCallId: id,
+      title: update.title ?? '',
+      kind: update.kind ?? '',
+      input: cleanForExport(update.rawInput ?? update.content ?? ''),
+      output: cleanForExport(update.rawOutput ?? ''),
+      status: initial ? 'in_progress' : (update.status ?? 'completed'),
+    };
+    turn.tools.push(entry);
+    return entry;
+  }
+  // Keep the first non-empty title/kind/input we ever saw — later updates often
+  // omit the title or repurpose rawInput for streamed content blocks.
+  if (update.title && !entry.title) entry.title = update.title;
+  if (update.kind && !entry.kind) entry.kind = update.kind;
+  if (update.status) entry.status = update.status;
+  const nextOutput = cleanForExport(update.rawOutput ?? '');
+  if (nextOutput) entry.output = nextOutput;
+  if (!entry.input) {
+    const nextInput = cleanForExport(update.rawInput ?? update.content ?? '');
+    if (nextInput) entry.input = nextInput;
+  }
+  return entry;
+}
+
+// Some tool outputs arrive as raw byte buffers (e.g. terminal stdout) that
+// JSON.stringify serialises as `[13, 10, 27, ...]` — unreadable in an export.
+// Decode those, and unwrap a few common content-block shapes while we're at it.
+export function cleanForExport(value) {
+  if (value == null || value === '') return value ?? '';
+  if (typeof value === 'string') return value;
+  if (looksLikeByteArray(value)) return decodeByteArray(value);
+  if (Array.isArray(value)) return value.map(cleanForExport);
+  if (typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = cleanForExport(v);
+    return out;
+  }
+  return value;
+}
+
+function looksLikeByteArray(value) {
+  if (!Array.isArray(value) || value.length < 16) return false;
+  for (const v of value) {
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > 255) return false;
+  }
+  return true;
+}
+
+function decodeByteArray(bytes) {
+  try {
+    if (typeof TextDecoder !== 'undefined') {
+      const arr = new Uint8Array(bytes);
+      return new TextDecoder('utf-8', { fatal: false }).decode(arr);
+    }
+  } catch {}
+  return String.fromCharCode(...bytes);
+}
+
 export function dispatch(event) {
   switch (event.kind) {
     case 'agent_ready':
@@ -200,18 +267,11 @@ function handleUpdate(u) {
       break;
     case 'tool_call':
       paintTool(u);
-      ensureExportTurn().tools.push({ title: u.title ?? '', kind: u.kind ?? '', input: u.rawInput ?? u.content ?? '', output: '', status: 'in_progress' });
+      recordToolForExport(u, { initial: true });
       break;
     case 'tool_call_update': {
       paintTool(u);
-      const tools = ensureExportTurn().tools;
-      const existing = tools.find(t => t.title === (u.title ?? '') && t.status === 'in_progress');
-      if (existing) {
-        existing.status = u.status ?? 'completed';
-        existing.output = u.rawOutput ?? '';
-      } else {
-        tools.push({ title: u.title ?? '', kind: u.kind ?? '', input: u.rawInput ?? u.content ?? '', output: u.rawOutput ?? '', status: u.status ?? 'completed' });
-      }
+      recordToolForExport(u, { initial: false });
       break;
     }
     case 'available_commands_update':

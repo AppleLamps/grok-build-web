@@ -1,6 +1,6 @@
 // Wire the sidebar "Tools" buttons + Sign-in + Import.
 
-import { showInspect, showMcp, showWorktrees, showModels, showHooks, showPlugins, downloadTrace } from './panels.js';
+import { showInspect, showMcp, showWorktrees, showModels, showHooks, showPlugins, downloadTrace, showMemory, showSessionInfo } from './panels.js';
 import { showRoutines } from './routines.js';
 import { modal } from './modal.js';
 import { toast } from './toast.js';
@@ -75,6 +75,9 @@ export function initToolsMenu() {
   wire('tool-worktrees', showWorktrees);
   wire('tool-models',    showModels);
   wire('tool-routines',  showRoutines);
+  wire('tool-memory',    showMemory);
+  wire('tool-session-info', showSessionInfo);
+  wire('usage',             showSessionInfo);
   wire('tool-hooks',     showHooks);
   wire('tool-plugins',   showPlugins);
   wire('tool-trace',     downloadTrace);

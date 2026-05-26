@@ -7,7 +7,7 @@
 
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
-import { CWD, PORT, SESSION_COOKIE } from './lib/config.mjs';
+import { CWD, GRACEFUL_SHUTDOWN_TIMEOUT_MS, PORT, SESSION_COOKIE } from './lib/config.mjs';
 import { defaultUsername } from './lib/util.mjs';
 import { GrokBridge } from './lib/grok-bridge.mjs';
 import { createCliRunner } from './lib/cli-runner.mjs';
@@ -61,8 +61,14 @@ watchSessionsRoot(() => {
   });
 })();
 
+let shuttingDown = false;
 async function shutdown() {
-  await grok.killAllAgents();
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try { server?.close(); } catch {}
+  try { await grok.gracefulShutdown(GRACEFUL_SHUTDOWN_TIMEOUT_MS); }
+  catch (e) { console.error('[grok-web] graceful shutdown error:', e); }
+  try { server?.closeAllConnections?.(); } catch {}
   process.exit(0);
 }
 

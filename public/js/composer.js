@@ -4,6 +4,7 @@
 import { state, dom } from './state.js';
 import { postPrompt, postCancel, getSettings, setSettings, cliOneshot } from './api.js';
 import { addError, setStatus, appendMessage, addUserItem } from './chat.js';
+import { getPendingAttachments, clearAttachments, hasPendingAttachments } from './attachments.js';
 
 export function setBusy(busy) {
   dom.sendBtn.disabled = busy;
@@ -40,13 +41,16 @@ export function initComposer() {
   dom.form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = dom.input.value.trim();
-    if (!text || dom.sendBtn.disabled) return;
+    if (dom.sendBtn.disabled) return;
+    if (!text && !hasPendingAttachments()) return;
+    const attachments = getPendingAttachments();
     dom.input.value = ''; autoSize();
+    clearAttachments();
     setBusy(true);
     const mode = dom.sendMode?.value ?? 'agent';
     if (mode === 'agent') {
       try {
-        const r = await postPrompt(text);
+        const r = await postPrompt(text, attachments);
         if (!r.ok) { addError(`prompt failed: ${r.status} ${await r.text()}`); setBusy(false); }
       } catch (err) {
         addError(`network error: ${err.message}`); setBusy(false);
@@ -95,7 +99,7 @@ export function initComposer() {
   dom.sendMode?.addEventListener('change', () => {
     localStorage.setItem('grokweb.sendMode', dom.sendMode.value);
   });
-  dom.input.focus();
+  dom.input.focus({ preventScroll: true });
 
   // Welcome-tile shortcuts: clicking a starter tile fills the composer and sends.
   document.querySelectorAll('.welcome-tile').forEach((tile) => {
@@ -145,13 +149,13 @@ export function handleGlobalShortcut(e) {
   if (isEditableTarget(e.target)) return;
   if ((e.ctrlKey || e.metaKey) && e.key?.toLowerCase() === 'k') {
     e.preventDefault();
-    dom.input.focus();
+    dom.input.focus({ preventScroll: true });
     return;
   }
   if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
     e.preventDefault();
     dom.input.value = '/';
-    dom.input.focus();
+    dom.input.focus({ preventScroll: true });
     try {
       dom.input.dispatchEvent(new Event('input', { bubbles: true }));
     } catch {

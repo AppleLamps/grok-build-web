@@ -17,6 +17,7 @@ const chat = await importPublic('public/js/chat.js');
 const composer = await importPublic('public/js/composer.js');
 const tools = await importPublic('public/js/tools.js');
 const toolsMenu = await importPublic('public/js/tools-menu.js');
+const { dispatch } = await importPublic('public/js/dispatch.js');
 const { modal } = await importPublic('public/js/modal.js');
 
 test('user messages render in right-aligned rows', () => {
@@ -34,6 +35,20 @@ test('user messages render in right-aligned rows', () => {
   chat.appendUserChunk('lo');
   const replayRow = state.turnEl.querySelector('.user-msg-row');
   assert.equal(replayRow.querySelector('.user-msg').textContent, 'hello');
+});
+
+test('empty replay chunks keep the welcome screen visible', () => {
+  resetChatState();
+  dom.welcome.hidden = false;
+  dom.logInner.appendChild(dom.welcome);
+
+  dispatch({ kind: 'update', update: { sessionUpdate: 'user_message_chunk', content: { text: '' } } });
+  dispatch({ kind: 'update', update: { sessionUpdate: 'agent_thought_chunk', content: { text: '' } } });
+  dispatch({ kind: 'update', update: { sessionUpdate: 'agent_message_chunk', content: { text: '' } } });
+
+  assert.equal(dom.welcome.hidden, false);
+  assert.equal(state.turnEl, null);
+  assert.equal(dom.logInner.querySelectorAll('.turn').length, 0);
 });
 
 test('code block copy button copies from the matching block', async () => {

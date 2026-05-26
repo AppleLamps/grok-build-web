@@ -59,6 +59,8 @@ export function clearLog() {
     dom.welcome.hidden = false;
     dom.logInner.appendChild(dom.welcome);
   }
+  dom.log.scrollTop = 0;
+  document.querySelector('main')?.scrollTo?.(0, 0);
   state.turnEl = null;
   state.thinkingEl = null;
   state.thinkingBuf = '';
@@ -70,11 +72,17 @@ export function clearLog() {
   resetAllToolState();
 }
 
-export function addUserItem(text) {
+export function addUserItem(text, attachments = []) {
   newTurn();
-  const div = appendUserMessageElement(state.turnEl);
-  div.textContent = text;
-  dom.crumb.textContent = text.slice(0, 80);
+  const row = ensureUserMessageRow(state.turnEl);
+  if (text) {
+    const div = createUserMessageBubble();
+    div.textContent = text;
+    row.appendChild(div);
+  }
+  appendAttachmentList(row, attachments);
+  const crumb = text || (attachments[0]?.filename ?? 'attachment');
+  dom.crumb.textContent = crumb.slice(0, 80);
   autoScroll();
 }
 
@@ -245,23 +253,78 @@ function invalidateThinkingRender() {
 // Replay marker (loaded sessions emit user_message_chunk to delimit turns).
 export function appendUserChunk(text) {
   if (!state.turnEl || (state.assistantEl || state.thinkingEl || state.toolEls.size > 0)) newTurn();
-  let userEl = state.turnEl.querySelector('.user-msg');
-  if (!userEl) userEl = appendUserMessageElement(state.turnEl);
+  const row = ensureUserMessageRow(state.turnEl);
+  let userEl = row.querySelector('.user-msg');
+  if (!userEl) {
+    userEl = createUserMessageBubble();
+    // Keep text bubble above any attachment list already appended.
+    const firstAttach = row.querySelector('.user-attachments');
+    if (firstAttach) row.insertBefore(userEl, firstAttach);
+    else row.appendChild(userEl);
+  }
   userEl.textContent += text;
   autoScroll();
 }
 
-function appendUserMessageElement(turnEl) {
+function ensureUserMessageRow(turnEl) {
   let row = turnEl.querySelector('.user-msg-row');
   if (!row) {
     row = document.createElement('div');
     row.className = 'user-msg-row';
     turnEl.appendChild(row);
   }
+  return row;
+}
+
+function createUserMessageBubble() {
   const div = document.createElement('div');
   div.className = 'user-msg';
-  row.appendChild(div);
   return div;
+}
+
+function appendAttachmentList(row, attachments) {
+  if (!Array.isArray(attachments) || attachments.length === 0) return;
+  const list = document.createElement('div');
+  list.className = 'user-attachments';
+  for (const a of attachments) {
+    list.appendChild(renderAttachmentChip(a));
+  }
+  row.appendChild(list);
+}
+
+function renderAttachmentChip(a) {
+  const kind = a?.kind ?? 'file';
+  const filename = a?.filename ?? 'attachment';
+  if (kind === 'image' && a?.mediaUrl) {
+    const link = document.createElement('a');
+    link.className = 'user-attach image';
+    link.href = a.mediaUrl;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.title = filename;
+    const img = document.createElement('img');
+    img.src = a.mediaUrl;
+    img.alt = filename;
+    img.loading = 'lazy';
+    link.appendChild(img);
+    return link;
+  }
+  const chip = document.createElement(a?.mediaUrl ? 'a' : 'span');
+  chip.className = `user-attach ${kind === 'pdf' ? 'pdf' : 'file'}`;
+  if (a?.mediaUrl) {
+    chip.href = a.mediaUrl;
+    chip.target = '_blank';
+    chip.rel = 'noopener';
+  }
+  const icon = document.createElement('span');
+  icon.className = 'user-attach-icon';
+  icon.textContent = kind === 'pdf' ? 'PDF' : 'FILE';
+  chip.appendChild(icon);
+  const label = document.createElement('span');
+  label.className = 'user-attach-name';
+  label.textContent = filename;
+  chip.appendChild(label);
+  return chip;
 }
 
 export function addError(msg) {

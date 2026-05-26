@@ -43,10 +43,19 @@ export async function setSettings(body) {
   return r.json();
 }
 
-export async function postPrompt(text) {
+export async function postPrompt(text, attachments = null) {
+  const body = { text };
+  if (Array.isArray(attachments) && attachments.length) body.attachments = attachments;
   return fetch(url('/prompt'), {
-    method: 'POST', headers: json, body: JSON.stringify(withSid({ text })),
+    method: 'POST', headers: json, body: JSON.stringify(withSid(body)),
   });
+}
+
+export async function postUpload({ filename, dataBase64 }) {
+  const r = await fetch(url('/upload'), {
+    method: 'POST', headers: json, body: JSON.stringify(withSid({ filename, dataBase64 })),
+  });
+  return readJsonResponse(r, 'upload');
 }
 
 export async function cliOneshot(body) {

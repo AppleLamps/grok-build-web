@@ -63,6 +63,7 @@ const DOM_IDS = {
   bgList: 'bg-list',
   sendMode: 'send-mode',
   attachBtn: 'attach-btn',
+  attachStrip: 'attach-strip',
   voiceBtn: 'voice-btn',
   modelTag: 'model-tag',
   footerModel: 'footer-model',

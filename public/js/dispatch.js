@@ -135,7 +135,7 @@ export function dispatch(event) {
       break;
 
     case 'user_prompt':
-      addUserItem(event.text);
+      addUserItem(event.text, event.attachments);
       setStatus('thinking…', 'busy');
       setBusy(true);
       state._exportCurrentTurn = null;
@@ -162,7 +162,7 @@ export function dispatch(event) {
       collapseLastThinking();
       finishStreaming();
       updateUsage(event.result?._meta);
-      dom.input.focus();
+      dom.input.focus({ preventScroll: true });
       break;
 
     case 'permission_request':
@@ -253,18 +253,27 @@ function handleUpdate(u) {
     return;
   }
   switch (u.sessionUpdate) {
-    case 'user_message_chunk':
-      appendUserChunk(u.content?.text ?? '');
-      ensureExportTurn().user += u.content?.text ?? '';
+    case 'user_message_chunk': {
+      const text = u.content?.text ?? '';
+      if (!text) break;
+      appendUserChunk(text);
+      ensureExportTurn().user += text;
       break;
-    case 'agent_thought_chunk':
-      appendThought(u.content?.text ?? '');
-      ensureExportTurn().thinking += u.content?.text ?? '';
+    }
+    case 'agent_thought_chunk': {
+      const text = u.content?.text ?? '';
+      if (!text) break;
+      appendThought(text);
+      ensureExportTurn().thinking += text;
       break;
-    case 'agent_message_chunk':
-      appendMessage(u.content?.text ?? '');
-      ensureExportTurn().assistant += u.content?.text ?? '';
+    }
+    case 'agent_message_chunk': {
+      const text = u.content?.text ?? '';
+      if (!text) break;
+      appendMessage(text);
+      ensureExportTurn().assistant += text;
       break;
+    }
     case 'tool_call':
       paintTool(u);
       recordToolForExport(u, { initial: true });

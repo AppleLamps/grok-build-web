@@ -1,0 +1,194 @@
+#!/usr/bin/env node
+
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { chromium } from '@playwright/test';
+import { repoRoot, startFakeServer } from './helpers.mjs';
+
+const screenshotsDir = join(repoRoot, 'output', 'playwright');
+const viewports = [
+  { name: '390x844', width: 390, height: 844 },
+  { name: '320x700', width: 320, height: 700 },
+];
+
+let browser;
+let server;
+let sessionsRoot;
+
+try {
+  await mkdir(screenshotsDir, { recursive: true });
+  sessionsRoot = await mkdtemp(join(tmpdir(), 'grok-web-visual-sessions-'));
+  await seedVisualSessions(sessionsRoot);
+  server = await startFakeServer({ scenario: 'quiet', sessionsRoot, cwd: repoRoot });
+  browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const sessionUrl = await authenticatedSessionUrl(page, server.launchUrl);
+
+  await page.goto(sessionUrl);
+  await waitForReady(page);
+  await page.fill(
+    '#input',
+    'sdasdssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss',
+  );
+  await assertComposerWrap(page);
+  await page.fill('#input', '');
+  await assertVisibleWithinViewport(page, '#send', 'desktop send button');
+  await assertVisibleWithinViewport(page, '.recent.active', 'active sidebar session');
+  await assertWelcomeSubtitle(page);
+  await page.screenshot({ path: join(screenshotsDir, 'visual-desktop-1280x720.png'), fullPage: false });
+
+  await page.click('#customize-btn');
+  await page.locator('.settings-panel.open').waitFor({ timeout: 10000 });
+  await assertVisibleWithinViewport(page, '.settings-panel.open', 'settings panel');
+  await assertVisibleWithinViewport(page, '.settings-foot .apply', 'settings Apply button');
+  await assertSettingsSections(page);
+  await page.screenshot({ path: join(screenshotsDir, 'visual-settings-1280x720.png'), fullPage: false });
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.settings-panel')?.classList.contains('open'));
+
+  for (const viewport of viewports) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto(sessionUrl);
+    await waitForReady(page);
+    await page.fill('#input', `visual smoke ${viewport.name}`);
+    await assertVisibleWithinViewport(page, '#send', `mobile send button ${viewport.name}`);
+    await assertWelcomeSubtitle(page);
+    await page.screenshot({
+      path: join(screenshotsDir, `visual-mobile-${viewport.name}.png`),
+      fullPage: false,
+    });
+  }
+} finally {
+  await browser?.close();
+  await server?.stop();
+  if (sessionsRoot) await rm(sessionsRoot, { recursive: true, force: true });
+}
+
+async function authenticatedSessionUrl(page, launchUrl) {
+  const launch = new URL(launchUrl);
+  await page.goto(launchUrl);
+  await page.waitForURL(`${launch.origin}/`, { timeout: 10000 });
+  const sessionUrl = new URL('/', launch.origin);
+  sessionUrl.searchParams.set('session', 'active-session');
+  sessionUrl.searchParams.set('cwd', repoRoot);
+  return sessionUrl.href;
+}
+
+async function seedVisualSessions(root) {
+  const active = join(root, 'visual', 'active-session');
+  await mkdir(active, { recursive: true });
+  await writeFile(
+    join(active, 'summary.json'),
+    JSON.stringify({
+      info: { id: 'active-session', cwd: repoRoot },
+      generated_title: 'Active visual smoke session',
+      last_active_at: '2026-05-26T12:00:00Z',
+      num_chat_messages: 3,
+    }),
+    'utf8',
+  );
+}
+
+async function waitForReady(page) {
+  await page.locator('#send').waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForFunction(() => /ready/i.test(document.querySelector('#status')?.textContent ?? ''), null, {
+    timeout: 10000,
+  });
+}
+
+async function assertVisibleWithinViewport(page, selector, label) {
+  await page.locator(selector).first().waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForFunction(
+    (sel) => {
+      const node = document.querySelector(sel);
+      if (!node) return false;
+      const rect = node.getBoundingClientRect();
+      return (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        rect.x >= 0 &&
+        rect.y >= 0 &&
+        rect.right <= window.innerWidth + 1 &&
+        rect.bottom <= window.innerHeight + 1
+      );
+    },
+    selector,
+    { timeout: 10000 },
+  );
+  const box = await page.locator(selector).first().boundingBox();
+  assert.ok(box, `${label} is visible`);
+  const viewport = page.viewportSize();
+  assert.ok(viewport, 'viewport is available');
+  assert.ok(box.width > 0 && box.height > 0, `${label} has size`);
+  assert.ok(box.x >= 0 && box.y >= 0, `${label} starts inside viewport`);
+  assert.ok(box.x + box.width <= viewport.width + 1, `${label} is not clipped horizontally`);
+  assert.ok(box.y + box.height <= viewport.height + 1, `${label} is not clipped vertically`);
+}
+
+async function assertWelcomeSubtitle(page) {
+  const result = await page.locator('.welcome-sub').evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      text: node.textContent,
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  assert.equal(result.text, 'Local Grok CLI sessions, shaped like the Grok app.');
+  assert.ok(result.left >= 0, 'welcome subtitle left edge is visible');
+  assert.ok(result.right <= result.viewportWidth + 1, 'welcome subtitle right edge is visible');
+  assert.ok(result.top >= 0, 'welcome subtitle top edge is visible');
+  assert.ok(result.bottom <= result.viewportHeight + 1, 'welcome subtitle bottom edge is visible');
+}
+
+async function assertComposerWrap(page) {
+  const result = await page.evaluate(() => {
+    const input = document.querySelector('#input');
+    const wrap = document.querySelector('.input-wrap');
+    const status = document.querySelector('#status');
+    const inputRect = input.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
+    const statusRect = status.getBoundingClientRect();
+    const style = getComputedStyle(input);
+    return {
+      inputTop: inputRect.top,
+      inputBottom: inputRect.bottom,
+      wrapTop: wrapRect.top,
+      wrapBottom: wrapRect.bottom,
+      statusTop: statusRect.top,
+      lineHeight: Number.parseFloat(style.lineHeight),
+      textHeight: input.scrollHeight,
+    };
+  });
+  assert.ok(result.textHeight > result.lineHeight * 1.5, 'long composer text wraps to more than one line');
+  assert.ok(result.inputTop >= result.wrapTop + 6, 'wrapped text keeps top padding inside composer');
+  assert.ok(result.inputBottom <= result.wrapBottom - 6, 'wrapped text keeps bottom padding inside composer');
+  assert.ok(result.statusTop >= result.wrapBottom + 6, 'ready status is separated from composer');
+}
+
+async function assertSettingsSections(page) {
+  for (const label of ['Profile', 'Composer', 'Model', 'Permissions', 'Tools', 'Runtime']) {
+    const sectionLabel = page.locator('.settings-section-label', { hasText: label }).first();
+    await sectionLabel.scrollIntoViewIfNeeded();
+    await expectLocatorInViewport(page, sectionLabel, `settings section is visible: ${label}`);
+  }
+  await page.locator('.settings-body').evaluate((node) => {
+    node.scrollTop = 0;
+  });
+}
+
+async function expectLocatorInViewport(page, locator, label) {
+  const box = await locator.boundingBox();
+  assert.ok(box, label);
+  const viewport = page.viewportSize();
+  assert.ok(viewport, 'viewport is available');
+  assert.ok(box.x >= 0 && box.y >= 0, label);
+  assert.ok(box.x + box.width <= viewport.width + 1, label);
+  assert.ok(box.y + box.height <= viewport.height + 1, label);
+}

@@ -9,8 +9,17 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "check": "node test/check.mjs",
+    "check": "npm run check:syntax && npm run lint && npm run format:check",
+    "check:syntax": "node test/check.mjs",
+    "lint": "biome lint .",
+    "format": "biome format --write biome.json package.json public/js/ui public/js/modelpicker.js public/js/topbar.js public/js/routines.js public/js/sidebar.js public/js/settings.js public/js/state.js public/js/dispatch.js test/helpers.mjs test/ui-security.test.mjs test/visual-smoke.mjs",
+    "format:check": "biome format biome.json package.json public/js/ui public/js/modelpicker.js public/js/topbar.js public/js/routines.js public/js/sidebar.js public/js/settings.js public/js/state.js public/js/dispatch.js test/helpers.mjs test/ui-security.test.mjs test/visual-smoke.mjs",
     "test": "node --test test/*.test.mjs",
+    "test:visual": "node test/visual-smoke.mjs",
     "test:live": "node test/run-live.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.15",
+    "@playwright/test": "1.60.0"
   }
 }

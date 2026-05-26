@@ -8,21 +8,25 @@ import { state } from './state.js';
 import { newSessionAction } from './sidebar.js';
 import { setStatus, addError } from './chat.js';
 import { setBusy } from './composer.js';
+import { el } from './ui/dom.js';
 
 function openWorkspacePicker() {
   const current = state.currentCwd ?? '';
-  const wrap = document.createElement('form');
-  wrap.className = 'workspace-form';
-  wrap.innerHTML = `
-    <label>
-      <span>Workspace path</span>
-      <input type="text" name="cwd" value="${escapeHTML(current)}" placeholder="C:\\path\\to\\project" />
-    </label>
-    <div class="workspace-actions">
-      <button class="apply" type="submit">Start session</button>
-      <button class="cancel" type="button">Cancel</button>
-    </div>
-  `;
+  const input = el('input', {
+    attrs: { type: 'text', name: 'cwd', placeholder: 'C:\\path\\to\\project' },
+    props: { value: current },
+  });
+  const wrap = el(
+    'form',
+    { className: 'workspace-form' },
+    el('label', {}, el('span', { text: 'Workspace path' }), input),
+    el(
+      'div',
+      { className: 'workspace-actions' },
+      el('button', { className: 'apply', text: 'Start session', attrs: { type: 'submit' } }),
+      el('button', { className: 'cancel', text: 'Cancel', attrs: { type: 'button' } }),
+    ),
+  );
   const { close } = modal('Change workspace', wrap);
   wrap.querySelector('.cancel').addEventListener('click', close);
   wrap.addEventListener('submit', async (e) => {
@@ -39,7 +43,7 @@ function openWorkspacePicker() {
       setBusy(false);
     }
   });
-  wrap.querySelector('input')?.focus();
+  input.focus();
 }
 
 async function copyShareUrl(url) {
@@ -53,18 +57,23 @@ async function copyShareUrl(url) {
 }
 
 function showShareFallback(url) {
-  const wrap = document.createElement('div');
-  wrap.className = 'share-fallback';
-  wrap.innerHTML = `
-    <p>Copy this share link:</p>
-    <input type="text" readonly value="${escapeAttr(url)}" />
-    <div class="workspace-actions">
-      <button class="apply" type="button">Copy</button>
-      <button class="cancel" type="button">Close</button>
-    </div>
-  `;
+  const input = el('input', {
+    attrs: { type: 'text', readonly: true },
+    props: { value: url },
+  });
+  const wrap = el(
+    'div',
+    { className: 'share-fallback' },
+    el('p', { text: 'Copy this share link:' }),
+    input,
+    el(
+      'div',
+      { className: 'workspace-actions' },
+      el('button', { className: 'apply', text: 'Copy', attrs: { type: 'button' } }),
+      el('button', { className: 'cancel', text: 'Close', attrs: { type: 'button' } }),
+    ),
+  );
   const { close } = modal('Share link', wrap);
-  const input = wrap.querySelector('input');
   wrap.querySelector('.cancel').addEventListener('click', close);
   wrap.querySelector('.apply').addEventListener('click', async () => {
     input.select();
@@ -209,34 +218,40 @@ export function initTopbar() {
   }
 
   // Update banner: non-blocking, fail silently if grok update is unavailable.
-  cliUpdateCheck().then((data) => {
-    // Schema: { update_available: bool, current: "0.1.x", latest: "0.1.y", ... }
-    // Some grok versions may return different keys; we read defensively.
-    const available = data?.update_available ?? data?.updateAvailable ?? false;
-    const latest = data?.latest ?? data?.latest_version ?? data?.latestVersion;
-    const current = data?.current ?? data?.current_version ?? data?.currentVersion;
-    const releaseUrl = safeHttpUrl(
-      data?.release_notes_url ?? data?.releaseNotesUrl ?? data?.release_url ?? data?.releaseUrl ?? ''
-    );
-    if (!available || !latest || !current) return;
-    const slot = document.getElementById('update-slot');
-    if (!slot) return;
-    const banner = document.createElement('div');
-    banner.className = 'update-banner';
-    const releaseLink = releaseUrl
-      ? `<a href="${escapeAttr(releaseUrl)}" target="_blank" rel="noopener">Release notes</a>`
-      : '';
-    banner.innerHTML = `
+  cliUpdateCheck()
+    .then((data) => {
+      // Schema: { update_available: bool, current: "0.1.x", latest: "0.1.y", ... }
+      // Some grok versions may return different keys; we read defensively.
+      const available = data?.update_available ?? data?.updateAvailable ?? false;
+      const latest = data?.latest ?? data?.latest_version ?? data?.latestVersion;
+      const current = data?.current ?? data?.current_version ?? data?.currentVersion;
+      const releaseUrl = safeHttpUrl(
+        data?.release_notes_url ?? data?.releaseNotesUrl ?? data?.release_url ?? data?.releaseUrl ?? '',
+      );
+      if (!available || !latest || !current) return;
+      const slot = document.getElementById('update-slot');
+      if (!slot) return;
+      const banner = document.createElement('div');
+      banner.className = 'update-banner';
+      const releaseLink = releaseUrl
+        ? `<a href="${escapeAttr(releaseUrl)}" target="_blank" rel="noopener">Release notes</a>`
+        : '';
+      banner.innerHTML = `
       <span class="update-dot" aria-hidden="true"></span>
       <span class="update-copy"><strong>grok ${escapeHTML(latest)} is available</strong><span>You have ${escapeHTML(current)}. Run <code>grok update</code> to install.</span></span>
       ${releaseLink}
       <button class="close" type="button" title="Dismiss update notice" aria-label="Dismiss update notice">×</button>
     `;
-    banner.querySelector('.close').addEventListener('click', () => {
-      banner.remove();
-      slot.hidden = true;
-    });
-    slot.replaceChildren(banner);
-    slot.hidden = false;
-  }).catch(() => {});
+      banner.querySelector('.close').addEventListener('click', () => {
+        banner.remove();
+        slot.hidden = true;
+      });
+      slot.replaceChildren(banner);
+      slot.hidden = false;
+    })
+    .catch(() => {});
+}
+
+export function __testShowShareFallback(url) {
+  return showShareFallback(url);
 }

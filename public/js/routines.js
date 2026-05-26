@@ -4,6 +4,7 @@ import { modal } from './modal.js';
 import { postPrompt } from './api.js';
 import { setBusy } from './composer.js';
 import { setStatus, addError } from './chat.js';
+import { el } from './ui/dom.js';
 
 async function sendRoutinePrompt(text, close) {
   setBusy(true);
@@ -19,25 +20,46 @@ async function sendRoutinePrompt(text, close) {
 }
 
 export function showRoutines() {
-  const wrap = document.createElement('div');
-  wrap.className = 'routines-panel';
-  wrap.innerHTML = `
-    <p>Routines are managed by asking Grok to use its scheduler tools in this session.</p>
-    <div class="routine-section">
-      <button class="routine-list">List routines</button>
-    </div>
-    <form class="routine-create">
-      <strong>Create routine</strong>
-      <label><span>Interval</span><input name="interval" placeholder="every weekday at 9am" required></label>
-      <label><span>Prompt</span><textarea name="prompt" rows="3" placeholder="What should Grok do?" required></textarea></label>
-      <button type="submit">Create routine</button>
-    </form>
-    <form class="routine-delete">
-      <strong>Delete routine</strong>
-      <label><span>Routine ID</span><input name="id" placeholder="routine id" required></label>
-      <button type="submit">Delete routine</button>
-    </form>
-  `;
+  const wrap = el(
+    'div',
+    { className: 'routines-panel' },
+    el('p', { text: 'Routines are managed by asking Grok to use its scheduler tools in this session.' }),
+    el(
+      'div',
+      { className: 'routine-section' },
+      el('button', { className: 'routine-list', text: 'List routines', attrs: { type: 'button' } }),
+    ),
+    el(
+      'form',
+      { className: 'routine-create' },
+      el('strong', { text: 'Create routine' }),
+      el(
+        'label',
+        {},
+        el('span', { text: 'Interval' }),
+        el('input', { attrs: { name: 'interval', placeholder: 'every weekday at 9am', required: true } }),
+      ),
+      el(
+        'label',
+        {},
+        el('span', { text: 'Prompt' }),
+        el('textarea', { attrs: { name: 'prompt', rows: '3', placeholder: 'What should Grok do?', required: true } }),
+      ),
+      el('button', { text: 'Create routine', attrs: { type: 'submit' } }),
+    ),
+    el(
+      'form',
+      { className: 'routine-delete' },
+      el('strong', { text: 'Delete routine' }),
+      el(
+        'label',
+        {},
+        el('span', { text: 'Routine ID' }),
+        el('input', { attrs: { name: 'id', placeholder: 'routine id', required: true } }),
+      ),
+      el('button', { text: 'Delete routine', attrs: { type: 'submit' } }),
+    ),
+  );
   const { close } = modal('Routines', wrap);
   wrap.querySelector('.routine-list').addEventListener('click', () => {
     sendRoutinePrompt('Use the scheduler_list tool to list my scheduled routines. Return the results clearly.', close);
@@ -48,7 +70,10 @@ export function showRoutines() {
     const interval = data.get('interval')?.toString().trim();
     const prompt = data.get('prompt')?.toString().trim();
     if (!interval || !prompt) return;
-    sendRoutinePrompt(`Use the scheduler_create tool to create a routine with interval: ${interval}\nPrompt: ${prompt}`, close);
+    sendRoutinePrompt(
+      `Use the scheduler_create tool to create a routine with interval: ${interval}\nPrompt: ${prompt}`,
+      close,
+    );
   });
   wrap.querySelector('.routine-delete').addEventListener('submit', (e) => {
     e.preventDefault();

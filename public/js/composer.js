@@ -5,6 +5,7 @@ import { state, dom } from './state.js';
 import { postPrompt, postCancel, getSettings, setSettings, cliOneshot } from './api.js';
 import { addError, setStatus, appendMessage, addUserItem } from './chat.js';
 import { getPendingAttachments, clearAttachments, hasPendingAttachments } from './attachments.js';
+import { getString, setString } from './ui/storage.js';
 
 export function setBusy(busy) {
   dom.sendBtn.disabled = busy;
@@ -29,10 +30,17 @@ function autoSize() {
   const nextHeight = Math.min(220, dom.input.scrollHeight || 26);
   dom.input.style.height = `${nextHeight}px`;
   wrap?.classList.toggle('multiline', nextHeight > 38 || dom.input.value.includes('\n'));
+  updateEmptyCaret();
+}
+
+function updateEmptyCaret() {
+  const wrap = dom.input.closest?.('.input-wrap');
+  const show = document.activeElement === dom.input && dom.input.value.length === 0;
+  wrap?.classList.toggle('empty-focused', show);
 }
 
 export function initComposer() {
-  const savedSendMode = localStorage.getItem('grokweb.sendMode');
+  const savedSendMode = getString('grokweb.sendMode');
   const hasSavedSendMode = savedSendMode && Array.from(dom.sendMode?.options ?? []).some((opt) => opt.value === savedSendMode);
   if (hasSavedSendMode) {
     dom.sendMode.value = savedSendMode;
@@ -96,10 +104,13 @@ export function initComposer() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dom.form.requestSubmit(); }
   });
   dom.input.addEventListener('input', autoSize);
+  dom.input.addEventListener('focus', updateEmptyCaret);
+  dom.input.addEventListener('blur', updateEmptyCaret);
   dom.sendMode?.addEventListener('change', () => {
-    localStorage.setItem('grokweb.sendMode', dom.sendMode.value);
+    setString('grokweb.sendMode', dom.sendMode.value);
   });
   dom.input.focus({ preventScroll: true });
+  updateEmptyCaret();
 
   // Welcome-tile shortcuts: clicking a starter tile fills the composer and sends.
   document.querySelectorAll('.welcome-tile').forEach((tile) => {

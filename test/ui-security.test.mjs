@@ -53,3 +53,102 @@ test('CLI panel output is inserted as text, not HTML', async () => {
   assert.equal(body.querySelectorAll('script').length, 0);
   assert.equal(body.querySelectorAll('img').length, 0);
 });
+
+test('model picker treats hostile model IDs as text', async () => {
+  const { body } = installDomStubs({
+    fetchImpl: async (url) => {
+      const path = String(url);
+      if (path === '/spawn-opts') return json({ model: '<img src=x onerror=alert(1)>' });
+      if (path === '/cli/models') return new Response('<script>alert(1)</script>\ngrok-build', { status: 200 });
+      return json({});
+    },
+  });
+  const { __testOpenModelPicker } = await importFresh('public/js/modelpicker.js');
+
+  const { wrap } = await __testOpenModelPicker();
+
+  assert.equal(wrap.querySelector('.model-current-value').textContent, '<img src=x onerror=alert(1)>');
+  assert.equal(body.querySelectorAll('img').length, 0);
+  assert.equal(body.querySelectorAll('script').length, 0);
+});
+
+test('settings field labels and hints render hostile text literally', async () => {
+  const { body } = installDomStubs();
+  const settings = await importFresh('public/js/settings.js');
+
+  const field = settings.__testFieldEl(
+    {
+      key: 'hostile',
+      label: '<img src=x onerror=alert(1)>',
+      type: 'text',
+      hint: '<script>alert(1)</script>',
+    },
+    '<svg onload=alert(1)>',
+  );
+
+  assert.equal(field.querySelector('label').textContent, '<img src=x onerror=alert(1)>');
+  assert.equal(field.querySelector('.setting-hint').textContent, '<script>alert(1)</script>');
+  assert.equal(field.querySelector('input').value, '<svg onload=alert(1)>');
+  assert.equal(body.querySelectorAll('img').length, 0);
+  assert.equal(body.querySelectorAll('script').length, 0);
+});
+
+test('share fallback stores hostile URLs in input value only', async () => {
+  const { body } = installDomStubs();
+  const { __testShowShareFallback } = await importFresh('public/js/topbar.js');
+
+  __testShowShareFallback('https://example.com/?q=<img src=x onerror=alert(1)>');
+
+  const input = body.querySelector('.share-fallback').querySelector('input');
+  assert.equal(input.value, 'https://example.com/?q=<img src=x onerror=alert(1)>');
+  assert.equal(body.querySelectorAll('img').length, 0);
+});
+
+test('sidebar recents and global search results treat hostile strings as text', async () => {
+  const { body } = installDomStubs({
+    fetchImpl: async (url) => {
+      if (String(url) === '/cli/sessions/search') {
+        return json({
+          results: [
+            {
+              id: 'result-1',
+              title: '<img src=x onerror=alert(1)>',
+              date: '<script>alert(1)</script>',
+              snippet: '<svg onload=alert(1)>',
+              score: 1,
+            },
+          ],
+        });
+      }
+      return json({});
+    },
+  });
+  const sidebar = await importFresh('public/js/sidebar.js');
+
+  sidebar.__testSetRecentsState({
+    currentSessionId: 'active',
+    sessions: [
+      {
+        id: 'active',
+        cwd: 'C:\\Users\\lucas\\project',
+        title: '<img src=x onerror=alert(1)>',
+        lastActive: '2026-05-22T01:00:00Z',
+        numMessages: 2,
+      },
+    ],
+  });
+  sidebar.__testSetShowEmptySessions(true);
+  sidebar.renderRecents();
+  assert.equal(sidebar.__testRecentsElement().querySelector('.title').textContent, '<img src=x onerror=alert(1)>');
+
+  await sidebar.__testSearchAllSessionsModal('<b>private</b>');
+  assert.equal(body.querySelector('.search-result-title').textContent, '<img src=x onerror=alert(1)>');
+  assert.equal(body.querySelector('.search-result-meta').textContent, '<script>alert(1)</script>');
+  assert.equal(body.querySelector('.search-result-snippet').textContent, '<svg onload=alert(1)>');
+  assert.equal(body.querySelectorAll('img').length, 0);
+  assert.equal(body.querySelectorAll('script').length, 0);
+});
+
+function json(value) {
+  return new Response(JSON.stringify(value), { status: 200, headers: { 'content-type': 'application/json' } });
+}

@@ -36,18 +36,26 @@ export async function seedSessions(root) {
   const empty = join(cwdBucket, 'empty');
   await mkdir(active, { recursive: true });
   await mkdir(empty, { recursive: true });
-  await writeFile(join(active, 'summary.json'), JSON.stringify({
-    info: { id: 'active-session', cwd: 'C:\\Users\\lucas\\project' },
-    generated_title: 'Active session',
-    last_active_at: '2026-05-22T01:00:00Z',
-    num_chat_messages: 6,
-  }), 'utf8');
-  await writeFile(join(empty, 'summary.json'), JSON.stringify({
-    info: { id: 'empty-session', cwd: 'C:\\Users\\lucas\\project' },
-    generated_title: 'Empty session',
-    last_active_at: '2026-05-22T00:59:00Z',
-    num_chat_messages: 0,
-  }), 'utf8');
+  await writeFile(
+    join(active, 'summary.json'),
+    JSON.stringify({
+      info: { id: 'active-session', cwd: 'C:\\Users\\lucas\\project' },
+      generated_title: 'Active session',
+      last_active_at: '2026-05-22T01:00:00Z',
+      num_chat_messages: 6,
+    }),
+    'utf8',
+  );
+  await writeFile(
+    join(empty, 'summary.json'),
+    JSON.stringify({
+      info: { id: 'empty-session', cwd: 'C:\\Users\\lucas\\project' },
+      generated_title: 'Empty session',
+      last_active_at: '2026-05-22T00:59:00Z',
+      num_chat_messages: 0,
+    }),
+    'utf8',
+  );
 }
 
 export async function startFakeServer({ scenario = 'normal', sessionsRoot = null, cwd = null, env = {} } = {}) {
@@ -68,18 +76,30 @@ export async function startFakeServer({ scenario = 'normal', sessionsRoot = null
   });
   let stdout = '';
   let stderr = '';
-  child.stdout.on('data', c => { stdout += c.toString(); });
-  child.stderr.on('data', c => { stderr += c.toString(); });
-  const launchUrl = await waitForLaunchUrl(() => stdout, () => stderr, child);
+  child.stdout.on('data', (c) => {
+    stdout += c.toString();
+  });
+  child.stderr.on('data', (c) => {
+    stderr += c.toString();
+  });
+  const launchUrl = await waitForLaunchUrl(
+    () => stdout,
+    () => stderr,
+    child,
+  );
   return {
     child,
     launchUrl,
-    get stdout() { return stdout; },
-    get stderr() { return stderr; },
+    get stdout() {
+      return stdout;
+    },
+    get stderr() {
+      return stderr;
+    },
     async stop() {
       if (child.exitCode !== null) return;
       child.kill();
-      await new Promise(resolve => child.once('exit', resolve));
+      await new Promise((resolve) => child.once('exit', resolve));
     },
   };
 }
@@ -130,7 +150,7 @@ export async function waitForEvent(events, predicate, label = 'event') {
 }
 
 export async function waitForAgentReady(events, label = 'agent_ready') {
-  return waitForEvent(events, e => e.kind === 'agent_ready' || e.kind === 'session_ready', label);
+  return waitForEvent(events, (e) => e.kind === 'agent_ready' || e.kind === 'session_ready', label);
 }
 
 /** Create a per-tab ACP session (replaces the old init-time default session). */
@@ -145,7 +165,7 @@ export async function openTestTab(base, cookie, events = null) {
   if (events) {
     await waitForEvent(
       events,
-      e => (e.kind === 'session_ready' || e.kind === 'agent_ready') && e.sessionId === tab.sessionId,
+      (e) => (e.kind === 'session_ready' || e.kind === 'agent_ready') && e.sessionId === tab.sessionId,
       'tab agent ready',
     );
   }
@@ -157,7 +177,7 @@ export function makeUrl(base, path) {
 }
 
 export function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function waitForLaunchUrl(readStdout, readStderr, child) {
@@ -178,8 +198,14 @@ class TestClassList {
     this.owner = owner;
     this.values = new Set();
   }
-  add(...names) { for (const name of names) this.values.add(name); this.sync(); }
-  remove(...names) { for (const name of names) this.values.delete(name); this.sync(); }
+  add(...names) {
+    for (const name of names) this.values.add(name);
+    this.sync();
+  }
+  remove(...names) {
+    for (const name of names) this.values.delete(name);
+    this.sync();
+  }
   toggle(name, force) {
     const next = force === undefined ? !this.values.has(name) : !!force;
     if (next) this.values.add(name);
@@ -187,10 +213,18 @@ class TestClassList {
     this.sync();
     return next;
   }
-  contains(name) { return this.values.has(name); }
-  sync() { this.owner.className = Array.from(this.values).join(' '); }
+  contains(name) {
+    return this.values.has(name);
+  }
+  sync() {
+    this.owner.className = Array.from(this.values).join(' ');
+  }
   fromString(value) {
-    this.values = new Set(String(value ?? '').split(/\s+/).filter(Boolean));
+    this.values = new Set(
+      String(value ?? '')
+        .split(/\s+/)
+        .filter(Boolean),
+    );
     this.sync();
   }
 }
@@ -218,21 +252,29 @@ export class TestElement {
     this._className = String(value ?? '');
     if (this.classList) this.classList.values = new Set(this._className.split(/\s+/).filter(Boolean));
   }
-  get className() { return this._className; }
-  set textContent(value) { this._text = String(value ?? ''); }
+  get className() {
+    return this._className;
+  }
+  set textContent(value) {
+    this._text = String(value ?? '');
+  }
   get textContent() {
-    return this._text || this.children.map(c => c.textContent).join('');
+    return this._text || this.children.map((c) => c.textContent).join('');
   }
   set innerHTML(value) {
     this._html = String(value ?? '');
     this.children = [];
     populateFromHtml(this, this._html);
   }
-  get innerHTML() { return this._html; }
-  get lastElementChild() { return this.children[this.children.length - 1] ?? null; }
+  get innerHTML() {
+    return this._html;
+  }
+  get lastElementChild() {
+    return this.children[this.children.length - 1] ?? null;
+  }
   get elements() {
     const out = [];
-    walk(this, el => {
+    walk(this, (el) => {
       if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(el.tagName)) out.push(el);
     });
     return out;
@@ -243,12 +285,34 @@ export class TestElement {
     this.children.push(child);
     return child;
   }
+  insertBefore(child, before) {
+    child.parentElement = this;
+    const idx = this.children.indexOf(before);
+    if (idx < 0) this.children.push(child);
+    else this.children.splice(idx, 0, child);
+    return child;
+  }
+  replaceChildren(...nodes) {
+    this.children = [];
+    this._html = '';
+    this._text = '';
+    this.append(...nodes);
+  }
+  before(...nodes) {
+    if (!this.parentElement) return;
+    const parent = this.parentElement;
+    let idx = parent.children.indexOf(this);
+    for (const node of nodes) {
+      const child = typeof node === 'string' ? makeTextNode(node) : node;
+      child.parentElement = parent;
+      parent.children.splice(idx, 0, child);
+      idx++;
+    }
+  }
   append(...nodes) {
     for (const node of nodes) {
       if (typeof node === 'string') {
-        const text = new TestElement('#text');
-        text.textContent = node;
-        this.appendChild(text);
+        this.appendChild(makeTextNode(node));
       } else {
         this.appendChild(node);
       }
@@ -257,7 +321,7 @@ export class TestElement {
   remove() {
     const parent = this.parentElement;
     if (!parent) return;
-    parent.children = parent.children.filter(child => child !== this);
+    parent.children = parent.children.filter((child) => child !== this);
     this.parentElement = null;
   }
   setAttribute(name, value) {
@@ -269,7 +333,9 @@ export class TestElement {
     if (name === 'name') this.name = String(value);
     if (name === 'value') this.value = String(value);
   }
-  getAttribute(name) { return this.attributes.get(name) ?? null; }
+  getAttribute(name) {
+    return this.attributes.get(name) ?? null;
+  }
   toggleAttribute(name, force) {
     const next = force === undefined ? !this.attributes.has(name) : !!force;
     if (next) this.attributes.set(name, '');
@@ -288,18 +354,24 @@ export class TestElement {
     for (const handler of this.listeners.get(event.type) ?? []) handler(event);
     return true;
   }
-  click() { this.dispatchEvent({ type: 'click' }); }
+  click() {
+    this.dispatchEvent({ type: 'click' });
+  }
   focus() {
     this.focused = true;
     if (globalThis.document) globalThis.document.activeElement = this;
   }
-  select() { this.selected = true; }
+  select() {
+    this.selected = true;
+  }
   querySelector(selector) {
     return findElement(this, selector);
   }
   querySelectorAll(selector) {
     const out = [];
-    walk(this, el => { if (matchesSelector(el, selector)) out.push(el); });
+    walk(this, (el) => {
+      if (matchesSelector(el, selector)) out.push(el);
+    });
     return out;
   }
   closest(selector) {
@@ -323,9 +395,15 @@ export function installDomStubs({ storage = {}, fetchImpl = null } = {}) {
   globalThis.history = { replaceState() {} };
   globalThis.matchMedia = () => ({ matches: false });
   globalThis.localStorage = {
-    getItem(key) { return Object.hasOwn(storage, key) ? storage[key] : null; },
-    setItem(key, value) { storage[key] = String(value); },
-    removeItem(key) { delete storage[key]; },
+    getItem(key) {
+      return Object.hasOwn(storage, key) ? storage[key] : null;
+    },
+    setItem(key, value) {
+      storage[key] = String(value);
+    },
+    removeItem(key) {
+      delete storage[key];
+    },
   };
   globalThis.window = {
     matchMedia: globalThis.matchMedia,
@@ -337,7 +415,12 @@ export function installDomStubs({ storage = {}, fetchImpl = null } = {}) {
   globalThis.document = {
     body,
     activeElement: body,
-    createElement(tag) { return new TestElement(tag); },
+    createElement(tag) {
+      return new TestElement(tag);
+    },
+    createTextNode(value) {
+      return makeTextNode(value);
+    },
     getElementById(id) {
       if (!elements.has(id)) {
         const el = new TestElement(id === 'input' ? 'textarea' : 'div');
@@ -353,7 +436,9 @@ export function installDomStubs({ storage = {}, fetchImpl = null } = {}) {
     },
     querySelectorAll(selector) {
       const out = [];
-      walk(body, el => { if (matchesSelector(el, selector)) out.push(el); });
+      walk(body, (el) => {
+        if (matchesSelector(el, selector)) out.push(el);
+      });
       return out;
     },
     addEventListener() {},
@@ -368,9 +453,17 @@ export function installDomStubs({ storage = {}, fetchImpl = null } = {}) {
         this.values.set(el.name, el.type === 'checkbox' ? (el.checked ? 'on' : '') : (el.value ?? ''));
       }
     }
-    get(name) { return this.values.has(name) ? this.values.get(name) : null; }
+    get(name) {
+      return this.values.has(name) ? this.values.get(name) : null;
+    }
   };
   return { elements, storage, body };
+}
+
+function makeTextNode(value) {
+  const text = new TestElement('#text');
+  text.textContent = value;
+  return text;
 }
 
 function populateFromHtml(parent, html) {
@@ -395,7 +488,7 @@ function applyAttributes(el, attrs) {
 
 function findElement(root, selector) {
   let found = null;
-  walk(root, el => {
+  walk(root, (el) => {
     if (!found && matchesSelector(el, selector)) found = el;
   });
   return found;
@@ -410,7 +503,7 @@ function walk(root, fn) {
 
 function matchesSelector(el, selector) {
   if (!el) return false;
-  if (selector.includes(',')) return selector.split(',').some(part => matchesSelector(el, part.trim()));
+  if (selector.includes(',')) return selector.split(',').some((part) => matchesSelector(el, part.trim()));
   const notAttr = selector.match(/^(.+):not\(\[([^=\]]+)(?:="([^"]*)")?\]\)$/);
   if (notAttr) {
     if (matchesSelector(el, `[${notAttr[2]}${notAttr[3] === undefined ? '' : `="${notAttr[3]}"`}]`)) return false;

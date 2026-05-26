@@ -1,14 +1,14 @@
-// Shared client state + DOM refs. Imported by every other module that
-// needs them. Keep this module dependency-free.
+// Shared client state + DOM refs. Imported by every other module that needs them.
+
+import { getString, setString } from './ui/storage.js';
 
 // Per-tab session ID. Sourced from URL ?session= first, then localStorage.
 // May be null on first load — main.js creates one via /tab/new.
 const _params = new URLSearchParams(location.search);
-export let TAB_SESSION_ID = _params.get('session') || localStorage.getItem('grokweb.tabSessionId') || null;
+export let TAB_SESSION_ID = _params.get('session') || getString('grokweb.tabSessionId', null);
 export function setTabSessionId(id) {
   TAB_SESSION_ID = id;
-  if (id) localStorage.setItem('grokweb.tabSessionId', id);
-  else localStorage.removeItem('grokweb.tabSessionId');
+  setString('grokweb.tabSessionId', id || null);
   // Reflect in URL so the tab is bookmarkable / reloadable.
   const u = new URL(location.href);
   if (id) u.searchParams.set('session', id);
@@ -30,12 +30,12 @@ export const state = {
   thinkingBuf: '',
   assistantEl: null,
   assistantBuf: '',
-  toolEls: new Map(),    // toolCallId -> .tool element
-  planCards: new Map(),  // toolCallId -> .plan-card element
+  toolEls: new Map(), // toolCallId -> .tool element
+  planCards: new Map(), // toolCallId -> .plan-card element
 
   // Survives across turns until resolved.
-  permCards: new Map(),  // rpcId -> .perm-card element
-  elicitationCards: new Map(),  // rpcId -> .elicitation-card element
+  permCards: new Map(), // rpcId -> .perm-card element
+  elicitationCards: new Map(), // rpcId -> .elicitation-card element
 
   // Export accumulator: structured turn data for chat export.
   exportTurns: [],
@@ -86,12 +86,15 @@ function getDomRef(key) {
   return domCache.get(key);
 }
 
-export const dom = new Proxy({}, {
-  get(_target, key) {
-    if (typeof key !== 'string') return undefined;
-    return getDomRef(key);
+export const dom = new Proxy(
+  {},
+  {
+    get(_target, key) {
+      if (typeof key !== 'string') return undefined;
+      return getDomRef(key);
+    },
+    has(_target, key) {
+      return typeof key === 'string' && Object.hasOwn(DOM_IDS, key);
+    },
   },
-  has(_target, key) {
-    return typeof key === 'string' && Object.hasOwn(DOM_IDS, key);
-  },
-});
+);

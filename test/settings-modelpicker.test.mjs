@@ -65,6 +65,25 @@ test('settings display-name-only changes avoid respawn and skip unsupported perm
   assert.equal(requests.some(r => r.url === '/session/respawn'), false);
 });
 
+test('settings groups launch fields and summarizes pending changes', async () => {
+  requests.length = 0;
+  const panel = await settings.__testOpenSettings();
+  const sections = panel.querySelectorAll('.settings-section');
+  assert.equal(sections.length, 6);
+  assert.equal(sections[0].open, true);
+  assert.equal(sections[1].open, true);
+  assert.notEqual(sections[2].open, true);
+
+  const summary = panel.querySelector('.settings-change-summary');
+  assert.equal(summary.textContent, 'No pending changes.');
+
+  const sandbox = panel.querySelectorAll('[data-key]').find(el => el.dataset.key === 'sandbox');
+  sandbox.value = 'workspace-write';
+  sandbox.dispatchEvent({ type: 'input' });
+
+  assert.match(summary.textContent, /Pending changes: Sandbox profile/);
+});
+
 test('settings traps tab focus inside the dialog', async () => {
   requests.length = 0;
   const panel = await settings.__testOpenSettings();
@@ -105,6 +124,24 @@ test('settings traps tab focus inside the dialog', async () => {
   assert.equal(prevented, false);
   assert.equal(document.activeElement, close);
   assert.ok(apply);
+});
+
+test('settings closes with Escape', async () => {
+  requests.length = 0;
+  const panel = await settings.__testOpenSettings();
+  assert.equal(panel.classList.contains('open'), true);
+  assert.equal(panel.getAttribute('aria-hidden'), 'false');
+
+  let prevented = false;
+  panel.dispatchEvent({
+    type: 'keydown',
+    key: 'Escape',
+    preventDefault() { prevented = true; },
+  });
+
+  assert.equal(prevented, true);
+  assert.equal(panel.classList.contains('open'), false);
+  assert.equal(panel.getAttribute('aria-hidden'), 'true');
 });
 
 test('settings launch changes respawn without unsupported permissionMode', async () => {

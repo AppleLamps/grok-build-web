@@ -2,10 +2,18 @@
 // appropriate renderer. Adding a new event type? Add a case here and the
 // handler module.
 
-import { state, dom } from './state.js';
+import { state, dom, TAB_SESSION_ID } from './state.js';
 import {
-  addUserItem, appendThought, appendMessage, appendUserChunk,
-  addError, setStatus, clearLog, addHookLine, collapseLastThinking, updateUsage,
+  addUserItem,
+  appendThought,
+  appendMessage,
+  appendUserChunk,
+  addError,
+  setStatus,
+  clearLog,
+  addHookLine,
+  collapseLastThinking,
+  updateUsage,
   finishStreaming,
 } from './chat.js';
 import { paintTool, renderPlanCard } from './tools.js';
@@ -197,19 +205,21 @@ export function dispatch(event) {
       hideRecoveryBanner();
       setStatus('agent restarting…', 'busy');
       setTabSessionId(null);
-      postTabNew().then((tab) => {
-        setTabSessionId(tab.sessionId);
-        reconnectSSE();
-        setStatus('reconnected', 'ready');
-      }).catch((e) => {
-        addError(`failed to start a new session after respawn: ${e.message}`);
-        showRecoveryBanner({
-          title: 'Agent restarted but session setup failed',
-          message: e.message,
-          actionLabel: 'Retry',
-          onAction: () => recoverAfterRespawn(),
+      postTabNew()
+        .then((tab) => {
+          setTabSessionId(tab.sessionId);
+          reconnectSSE();
+          setStatus('reconnected', 'ready');
+        })
+        .catch((e) => {
+          addError(`failed to start a new session after respawn: ${e.message}`);
+          showRecoveryBanner({
+            title: 'Agent restarted but session setup failed',
+            message: e.message,
+            actionLabel: 'Retry',
+            onAction: () => recoverAfterRespawn(),
+          });
         });
-      });
       break;
 
     case 'sessions_changed':
@@ -247,8 +257,10 @@ export function dispatch(event) {
 
 function handleUpdate(u) {
   // Plan mode: agent calls enter_plan_mode / exit_plan_mode as tools
-  if ((u.sessionUpdate === 'tool_call' || u.sessionUpdate === 'tool_call_update')
-      && /enter_plan_mode|exit_plan_mode/i.test(u.title ?? '')) {
+  if (
+    (u.sessionUpdate === 'tool_call' || u.sessionUpdate === 'tool_call_update') &&
+    /enter_plan_mode|exit_plan_mode/i.test(u.title ?? '')
+  ) {
     renderPlanCard(u);
     return;
   }
@@ -287,9 +299,14 @@ function handleUpdate(u) {
       setCommands(firstCommandList(u));
       break;
     case 'hook_execution':
-      for (const run of (u.runs ?? [])) {
+      for (const run of u.runs ?? []) {
         addHookLine(u.event_name, run.name, run.status?.status, run.status?.elapsed_ms);
-        ensureExportTurn().hooks.push({ event: u.event_name, name: run.name, status: run.status?.status, elapsedMs: run.status?.elapsed_ms });
+        ensureExportTurn().hooks.push({
+          event: u.event_name,
+          name: run.name,
+          status: run.status?.status,
+          elapsedMs: run.status?.elapsed_ms,
+        });
       }
       break;
     case 'session_summary_generated': {
@@ -301,7 +318,7 @@ function handleUpdate(u) {
         // Update topbar crumb if this matches the current tab's session.
         if (sid === state.currentSessionId) dom.crumb.textContent = title;
         // Update the cached recents entry and re-render sidebar.
-        const entry = state.recentsCache.find(s => s.id === sid);
+        const entry = state.recentsCache.find((s) => s.id === sid);
         if (entry) {
           entry.title = title;
           renderRecents();
@@ -324,8 +341,8 @@ function firstCommandList(update) {
 
 function hydrateTodosFromPlan(sessionId, cwd = null) {
   getSessionPlan(sessionId, cwd)
-    .then(plan => setCurrentTodos(plan.todos ?? [], { merge: false }))
-    .catch(e => addError(`session plan load failed: ${e.message}`));
+    .then((plan) => setCurrentTodos(plan.todos ?? [], { merge: false }))
+    .catch((e) => addError(`session plan load failed: ${e.message}`));
 }
 
 async function recoverAfterRespawn() {

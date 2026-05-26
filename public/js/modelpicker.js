@@ -7,6 +7,7 @@ import { toast } from './toast.js';
 import { setBusy } from './composer.js';
 import { setStatus, addError } from './chat.js';
 import { mergeModelIds, parseModelIds } from './model-ids.js';
+import { el, clear } from './ui/dom.js';
 
 function labelFor(model) {
   return model || 'grok-build';
@@ -28,34 +29,49 @@ export async function refreshModelLabel() {
 }
 
 async function openModelPicker() {
-  const wrap = document.createElement('form');
-  wrap.className = 'model-picker-form';
-  wrap.innerHTML = `
-    <div class="model-current">Current model: <strong class="model-current-value">loading...</strong></div>
-    <label>
-      <span>Model</span>
-      <select name="model"><option value="">Loading models...</option></select>
-    </label>
-    <label>
-      <span>Custom model</span>
-      <input name="customModel" type="text" placeholder="Type a model ID" />
-    </label>
-    <div class="workspace-actions">
-      <button class="apply" type="submit">Apply & restart</button>
-      <button class="cancel" type="button">Cancel</button>
-    </div>
-  `;
+  const currentEl = el('strong', { className: 'model-current-value', text: 'loading...' });
+  const select = el(
+    'select',
+    { attrs: { name: 'model' } },
+    el('option', { text: 'Loading models...', attrs: { value: '' } }),
+  );
+  const wrap = el(
+    'form',
+    { className: 'model-picker-form' },
+    el('div', { className: 'model-current' }, 'Current model: ', currentEl),
+    el('label', {}, el('span', { text: 'Model' }), select),
+    el(
+      'label',
+      {},
+      el('span', { text: 'Custom model' }),
+      el('input', {
+        attrs: { name: 'customModel', type: 'text', placeholder: 'Type a model ID' },
+      }),
+    ),
+    el(
+      'div',
+      { className: 'workspace-actions' },
+      el('button', { className: 'apply', text: 'Apply & restart', attrs: { type: 'submit' } }),
+      el('button', { className: 'cancel', text: 'Cancel', attrs: { type: 'button' } }),
+    ),
+  );
   const { close } = modal('Change model', wrap);
-  const select = wrap.querySelector('select');
-  const currentEl = wrap.querySelector('.model-current-value');
   let current = {};
-  try { current = await getSpawnOpts(); } catch { current = {}; }
+  try {
+    current = await getSpawnOpts();
+  } catch {
+    current = {};
+  }
   currentEl.textContent = labelFor(current.model);
   let raw = '';
-  try { raw = await cliModels(); } catch { /* fallback list below */ }
+  try {
+    raw = await cliModels();
+  } catch {
+    /* fallback list below */
+  }
   const ids = mergeModelIds(raw, current.model);
   const opts = ['', ...ids];
-  select.innerHTML = '';
+  clear(select);
   for (const id of opts) {
     const option = document.createElement('option');
     option.value = id;

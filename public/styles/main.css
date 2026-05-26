@@ -587,16 +587,16 @@ main {
   gap: 13px;
   color: var(--ink);
 }
-.welcome-brand svg {
+.welcome-brand svg,
+.welcome-brand img {
   width: 56px;
   height: 56px;
   stroke-width: 1.8;
 }
 .welcome-brand .grok-logo {
-  width: 58px;
-  height: 58px;
-  fill: currentColor;
-  stroke: none;
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
 }
 .welcome h2 {
   font-size: clamp(38px, 5vw, 52px); font-weight: 800; letter-spacing: 0;

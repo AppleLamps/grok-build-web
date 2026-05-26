@@ -52,7 +52,10 @@ function isHorizontalRule(line) {
 
 function renderList(lines, start) {
   const first = lines[start];
-  const ordered = /^\s*\d+\.\s+/.test(first);
+  const orderedMatch = first.match(/^\s*(\d+)\.\s+/);
+  const ordered = !!orderedMatch;
+  const firstNumber = Math.max(1, Number(orderedMatch?.[1] ?? 1) || 1);
+  let nextNumber = firstNumber;
   const prefixRe = ordered ? /^\s*\d+\.\s+/ : /^\s*[-*+]\s+/;
   const items = [];
   let i = start;
@@ -64,15 +67,17 @@ function renderList(lines, start) {
       i++;
     }
     const task = itemText.match(/^\[([ xX])\]\s+([\s\S]*)$/);
+    const valueAttr = ordered ? ` value="${nextNumber++}"` : '';
     if (task) {
       const checked = task[1].toLowerCase() === 'x' ? ' checked' : '';
-      items.push(`<li class="task-item"><input type="checkbox" disabled${checked}>${renderInline(task[2])}</li>`);
+      items.push(`<li${valueAttr} class="task-item"><input type="checkbox" disabled${checked}>${renderInline(task[2])}</li>`);
     } else {
-      items.push(`<li>${renderInline(itemText)}</li>`);
+      items.push(`<li${valueAttr}>${renderInline(itemText)}</li>`);
     }
   }
   const tag = ordered ? 'ol' : 'ul';
-  return { next: i, html: `<${tag}>${items.join('')}</${tag}>` };
+  const startAttr = ordered && firstNumber !== 1 ? ` start="${firstNumber}"` : '';
+  return { next: i, html: `<${tag}${startAttr}>${items.join('')}</${tag}>` };
 }
 
 function splitTableRow(line) {

@@ -84,14 +84,16 @@ export function appendThought(text) {
     state.thinkingEl = document.createElement('div');
     state.thinkingEl.className = 'thinking';
     state.thinkingEl.innerHTML = `
-      <span class="label">
+      <button class="label" type="button" aria-expanded="true" title="Toggle thinking trace">
         <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-        Thinking
-      </span>
-      <span class="body"></span>
+        <span class="label-main">Thinking trace</span>
+        <span class="label-state">live</span>
+      </button>
+      <div class="body"></div>
     `;
-    state.thinkingEl.querySelector('.label').addEventListener('click', () => {
-      state.thinkingEl.classList.toggle('collapsed');
+    state.thinkingEl.querySelector('.label').addEventListener('click', (e) => {
+      const collapsed = state.thinkingEl.classList.toggle('collapsed');
+      e.currentTarget.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     });
     state.turnEl.appendChild(state.thinkingEl);
   }
@@ -104,7 +106,12 @@ export function collapseLastThinking() {
   if (!state.turnEl) return;
   finishThinkingRender();
   const t = state.turnEl.querySelector('.thinking');
-  if (t) t.classList.add('collapsed');
+  if (t) {
+    t.classList.add('collapsed');
+    t.querySelector('.label')?.setAttribute('aria-expanded', 'false');
+    const stateLabel = t.querySelector('.label-state');
+    if (stateLabel) stateLabel.textContent = 'done';
+  }
 }
 
 export function appendMessage(text) {

@@ -70,6 +70,41 @@ const BRIDGE_FIELDS = [
     hint: 'Shown in the sidebar footer. Leave blank to use your OS username.' },
 ];
 
+function dispatchModeEl() {
+  const wrap = document.createElement('div');
+  wrap.className = 'setting-field';
+  const lab = document.createElement('label');
+  lab.htmlFor = 'setting-dispatch-mode';
+  lab.textContent = 'Dispatch mode';
+  const input = document.createElement('select');
+  input.id = 'setting-dispatch-mode';
+  input.className = 'settings-dispatch-mode';
+  const composerSendMode = document.getElementById('send-mode');
+  const sourceOptions = Array.from(composerSendMode?.options ?? [
+    { value: 'agent', textContent: 'Interactive' },
+    { value: 'check', textContent: '+ self-check (headless)' },
+    { value: 'best3', textContent: 'Best of 3 (headless)' },
+    { value: 'best5', textContent: 'Best of 5 (headless)' },
+  ]);
+  for (const opt of sourceOptions) {
+    const o = document.createElement('option');
+    o.value = opt.value;
+    o.textContent = opt.textContent;
+    input.appendChild(o);
+  }
+  input.value = composerSendMode?.value ?? localStorage.getItem('grokweb.sendMode') ?? 'agent';
+  input.addEventListener('change', () => {
+    if (composerSendMode) composerSendMode.value = input.value;
+    localStorage.setItem('grokweb.sendMode', input.value);
+    composerSendMode?.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  const h = document.createElement('div');
+  h.className = 'setting-hint';
+  h.textContent = 'Controls how the next composer prompt is sent.';
+  wrap.append(lab, input, h);
+  return wrap;
+}
+
 function fieldEl(f, value) {
   const wrap = document.createElement('div');
   wrap.className = 'setting-field';
@@ -217,6 +252,11 @@ async function open() {
   profileHead.textContent = 'Profile';
   body.appendChild(profileHead);
   for (const f of BRIDGE_FIELDS) body.appendChild(fieldEl(f, bridgeCurrent[f.key]));
+  const composerHead = document.createElement('div');
+  composerHead.className = 'settings-group-head';
+  composerHead.textContent = 'Composer';
+  body.appendChild(composerHead);
+  body.appendChild(dispatchModeEl());
   const launchHead = document.createElement('div');
   launchHead.className = 'settings-group-head';
   launchHead.textContent = 'Agent launch';

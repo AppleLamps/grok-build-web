@@ -7,7 +7,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles/main.css">
   <link rel="stylesheet" href="/static/styles/cards.css">
 </head>
@@ -16,24 +16,26 @@
 <a class="skip-link" href="#main-content">Skip to main content</a>
 <aside id="sidebar">
   <div class="brand">
-    <div>
-      <span class="name">Grok</span><span class="pill">web</span>
-    </div>
+    <div class="brand-mark" id="brand-home" aria-label="Grok Web">Grok Web</div>
     <div class="icons">
-      <button title="Search" aria-label="Search">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <button class="collapse-btn" title="Collapse sidebar" aria-label="Collapse sidebar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
       </button>
     </div>
   </div>
 
   <div class="nav">
+    <button id="sidebar-search-btn" type="button" title="Search" aria-label="Search" data-sidebar-search>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      Search
+    </button>
     <button id="new-session-btn" title="Start a new session in the current cwd">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-      New session
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/><path d="M5 5h14v14H5z"/></svg>
+      New Chat
     </button>
     <button id="login-btn" title="Sign in to Grok">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-      Sign in
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+      Sign In
     </button>
     <button id="customize-btn" title="Session settings">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -166,8 +168,16 @@
   <div class="log" id="log">
     <div class="log-inner" id="log-inner">
       <div class="welcome" id="welcome">
-        <h2>What can I help with?</h2>
-        <p class="welcome-sub">Pick a starter or type your own prompt below.</p>
+        <div class="welcome-brand">
+          <svg class="grok-logo" viewBox="0 0 256 256" aria-hidden="true">
+            <path d="M255.6.3 98.4 140.5l69.4-53.9c8.8-6.8 21.5-1.3 22.7 9.8l3 28.9C201.6 85.8 222.8 40.2 255.6.3Z"/>
+            <path d="M0 238.6 151.2 99.8 88.6 153.6 0 238.6Z"/>
+            <path d="M201.3 56.5c-30-24.6-72.5-31.1-109.6-14.1C43.6 64.4 22.5 121.2 44.6 169.2c4.1 8.9 2.4 19.4-4.4 26.5L13.1 224l52.6-48.8c-14.7-34.6-3.5-76.2 28.5-98.1 23.2-15.9 52.1-18.1 76.8-8.4l30.3-12.2Z"/>
+            <path d="M190.7 93.9c13.3 28.5 8.2 63.5-15.4 87.1-25.6 25.6-65.2 29.4-94.9 11.5l-30.1 12.4c39.3 33.4 98.3 31.6 135.3-5.4 33.2-33.2 39.2-83 18-122.2l-12.9 16.6Z"/>
+          </svg>
+          <h2>Grok Web</h2><span class="pill">HEAVY</span>
+        </div>
+        <p class="welcome-sub">Local Grok CLI sessions, shaped like the Grok app.</p>
         <div class="welcome-tiles">
           <button class="welcome-tile" data-prompt="Give me a high-level tour of this codebase. What are the entry points and how do the pieces fit?">
             <span class="welcome-tile-icon" aria-hidden="true">
@@ -206,12 +216,12 @@
   <div class="composer">
     <form id="form" class="composer-inner">
       <div class="input-wrap">
-        <textarea id="input" rows="1" placeholder="Type / for commands"></textarea>
+        <button type="button" class="icon-btn attach-btn" id="attach-btn" title="Attach text files" aria-label="Attach text files">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <textarea id="input" rows="1" placeholder="Ask anything or type @ to search your apps"></textarea>
         <div class="action-row">
           <button type="button" class="mode-pill auto" id="mode-pill" aria-pressed="true" title="Click to toggle. Auto = run tools without asking; Manual = ask before each tool">Auto-approve</button>
-          <button type="button" class="icon-btn" id="attach-btn" title="Attach text files" aria-label="Attach text files">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-          </button>
           <button type="button" class="icon-btn" id="voice-btn" title="Voice input" aria-label="Voice input">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
           </button>
@@ -222,7 +232,10 @@
             <option value="best5">Best of 5 (headless)</option>
           </select>
           <button class="model-tag" id="model-tag" type="button" title="Change model">grok-build</button>
-          <button class="send-btn" id="send" type="submit" disabled aria-label="Send prompt">Send</button>
+          <button class="send-btn" id="send" type="submit" disabled aria-label="Send prompt">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="m6 11 6-6 6 6"/></svg>
+            <span class="send-label">Send</span>
+          </button>
           <button class="stop-btn" id="stop" type="button" style="display:none" title="Cancel the running turn" aria-label="Cancel running turn">Stop</button>
         </div>
       </div>

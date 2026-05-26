@@ -23,11 +23,20 @@ export function renderModePill() {
 }
 
 function autoSize() {
+  const wrap = dom.input.closest?.('.input-wrap');
   dom.input.style.height = 'auto';
-  dom.input.style.height = Math.min(220, dom.input.scrollHeight) + 'px';
+  const nextHeight = Math.min(220, dom.input.scrollHeight || 26);
+  dom.input.style.height = `${nextHeight}px`;
+  wrap?.classList.toggle('multiline', nextHeight > 38 || dom.input.value.includes('\n'));
 }
 
 export function initComposer() {
+  const savedSendMode = localStorage.getItem('grokweb.sendMode');
+  const hasSavedSendMode = savedSendMode && Array.from(dom.sendMode?.options ?? []).some((opt) => opt.value === savedSendMode);
+  if (hasSavedSendMode) {
+    dom.sendMode.value = savedSendMode;
+  }
+
   dom.form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = dom.input.value.trim();
@@ -83,6 +92,9 @@ export function initComposer() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dom.form.requestSubmit(); }
   });
   dom.input.addEventListener('input', autoSize);
+  dom.sendMode?.addEventListener('change', () => {
+    localStorage.setItem('grokweb.sendMode', dom.sendMode.value);
+  });
   dom.input.focus();
 
   // Welcome-tile shortcuts: clicking a starter tile fills the composer and sends.

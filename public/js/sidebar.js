@@ -383,7 +383,7 @@ export function initSidebar() {
     invalidateRecentsRender();
     renderRecents();
   });
-  const searchBtn = document.querySelector('.brand .icons button[title="Search"]');
+  const searchBtn = document.querySelector('[data-sidebar-search]');
   if (searchBtn && dom.recentsSearch) {
     searchBtn.addEventListener('click', () => {
       dom.recentsSearch.focus();

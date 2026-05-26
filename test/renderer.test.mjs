@@ -36,7 +36,7 @@ test('markdown renders expanded formatting safely', async () => {
   ].join('\n'));
 
   assert.match(html, /<h3>Heading<\/h3>/);
-  assert.match(html, /<ol><li>First<\/li><li>Second<\/li><\/ol>/);
+  assert.match(html, /<ol><li value="1">First<\/li><li value="2">Second<\/li><\/ol>/);
   assert.match(html, /<ul><li>Plus bullet<\/li><li class="task-item"><input type="checkbox" disabled checked>Done<\/li><li class="task-item"><input type="checkbox" disabled>Later<\/li><\/ul>/);
   assert.match(html, /<blockquote><p>quoted <strong>text<\/strong><\/p><\/blockquote>/);
   assert.match(html, /<del>removed<\/del>/);
@@ -46,6 +46,14 @@ test('markdown renders expanded formatting safely', async () => {
   assert.match(html, /class="code-block-copy"/);
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(html, /<script>/);
+});
+
+test('markdown ordered lists display sequential numbers when source repeats one', async () => {
+  installDomStubs();
+  const { renderMarkdown } = await importFresh('public/js/markdown.js');
+  const html = renderMarkdown('1. First\n1. Second\n1. Third');
+
+  assert.match(html, /<ol><li value="1">First<\/li><li value="2">Second<\/li><li value="3">Third<\/li><\/ol>/);
 });
 
 test('markdown image links stay literal and non-clickable', async () => {

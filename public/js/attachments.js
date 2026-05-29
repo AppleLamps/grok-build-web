@@ -11,11 +11,38 @@ const TEXT_MAX_BYTES = 256 * 1024;
 const BINARY_MAX_BYTES = 25 * 1024 * 1024;
 
 const TEXT_EXTS = new Set([
-  '.txt', '.md', '.js', '.mjs', '.ts', '.tsx', '.json', '.css', '.html',
-  '.py', '.sh', '.ps1', '.yml', '.yaml', '.toml', '.csv', '.xml', '.log',
+  '.txt',
+  '.md',
+  '.js',
+  '.mjs',
+  '.ts',
+  '.tsx',
+  '.json',
+  '.css',
+  '.html',
+  '.py',
+  '.sh',
+  '.ps1',
+  '.yml',
+  '.yaml',
+  '.toml',
+  '.csv',
+  '.xml',
+  '.log',
 ]);
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg']);
 const PDF_EXTS = new Set(['.pdf']);
+const MIME_EXTS = new Map([
+  ['image/png', '.png'],
+  ['image/jpeg', '.jpg'],
+  ['image/gif', '.gif'],
+  ['image/webp', '.webp'],
+  ['image/bmp', '.bmp'],
+  ['image/svg+xml', '.svg'],
+  ['application/pdf', '.pdf'],
+  ['text/plain', '.txt'],
+  ['text/markdown', '.md'],
+]);
 
 const ACCEPT_LIST = [...TEXT_EXTS, ...IMAGE_EXTS, ...PDF_EXTS].join(',');
 
@@ -29,6 +56,14 @@ function extOf(name = '') {
 
 function langFor(name = '') {
   return extOf(name).slice(1) || 'text';
+}
+
+function fallbackName(file, kind) {
+  const ext =
+    extOf(file?.name) ||
+    MIME_EXTS.get(String(file?.type ?? '').toLowerCase()) ||
+    (kind === 'pdf' ? '.pdf' : kind === 'image' ? '.png' : '.txt');
+  return file?.name || `pasted-${kind}${ext}`;
 }
 
 function fenceFor(text) {
@@ -65,7 +100,11 @@ export function hasPendingAttachments() {
 
 export function clearAttachments() {
   for (const a of pending) {
-    if (a.previewUrl) { try { URL.revokeObjectURL(a.previewUrl); } catch {} }
+    if (a.previewUrl) {
+      try {
+        URL.revokeObjectURL(a.previewUrl);
+      } catch {}
+    }
   }
   pending.length = 0;
   renderStrip();
@@ -78,13 +117,21 @@ export function onAttachmentsChange(fn) {
 }
 
 function notifyChange() {
-  for (const fn of changeListeners) { try { fn(); } catch {} }
+  for (const fn of changeListeners) {
+    try {
+      fn();
+    } catch {}
+  }
 }
 
 function removeAttachment(target) {
   const idx = pending.indexOf(target);
   if (idx < 0) return;
-  if (target.previewUrl) { try { URL.revokeObjectURL(target.previewUrl); } catch {} }
+  if (target.previewUrl) {
+    try {
+      URL.revokeObjectURL(target.previewUrl);
+    } catch {}
+  }
   pending.splice(idx, 1);
   renderStrip();
   notifyChange();
@@ -92,7 +139,11 @@ function removeAttachment(target) {
 
 function renderStrip() {
   let strip;
-  try { strip = dom.attachStrip; } catch { return; }
+  try {
+    strip = dom.attachStrip;
+  } catch {
+    return;
+  }
   if (!strip) return;
   strip.replaceChildren();
   if (!pending.length) return;
@@ -120,7 +171,8 @@ function renderStrip() {
     remove.className = 'attach-chip-remove';
     remove.type = 'button';
     remove.setAttribute('aria-label', `Remove ${a.filename}`);
-    remove.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+    remove.innerHTML =
+      '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
     remove.addEventListener('click', () => removeAttachment(a));
     chip.appendChild(remove);
     strip.appendChild(chip);
@@ -128,34 +180,36 @@ function renderStrip() {
 }
 
 async function handleTextFile(file) {
+  const name = fallbackName(file, 'file');
   if (file.size > TEXT_MAX_BYTES) {
-    toast(`${file.name} is larger than 256 KB and was skipped.`);
+    toast(`${name} is larger than 256 KB and was skipped.`);
     return;
   }
   try {
     const text = await file.text();
     const fence = fenceFor(text);
-    insertAtCursor(`Attached file: ${file.name}\n\n${fence}${langFor(file.name)}\n${text}\n${fence}`);
+    insertAtCursor(`Attached file: ${name}\n\n${fence}${langFor(name)}\n${text}\n${fence}`);
   } catch (e) {
-    toast(`Could not read ${file.name}: ${e.message}`);
+    toast(`Could not read ${name}: ${e.message}`);
   }
 }
 
 async function handleBinaryFile(file, kind) {
+  const name = fallbackName(file, kind);
   if (file.size > BINARY_MAX_BYTES) {
-    toast(`${file.name} is larger than ${Math.floor(BINARY_MAX_BYTES / (1024 * 1024))} MB and was skipped.`);
+    toast(`${name} is larger than ${Math.floor(BINARY_MAX_BYTES / (1024 * 1024))} MB and was skipped.`);
     return;
   }
   try {
     const buf = await file.arrayBuffer();
     const b64 = bytesToBase64(new Uint8Array(buf));
-    const result = await postUpload({ filename: file.name, dataBase64: b64 });
+    const result = await postUpload({ filename: name, dataBase64: b64 });
     if (!result?.ok || !result.path) {
       throw new Error(result?.error ?? 'upload failed');
     }
     const entry = {
       path: result.path,
-      filename: result.filename ?? file.name,
+      filename: result.filename ?? name,
       mediaUrl: result.mediaUrl,
       kind,
       previewUrl: kind === 'image' ? URL.createObjectURL(file) : null,
@@ -164,7 +218,7 @@ async function handleBinaryFile(file, kind) {
     renderStrip();
     notifyChange();
   } catch (e) {
-    toast(`Upload failed for ${file.name}: ${e.message}`);
+    toast(`Upload failed for ${name}: ${e.message}`);
   }
 }
 
@@ -185,12 +239,37 @@ async function handleFiles(files) {
   }
   const slots = Math.max(0, MAX_FILES - pending.length);
   for (const file of list.slice(0, slots)) {
-    const ext = extOf(file.name);
-    if (TEXT_EXTS.has(ext)) await handleTextFile(file);
-    else if (IMAGE_EXTS.has(ext)) await handleBinaryFile(file, 'image');
-    else if (PDF_EXTS.has(ext)) await handleBinaryFile(file, 'pdf');
-    else toast(`${file.name} was skipped (unsupported type).`);
+    const kind = kindForFile(file);
+    if (kind === 'text') await handleTextFile(file);
+    else if (kind === 'image') await handleBinaryFile(file, 'image');
+    else if (kind === 'pdf') await handleBinaryFile(file, 'pdf');
+    else toast(`${file.name || 'Clipboard item'} was skipped (unsupported type).`);
   }
+}
+
+function kindForFile(file) {
+  const ext = extOf(file?.name ?? '');
+  const type = String(file?.type ?? '').toLowerCase();
+  if (TEXT_EXTS.has(ext) || type.startsWith('text/')) return 'text';
+  if (IMAGE_EXTS.has(ext) || type.startsWith('image/')) return 'image';
+  if (PDF_EXTS.has(ext) || type === 'application/pdf') return 'pdf';
+  return null;
+}
+
+function filesFromClipboard(data) {
+  const files = [...(data?.files ?? [])];
+  if (files.length) return files;
+  const items = [...(data?.items ?? [])];
+  return items
+    .filter((item) => item.kind === 'file')
+    .map((item) => {
+      try {
+        return item.getAsFile();
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
 }
 
 function initDragDrop() {
@@ -235,9 +314,22 @@ function initDragDrop() {
   });
 }
 
+function initPaste() {
+  window.addEventListener('paste', async (e) => {
+    const files = filesFromClipboard(e.clipboardData);
+    if (!files.length) return;
+    e.preventDefault();
+    await handleFiles(files);
+  });
+}
+
 export function initAttachments() {
   let attachBtn;
-  try { attachBtn = dom.attachBtn; } catch { return; }
+  try {
+    attachBtn = dom.attachBtn;
+  } catch {
+    return;
+  }
   if (!attachBtn) return;
   const input = document.createElement('input');
   input.type = 'file';
@@ -251,4 +343,12 @@ export function initAttachments() {
     input.value = '';
   });
   initDragDrop();
+  initPaste();
 }
+
+export const __test = {
+  fallbackName,
+  filesFromClipboard,
+  handleFiles,
+  kindForFile,
+};

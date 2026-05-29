@@ -12,14 +12,18 @@ const READ_TIMEOUT = Number(process.env.GROK_WEB_LIVE_READ_TIMEOUT_MS ?? 90000);
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
 const liveOnly = LIVE ? false : 'set GROK_WEB_LIVE_TESTS=1 or run npm run test:live';
-const optionalX = process.env.GROK_WEB_LIVE_X_SEARCH === '1' ? false : 'set GROK_WEB_LIVE_X_SEARCH=1 to require real X search';
+const optionalX =
+  process.env.GROK_WEB_LIVE_X_SEARCH === '1' ? false : 'set GROK_WEB_LIVE_X_SEARCH=1 to require real X search';
 const optionalPlugin = process.env.GROK_WEB_LIVE_PLUGIN_MCP_NAME
   ? false
   : 'set GROK_WEB_LIVE_PLUGIN_MCP_NAME to require a specific plugin MCP server';
 
-test('live bridge bootstraps auth, SSE, sessions, settings, models, and MCP', { skip: liveOnly, timeout: LONG_TIMEOUT }, async () => {
+test('live bridge bootstraps auth, SSE, sessions, settings, models, and MCP', {
+  skip: liveOnly,
+  timeout: LONG_TIMEOUT,
+}, async () => {
   await withLiveServer(async ({ base, cookie, events, stderr }) => {
-    await waitForEvent(events, e => e.kind === 'agent_ready' || e.kind === 'session_ready', 'tab agent ready');
+    await waitForEvent(events, (e) => e.kind === 'agent_ready' || e.kind === 'session_ready', 'tab agent ready');
 
     const home = await fetch(new URL('/', base), { headers: { cookie } });
     assert.equal(home.status, 200);
@@ -31,7 +35,8 @@ test('live bridge bootstraps auth, SSE, sessions, settings, models, and MCP', { 
     const opts = await getJson(base, cookie, '/spawn-opts');
     assert.equal(opts._capabilities?.alwaysApprove, true);
     assert.equal(opts._capabilities?.noLeader, true);
-    assert.equal(opts._capabilities?.permissionMode, false);
+    assert.equal(opts._capabilities?.permissionMode, true);
+    assert.equal(opts._capabilities?.todoGate, true);
 
     const models = await getText(base, cookie, '/cli/models');
     assert.match(models, /grok/i);
@@ -46,39 +51,66 @@ test('live bridge bootstraps auth, SSE, sessions, settings, models, and MCP', { 
 test('live web search streams a real search tool update', { skip: liveOnly, timeout: LONG_TIMEOUT }, async () => {
   await withLiveServer(async ({ base, cookie, events, sessionId }) => {
     const before = events.length;
-    await postPrompt(base, cookie, sessionId, [
-      'Use the web search tool exactly once.',
-      'Search for the current xAI homepage.',
-      'After the tool result, answer in one short sentence.',
-    ].join(' '));
-    await waitForEvent(events, e => e.kind === 'turn_complete', 'turn_complete');
+    await postPrompt(
+      base,
+      cookie,
+      sessionId,
+      [
+        'Use the web search tool exactly once.',
+        'Search for the current xAI homepage.',
+        'After the tool result, answer in one short sentence.',
+      ].join(' '),
+    );
+    await waitForEvent(events, (e) => e.kind === 'turn_complete', 'turn_complete');
     const newEvents = events.slice(before);
-    assert.ok(newEvents.some(e => isToolTitle(e, /web[_ -]?search|search_web|websearch/i)), 'web search tool update streamed');
+    assert.ok(
+      newEvents.some((e) => isToolTitle(e, /web[_ -]?search|search_web|websearch/i)),
+      'web search tool update streamed',
+    );
   });
 });
 
-test('live read_file streams multimodal file tool updates for image, PDF, and PPTX fixtures', { skip: liveOnly, timeout: Math.max(LONG_TIMEOUT, READ_TIMEOUT * 5) }, async () => {
+test('live read_file streams multimodal file tool updates for image, PDF, and PPTX fixtures', {
+  skip: liveOnly,
+  timeout: Math.max(LONG_TIMEOUT, READ_TIMEOUT * 5),
+}, async () => {
   await withTempWorkspace(async (cwd) => {
     await writeMediaFixtures(cwd);
     for (const fileName of ['live.png', 'live.jpg', 'live.pdf', 'live.pptx']) {
-      await withLiveServer(async ({ base, cookie, events, sessionId }) => {
-        const before = events.length;
-        await postPrompt(base, cookie, sessionId, `Use read_file on ${fileName} in the current working directory. Stop after reading it.`);
-        await waitForReadFile(events, before, fileName);
-        await postCancel(base, cookie, sessionId);
-      }, { cwd });
+      await withLiveServer(
+        async ({ base, cookie, events, sessionId }) => {
+          const before = events.length;
+          await postPrompt(
+            base,
+            cookie,
+            sessionId,
+            `Use read_file on ${fileName} in the current working directory. Stop after reading it.`,
+          );
+          await waitForReadFile(events, before, fileName);
+          await postCancel(base, cookie, sessionId);
+        },
+        { cwd },
+      );
     }
   });
 });
 
-test('live cancel recovers from a running background-style task', { skip: liveOnly, timeout: LONG_TIMEOUT }, async () => {
+test('live cancel recovers from a running background-style task', {
+  skip: liveOnly,
+  timeout: LONG_TIMEOUT,
+}, async () => {
   await withLiveServer(async ({ base, cookie, events, sessionId }) => {
     const before = events.length;
-    await postPrompt(base, cookie, sessionId, [
-      'Run a terminal command that waits for 60 seconds.',
-      'Use a background-capable command if available.',
-      'Do not do anything else until the command is running.',
-    ].join(' '));
+    await postPrompt(
+      base,
+      cookie,
+      sessionId,
+      [
+        'Run a terminal command that waits for 60 seconds.',
+        'Use a background-capable command if available.',
+        'Do not do anything else until the command is running.',
+      ].join(' '),
+    );
     await delay(2000);
     const cancel = await fetch(sessionUrl(base, '/cancel', sessionId), {
       method: 'POST',
@@ -87,27 +119,44 @@ test('live cancel recovers from a running background-style task', { skip: liveOn
     });
     assert.equal(cancel.status, 202);
     assert.equal((await cancel.json()).ok, true);
-    await waitForEvent(events, e => e.kind === 'turn_complete' || isCancelledToolEvent(e), 'cancelled turn');
+    await waitForEvent(events, (e) => e.kind === 'turn_complete' || isCancelledToolEvent(e), 'cancelled turn');
     const newEvents = events.slice(before);
-    assert.ok(newEvents.some(e => e.kind === 'turn_complete' || isCancelledToolEvent(e)), 'cancel state streamed');
+    assert.ok(
+      newEvents.some((e) => e.kind === 'turn_complete' || isCancelledToolEvent(e)),
+      'cancel state streamed',
+    );
   });
 });
 
-test('live X search streams an X-specific search tool update', { skip: liveOnly || optionalX, timeout: LONG_TIMEOUT }, async () => {
+test('live X search streams an X-specific search tool update', {
+  skip: liveOnly || optionalX,
+  timeout: LONG_TIMEOUT,
+}, async () => {
   await withLiveServer(async ({ base, cookie, events, sessionId }) => {
     const before = events.length;
-    await postPrompt(base, cookie, sessionId, [
-      'Use X search exactly once.',
-      'Search X for recent posts from skcd42 about Grok Build.',
-      'After the tool result, answer in one short sentence.',
-    ].join(' '));
-    await waitForEvent(events, e => e.kind === 'turn_complete', 'turn_complete');
+    await postPrompt(
+      base,
+      cookie,
+      sessionId,
+      [
+        'Use X search exactly once.',
+        'Search X for recent posts from skcd42 about Grok Build.',
+        'After the tool result, answer in one short sentence.',
+      ].join(' '),
+    );
+    await waitForEvent(events, (e) => e.kind === 'turn_complete', 'turn_complete');
     const newEvents = events.slice(before);
-    assert.ok(newEvents.some(e => isToolTitle(e, /x[_ -]?search|twitter[_ -]?search|search_x|x_search_posts/i)), 'X search tool update streamed');
+    assert.ok(
+      newEvents.some((e) => isToolTitle(e, /x[_ -]?search|twitter[_ -]?search|search_x|x_search_posts/i)),
+      'X search tool update streamed',
+    );
   });
 });
 
-test('live plugin MCP list contains the configured auth-backed server', { skip: liveOnly || optionalPlugin, timeout: LONG_TIMEOUT }, async () => {
+test('live plugin MCP list contains the configured auth-backed server', {
+  skip: liveOnly || optionalPlugin,
+  timeout: LONG_TIMEOUT,
+}, async () => {
   await withLiveServer(async ({ base, cookie }) => {
     const name = process.env.GROK_WEB_LIVE_PLUGIN_MCP_NAME;
     const mcp = await getText(base, cookie, '/cli/mcp');
@@ -120,7 +169,12 @@ async function withLiveServer(fn, { cwd = null } = {}) {
   const server = await startLiveServer({ cwd });
   const abort = new AbortController();
   const events = [];
-  const stream = readEvents(sessionUrl(server.base, '/stream', server.sessionId), server.cookie, events, abort.signal).catch((e) => {
+  const stream = readEvents(
+    sessionUrl(server.base, '/stream', server.sessionId),
+    server.cookie,
+    events,
+    abort.signal,
+  ).catch((e) => {
     if (!abort.signal.aborted) throw e;
   });
   try {
@@ -146,9 +200,17 @@ async function startLiveServer({ cwd = null } = {}) {
   });
   let stdout = '';
   let stderr = '';
-  child.stdout.on('data', c => { stdout += c.toString(); });
-  child.stderr.on('data', c => { stderr += c.toString(); });
-  const launchUrl = await waitForLaunchUrl(() => stdout, () => stderr, child);
+  child.stdout.on('data', (c) => {
+    stdout += c.toString();
+  });
+  child.stderr.on('data', (c) => {
+    stderr += c.toString();
+  });
+  const launchUrl = await waitForLaunchUrl(
+    () => stdout,
+    () => stderr,
+    child,
+  );
   const first = await fetch(launchUrl, { redirect: 'manual' });
   assert.equal(first.status, 302);
   const cookie = first.headers.get('set-cookie')?.split(';')[0];
@@ -168,10 +230,7 @@ async function startLiveServer({ cwd = null } = {}) {
       } else {
         child.kill();
       }
-      await Promise.race([
-        new Promise(resolve => child.once('exit', resolve)),
-        delay(5000),
-      ]);
+      await Promise.race([new Promise((resolve) => child.once('exit', resolve)), delay(5000)]);
     },
   };
 }
@@ -281,22 +340,24 @@ async function waitForReadFile(events, before, fileName) {
         update.kind,
         update.rawInput?.path,
         update.rawInput?.file_path,
-      ].filter(Boolean).join(' ');
-      if (new RegExp(`read|${escapeRegExp(fileName)}`, 'i').test(haystack)
-          && new RegExp(escapeRegExp(fileName), 'i').test(haystack)) {
+      ]
+        .filter(Boolean)
+        .join(' ');
+      if (
+        new RegExp(`read|${escapeRegExp(fileName)}`, 'i').test(haystack) &&
+        new RegExp(escapeRegExp(fileName), 'i').test(haystack)
+      ) {
         sawReadCall = true;
         toolCallId = update.toolCallId ?? toolCallId;
       }
       const sameTool = !toolCallId || update.toolCallId === toolCallId;
-      const hasPayload = update.status === 'completed'
-        || update.content != null
-        || update.rawOutput != null
-        || update.output != null;
+      const hasPayload =
+        update.status === 'completed' || update.content != null || update.rawOutput != null || update.output != null;
       if (sawReadCall && sameTool && hasPayload) return;
     }
     await delay(100);
   }
-  const summary = events.slice(before).map(event => ({
+  const summary = events.slice(before).map((event) => ({
     kind: event.kind,
     title: event.update?.title,
     status: event.update?.status,
@@ -313,7 +374,10 @@ function isToolTitle(event, pattern) {
 
 function isCancelledToolEvent(event) {
   const update = event.update ?? {};
-  return event.kind === 'update' && /cancelled|canceled|killed/i.test(String(update.status ?? update.rawOutput?.status ?? ''));
+  return (
+    event.kind === 'update' &&
+    /cancelled|canceled|killed/i.test(String(update.status ?? update.rawOutput?.status ?? ''))
+  );
 }
 
 async function withTempWorkspace(fn) {
@@ -327,28 +391,38 @@ async function withTempWorkspace(fn) {
 
 async function writeMediaFixtures(cwd) {
   await mkdir(cwd, { recursive: true });
-  await writeFile(join(cwd, 'live.png'), Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
-    'base64',
-  ));
-  await writeFile(join(cwd, 'live.jpg'), Buffer.from(
-    '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/ASP/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/ASP/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Aqf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IV//2gAMAwEAAgADAAAAEP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QH//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QH//EABQQAQAAAAAAAAAAAAAAAAAAABD/2gAIAQEAAT8QH//Z',
-    'base64',
-  ));
-  await writeFile(join(cwd, 'live.pdf'), [
-    '%PDF-1.4',
-    '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
-    '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
-    '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >> endobj',
-    '4 0 obj << /Length 44 >> stream',
-    'BT /F1 12 Tf 20 100 Td (Live PDF fixture) Tj ET',
-    'endstream endobj',
-    'xref',
-    '0 5',
-    '0000000000 65535 f ',
-    'trailer << /Root 1 0 R >>',
-    '%%EOF',
-  ].join('\n'), 'utf8');
+  await writeFile(
+    join(cwd, 'live.png'),
+    Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+      'base64',
+    ),
+  );
+  await writeFile(
+    join(cwd, 'live.jpg'),
+    Buffer.from(
+      '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/ASP/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/ASP/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Aqf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IV//2gAMAwEAAgADAAAAEP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QH//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QH//EABQQAQAAAAAAAAAAAAAAAAAAABD/2gAIAQEAAT8QH//Z',
+      'base64',
+    ),
+  );
+  await writeFile(
+    join(cwd, 'live.pdf'),
+    [
+      '%PDF-1.4',
+      '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
+      '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
+      '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >> endobj',
+      '4 0 obj << /Length 44 >> stream',
+      'BT /F1 12 Tf 20 100 Td (Live PDF fixture) Tj ET',
+      'endstream endobj',
+      'xref',
+      '0 5',
+      '0000000000 65535 f ',
+      'trailer << /Root 1 0 R >>',
+      '%%EOF',
+    ].join('\n'),
+    'utf8',
+  );
   await writeFile(join(cwd, 'live.pptx'), makePptxFixture());
 }
 
@@ -446,7 +520,7 @@ function crc32(buffer) {
 }
 
 function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function escapeRegExp(value) {

@@ -65,10 +65,17 @@ test('sidebar skips unchanged recents renders and repaints changed visible state
 });
 
 test('settings disables permissionMode when the CLI does not support it', async () => {
-  const field = settings.__testFields.find(f => f.key === 'permissionMode');
+  const field = settings.__testFields.find((f) => f.key === 'permissionMode');
   const el = settings.__testFieldEl(field, null, { _capabilities: { permissionMode: false } });
   const select = el.querySelector('select');
   assert.equal(select.disabled, true);
   assert.equal(select.dataset.unsupported, '1');
-  assert.ok(el.querySelectorAll('.setting-hint').some(h => /Unsupported/.test(h.textContent)));
+  assert.ok(el.querySelectorAll('.setting-hint').some((h) => /Unsupported/.test(h.textContent)));
+});
+
+test('settings exposes current permission modes when supported', async () => {
+  const field = settings.__testFields.find((f) => f.key === 'permissionMode');
+  const el = settings.__testFieldEl(field, 'auto', { _capabilities: { permissionMode: true } });
+  const values = [...el.querySelector('select').children].map((child) => child.value);
+  assert.deepEqual(values, ['', 'default', 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions', 'plan']);
 });

@@ -50,9 +50,12 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
       const tab = await openTestTab(base, cookie, events);
 
-      const sessions = await fetch(makeUrl(base, '/sessions'), { headers: { cookie } }).then(r => r.json());
+      const sessions = await fetch(makeUrl(base, '/sessions'), { headers: { cookie } }).then((r) => r.json());
       assert.equal(sessions.sessions.length, 2);
-      assert.ok(sessions.sessions.some(s => s.numMessages === 0), 'empty session summary is returned for client filtering');
+      assert.ok(
+        sessions.sessions.some((s) => s.numMessages === 0),
+        'empty session summary is returned for client filtering',
+      );
 
       const prompt = await fetch(makeUrl(base, '/prompt'), {
         method: 'POST',
@@ -60,12 +63,27 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
         body: JSON.stringify({ text: 'run fake smoke', sessionId: tab.sessionId }),
       });
       assert.equal(prompt.status, 202);
-      await waitForEvent(events, e => e.kind === 'turn_complete', 'turn_complete');
-      assert.ok(events.some(e => e.kind === 'permission_auto_allowed'), 'permission request was handled');
-      assert.ok(events.some(e => e.kind === 'elicitation_request'), 'elicitation request was surfaced');
-      assert.ok(events.some(e => e.kind === 'meta' && e.method === 'fake/unknown_client_request'), 'unknown request was surfaced as meta');
-      assert.ok(events.some(e => e.kind === 'update' && e.update?.title === 'x_search_posts'), 'x search update streamed');
-      assert.ok(events.some(e => e.kind === 'update' && e.update?.title === 'imagine_video'), 'video update streamed');
+      await waitForEvent(events, (e) => e.kind === 'turn_complete', 'turn_complete');
+      assert.ok(
+        events.some((e) => e.kind === 'permission_auto_allowed'),
+        'permission request was handled',
+      );
+      assert.ok(
+        events.some((e) => e.kind === 'elicitation_request'),
+        'elicitation request was surfaced',
+      );
+      assert.ok(
+        events.some((e) => e.kind === 'meta' && e.method === 'fake/unknown_client_request'),
+        'unknown request was surfaced as meta',
+      );
+      assert.ok(
+        events.some((e) => e.kind === 'update' && e.update?.title === 'x_search_posts'),
+        'x search update streamed',
+      );
+      assert.ok(
+        events.some((e) => e.kind === 'update' && e.update?.title === 'imagine_video'),
+        'video update streamed',
+      );
 
       const cancel = await fetch(makeUrl(base, '/cancel'), {
         method: 'POST',
@@ -76,10 +94,11 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
       assert.equal(cancel.headers.get('content-type'), 'application/json');
       assert.equal((await cancel.json()).ok, true);
 
-      const opts = await fetch(makeUrl(base, '/spawn-opts'), { headers: { cookie } }).then(r => r.json());
+      const opts = await fetch(makeUrl(base, '/spawn-opts'), { headers: { cookie } }).then((r) => r.json());
       assert.equal(opts.alwaysApprove, true);
       assert.equal(opts._capabilities.noLeader, true);
-      assert.equal(opts._capabilities.permissionMode, false);
+      assert.equal(opts._capabilities.permissionMode, true);
+      assert.equal(opts._capabilities.todoGate, true);
 
       const oneshotText = 'line 1\n--not-a-flag\n<script>x</script>';
       const oneshot = await fetch(makeUrl(base, '/cli/oneshot'), {
@@ -91,12 +110,17 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
       const oneshotData = await oneshot.json();
       const fakeResult = JSON.parse(oneshotData.stdout);
       assert.deepEqual(fakeResult.args, [
-        '--effort', 'future-effort',
-        '--best-of-n', '3',
-        '--max-turns', '4',
+        '--effort',
+        'future-effort',
+        '--best-of-n',
+        '3',
+        '--max-turns',
+        '4',
         '--always-approve',
-        '--output-format', 'json',
-        '-p', oneshotText,
+        '--output-format',
+        'json',
+        '-p',
+        oneshotText,
       ]);
       assert.equal(fakeResult.prompt, oneshotText);
 
@@ -136,10 +160,10 @@ test('auto-approve cancels permission requests that have no options', async () =
         body: JSON.stringify({ text: 'permission empty probe', sessionId: tab.sessionId }),
       });
       assert.equal(prompt.status, 202);
-      await waitForEvent(events, e => e.kind === 'turn_complete', 'turn_complete');
+      await waitForEvent(events, (e) => e.kind === 'turn_complete', 'turn_complete');
 
-      assert.ok(events.some(e => e.kind === 'permission_auto_cancelled' && e.reason === 'no_options'));
-      const probe = events.find(e => e.kind === 'update' && e.update?.toolCallId === 'permission-empty');
+      assert.ok(events.some((e) => e.kind === 'permission_auto_cancelled' && e.reason === 'no_options'));
+      const probe = events.find((e) => e.kind === 'update' && e.update?.toolCallId === 'permission-empty');
       assert.equal(probe?.update?.rawOutput?.permissionOutcome?.outcome, 'cancelled');
       assert.equal(probe?.update?.rawOutput?.permissionOutcome?.optionId, undefined);
 
@@ -170,7 +194,7 @@ test('ask_user_question is surfaced as elicitation and replies with outcome', as
 
       const request = await waitForEvent(
         events,
-        e => e.kind === 'elicitation_request' && e.request?.mode === 'question',
+        (e) => e.kind === 'elicitation_request' && e.request?.mode === 'question',
         'question request',
       );
       assert.equal(request.request.questions[0].question, 'Which UI improvement should be prioritized?');
@@ -182,8 +206,10 @@ test('ask_user_question is surfaced as elicitation and replies with outcome', as
       });
       assert.equal(answer.status, 200);
 
-      await waitForEvent(events, e => e.kind === 'turn_complete', 'turn_complete');
-      const probe = events.find(e => e.kind === 'update' && e.update?.toolCallId === 'ask-question-1' && e.update?.status === 'completed');
+      await waitForEvent(events, (e) => e.kind === 'turn_complete', 'turn_complete');
+      const probe = events.find(
+        (e) => e.kind === 'update' && e.update?.toolCallId === 'ask-question-1' && e.update?.status === 'completed',
+      );
       assert.equal(probe?.update?.rawOutput?.questionOutcome?.outcome, 'accepted');
       assert.deepEqual(probe?.update?.rawOutput?.questionOutcome?.answers, ['mobile']);
       assert.equal(probe?.update?.rawOutput?.questionOutcome?.partial_answers, false);
@@ -217,9 +243,15 @@ test('ask_user_question timeout resolves with empty outcome', async () => {
       });
       assert.equal(prompt.status, 202);
 
-      await waitForEvent(events, e => e.kind === 'elicitation_timeout' || e.kind === 'elicitation_resolved', 'question timeout');
-      await waitForEvent(events, e => e.kind === 'turn_complete', 'turn_complete');
-      const probe = events.find(e => e.kind === 'update' && e.update?.toolCallId === 'ask-question-1' && e.update?.status === 'completed');
+      await waitForEvent(
+        events,
+        (e) => e.kind === 'elicitation_timeout' || e.kind === 'elicitation_resolved',
+        'question timeout',
+      );
+      await waitForEvent(events, (e) => e.kind === 'turn_complete', 'turn_complete');
+      const probe = events.find(
+        (e) => e.kind === 'update' && e.update?.toolCallId === 'ask-question-1' && e.update?.status === 'completed',
+      );
       assert.equal(probe?.update?.rawOutput?.questionOutcome?.outcome, 'cancelled');
 
       abort.abort();
@@ -246,10 +278,10 @@ test('unknown x.ai client requests return JSON-RPC errors and diagnostic meta', 
         body: JSON.stringify({ text: 'unknown x request probe', sessionId: tab.sessionId }),
       });
       assert.equal(prompt.status, 202);
-      await waitForEvent(events, e => e.kind === 'turn_complete', 'turn_complete');
+      await waitForEvent(events, (e) => e.kind === 'turn_complete', 'turn_complete');
 
-      assert.ok(events.some(e => e.kind === 'meta' && e.method === '_x.ai/future_method' && e.unsupported === true));
-      const probe = events.find(e => e.kind === 'update' && e.update?.toolCallId === 'unknown-x-1');
+      assert.ok(events.some((e) => e.kind === 'meta' && e.method === '_x.ai/future_method' && e.unsupported === true));
+      const probe = events.find((e) => e.kind === 'update' && e.update?.toolCallId === 'unknown-x-1');
       assert.equal(probe?.update?.rawOutput?.response?.error?.code, -32601);
 
       abort.abort();
@@ -340,7 +372,11 @@ test('respawn clears stale permission timers before reused RPC IDs can resolve n
         body: JSON.stringify({ text: 'park first permission', sessionId: tab.sessionId }),
       });
       assert.equal(firstPrompt.status, 202);
-      await waitForEvent(events, e => e.kind === 'permission_request' && e.rpcId === 1000, 'first permission_request');
+      await waitForEvent(
+        events,
+        (e) => e.kind === 'permission_request' && e.rpcId === 1000,
+        'first permission_request',
+      );
 
       await delay(700);
       const respawn = await fetch(makeUrl(base, '/session/respawn'), {
@@ -349,8 +385,12 @@ test('respawn clears stale permission timers before reused RPC IDs can resolve n
         body: JSON.stringify({ sessionId: tab.sessionId }),
       });
       assert.equal(respawn.status, 200);
-      await waitForEvent(events, e => e.kind === 'agent_respawn' && e.sessionId === tab.sessionId, 'agent_respawn');
-      await waitForEvent(events, e => e.kind === 'agent_ready' && e.sessionId === tab.sessionId, 'respawned agent_ready');
+      await waitForEvent(events, (e) => e.kind === 'agent_respawn' && e.sessionId === tab.sessionId, 'agent_respawn');
+      await waitForEvent(
+        events,
+        (e) => e.kind === 'agent_ready' && e.sessionId === tab.sessionId,
+        'respawned agent_ready',
+      );
 
       const secondPrompt = await fetch(makeUrl(base, '/prompt'), {
         method: 'POST',
@@ -360,12 +400,15 @@ test('respawn clears stale permission timers before reused RPC IDs can resolve n
       assert.equal(secondPrompt.status, 202);
       await waitForEvent(
         events,
-        () => events.filter(e => e.kind === 'permission_request' && e.rpcId === 1000).length === 2,
+        () => events.filter((e) => e.kind === 'permission_request' && e.rpcId === 1000).length === 2,
         'second permission_request with reused rpcId',
       );
 
       await delay(1300);
-      assert.equal(events.some(e => e.kind === 'permission_timeout' && e.rpcId === 1000), false);
+      assert.equal(
+        events.some((e) => e.kind === 'permission_timeout' && e.rpcId === 1000),
+        false,
+      );
 
       const answer = await fetch(makeUrl(base, '/permission'), {
         method: 'POST',
@@ -415,9 +458,11 @@ test('tab session load is serialized with concurrent respawns', async () => {
       assert.equal(respawnResponse.status, 200);
       assert.equal((await respawnResponse.json()).spawnOpts.model, 'grok-4.3');
 
-      await waitForEvent(events, e => e.kind === 'agent_respawn', 'agent_respawn');
-      const loadedIndex = events.findIndex(e => e.kind === 'session_ready' && e.sessionId === 'slow-loaded-session' && e.loaded);
-      const respawnIndex = events.findIndex(e => e.kind === 'agent_respawn');
+      await waitForEvent(events, (e) => e.kind === 'agent_respawn', 'agent_respawn');
+      const loadedIndex = events.findIndex(
+        (e) => e.kind === 'session_ready' && e.sessionId === 'slow-loaded-session' && e.loaded,
+      );
+      const respawnIndex = events.findIndex((e) => e.kind === 'agent_respawn');
       assert.notEqual(loadedIndex, -1, 'tab load completed');
       assert.notEqual(respawnIndex, -1, 'respawn event was emitted');
       assert.ok(loadedIndex < respawnIndex, 'tab load finished before queued respawn');
@@ -445,8 +490,8 @@ test('tab prompts on different sessions run in parallel', async () => {
 
       const tabA = await postJson(base, cookie, '/tab/new', {});
       const tabB = await postJson(base, cookie, '/tab/new', {});
-      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tabA.sessionId, 'tab A ready');
-      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tabB.sessionId, 'tab B ready');
+      await waitForEvent(events, (e) => e.kind === 'session_ready' && e.sessionId === tabA.sessionId, 'tab A ready');
+      await waitForEvent(events, (e) => e.kind === 'session_ready' && e.sessionId === tabB.sessionId, 'tab B ready');
 
       const first = await postJson(base, cookie, '/prompt', { sessionId: tabA.sessionId, text: 'prompt A' }, 202);
       const second = await postJson(base, cookie, '/prompt', { sessionId: tabB.sessionId, text: 'prompt B' }, 202);
@@ -457,14 +502,19 @@ test('tab prompts on different sessions run in parallel', async () => {
 
       const startedAt = Date.now();
       await Promise.all([
-        waitForEvent(events, e => e.kind === 'turn_complete' && e.sessionId === tabA.sessionId, 'tab A complete'),
-        waitForEvent(events, e => e.kind === 'turn_complete' && e.sessionId === tabB.sessionId, 'tab B complete'),
+        waitForEvent(events, (e) => e.kind === 'turn_complete' && e.sessionId === tabA.sessionId, 'tab A complete'),
+        waitForEvent(events, (e) => e.kind === 'turn_complete' && e.sessionId === tabB.sessionId, 'tab B complete'),
       ]);
       assert.ok(Date.now() - startedAt < 450, 'parallel prompts should finish faster than serial 500ms');
 
-      const starts = events.filter(e => e.kind === 'meta' && e.method === '_x.ai/fake_prompt_probe' && e.params?.phase === 'start');
-      assert.deepEqual(starts.map(e => e.sessionId).sort(), [tabA.sessionId, tabB.sessionId].sort());
-      assert.equal(events.some(e => e.kind === 'turn_queued' && e.sessionId === tabB.sessionId && e.turnId === second.turnId), false);
+      const starts = events.filter(
+        (e) => e.kind === 'meta' && e.method === '_x.ai/fake_prompt_probe' && e.params?.phase === 'start',
+      );
+      assert.deepEqual(starts.map((e) => e.sessionId).sort(), [tabA.sessionId, tabB.sessionId].sort());
+      assert.equal(
+        events.some((e) => e.kind === 'turn_queued' && e.sessionId === tabB.sessionId && e.turnId === second.turnId),
+        false,
+      );
 
       abort.abort();
       await stream;
@@ -488,7 +538,7 @@ test('cancel removes queued turns without sending them to the agent', async () =
       const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
 
       const tab = await postJson(base, cookie, '/tab/new', {});
-      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tab.sessionId, 'tab ready');
+      await waitForEvent(events, (e) => e.kind === 'session_ready' && e.sessionId === tab.sessionId, 'tab ready');
 
       await postJson(base, cookie, '/prompt', { sessionId: tab.sessionId, text: 'slow A' }, 202);
       const queued = await postJson(base, cookie, '/prompt', { sessionId: tab.sessionId, text: 'queued B' }, 202);
@@ -496,13 +546,22 @@ test('cancel removes queued turns without sending them to the agent', async () =
 
       const cancel = await postJson(base, cookie, '/cancel', { sessionId: tab.sessionId }, 202);
       assert.equal(cancel.queuedCancelled, 1);
-      await waitForEvent(events, e => e.kind === 'turn_cancelled' && e.sessionId === tab.sessionId && e.turnId === queued.turnId, 'queued turn cancelled');
-      await waitForEvent(events, e => e.kind === 'turn_complete' && e.sessionId === tab.sessionId, 'tab complete');
+      await waitForEvent(
+        events,
+        (e) => e.kind === 'turn_cancelled' && e.sessionId === tab.sessionId && e.turnId === queued.turnId,
+        'queued turn cancelled',
+      );
+      await waitForEvent(events, (e) => e.kind === 'turn_complete' && e.sessionId === tab.sessionId, 'tab complete');
       await delay(500);
 
-      const starts = events.filter(e => e.kind === 'meta' && e.method === '_x.ai/fake_prompt_probe' && e.params?.phase === 'start');
-      assert.deepEqual(starts.map(e => e.sessionId), [tab.sessionId]);
-      assert.equal(events.filter(e => e.kind === 'turn_complete' && e.sessionId === tab.sessionId).length, 1);
+      const starts = events.filter(
+        (e) => e.kind === 'meta' && e.method === '_x.ai/fake_prompt_probe' && e.params?.phase === 'start',
+      );
+      assert.deepEqual(
+        starts.map((e) => e.sessionId),
+        [tab.sessionId],
+      );
+      assert.equal(events.filter((e) => e.kind === 'turn_complete' && e.sessionId === tab.sessionId).length, 1);
 
       abort.abort();
       await stream;
@@ -523,28 +582,46 @@ test('auto-approve settings are scoped by tab session', async () => {
 
       const tabA = await postJson(base, cookie, '/tab/new', {});
       const tabB = await postJson(base, cookie, '/tab/new', {});
-      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tabA.sessionId, 'tab A ready');
-      await waitForEvent(events, e => e.kind === 'session_ready' && e.sessionId === tabB.sessionId, 'tab B ready');
+      await waitForEvent(events, (e) => e.kind === 'session_ready' && e.sessionId === tabA.sessionId, 'tab A ready');
+      await waitForEvent(events, (e) => e.kind === 'session_ready' && e.sessionId === tabB.sessionId, 'tab B ready');
 
       const tabAManual = await postJson(base, cookie, '/settings', { sessionId: tabA.sessionId, autoApprove: false });
       const tabBAuto = await postJson(base, cookie, '/settings', { sessionId: tabB.sessionId, autoApprove: true });
       assert.equal(tabAManual.autoApprove, false);
       assert.equal(tabBAuto.autoApprove, true);
 
-      const defaultSettings = await fetch(makeUrl(base, '/settings'), { headers: { cookie } }).then(r => r.json());
-      const settingsA = await fetch(makeUrl(base, `/settings?sessionId=${encodeURIComponent(tabA.sessionId)}`), { headers: { cookie } }).then(r => r.json());
-      const settingsB = await fetch(makeUrl(base, `/settings?sessionId=${encodeURIComponent(tabB.sessionId)}`), { headers: { cookie } }).then(r => r.json());
+      const defaultSettings = await fetch(makeUrl(base, '/settings'), { headers: { cookie } }).then((r) => r.json());
+      const settingsA = await fetch(makeUrl(base, `/settings?sessionId=${encodeURIComponent(tabA.sessionId)}`), {
+        headers: { cookie },
+      }).then((r) => r.json());
+      const settingsB = await fetch(makeUrl(base, `/settings?sessionId=${encodeURIComponent(tabB.sessionId)}`), {
+        headers: { cookie },
+      }).then((r) => r.json());
       assert.equal(defaultSettings.autoApprove, true);
       assert.equal(settingsA.autoApprove, false);
       assert.equal(settingsB.autoApprove, true);
 
       await postJson(base, cookie, '/prompt', { sessionId: tabA.sessionId, text: 'manual approval A' }, 202);
-      await waitForEvent(events, e => e.kind === 'permission_request' && e.sessionId === tabA.sessionId, 'tab A manual permission');
+      await waitForEvent(
+        events,
+        (e) => e.kind === 'permission_request' && e.sessionId === tabA.sessionId,
+        'tab A manual permission',
+      );
       await postJson(base, cookie, '/prompt', { sessionId: tabB.sessionId, text: 'auto approval B' }, 202);
-      await waitForEvent(events, e => e.kind === 'permission_auto_allowed' && e.sessionId === tabB.sessionId, 'tab B auto permission');
+      await waitForEvent(
+        events,
+        (e) => e.kind === 'permission_auto_allowed' && e.sessionId === tabB.sessionId,
+        'tab B auto permission',
+      );
 
-      assert.equal(events.some(e => e.kind === 'permission_auto_allowed' && e.sessionId === tabA.sessionId), false);
-      assert.equal(events.some(e => e.kind === 'permission_request' && e.sessionId === tabB.sessionId), false);
+      assert.equal(
+        events.some((e) => e.kind === 'permission_auto_allowed' && e.sessionId === tabA.sessionId),
+        false,
+      );
+      assert.equal(
+        events.some((e) => e.kind === 'permission_request' && e.sessionId === tabB.sessionId),
+        false,
+      );
 
       abort.abort();
       await stream;
@@ -637,12 +714,16 @@ test('session plan serves authenticated persisted todos under sessions root', as
     await mkdir(sessionDir, { recursive: true });
     await mkdir(malformedDir, { recursive: true });
     await mkdir(symlinkDir, { recursive: true });
-    await writeFile(join(sessionDir, 'plan.json'), JSON.stringify({
-      tasks: [
-        { id: '1', content: 'Draft persisted plan', status: 'in_progress' },
-        { id: '2', title: 'Verify hydration', state: 'pending' },
-      ],
-    }), 'utf8');
+    await writeFile(
+      join(sessionDir, 'plan.json'),
+      JSON.stringify({
+        tasks: [
+          { id: '1', content: 'Draft persisted plan', status: 'in_progress' },
+          { id: '2', title: 'Verify hydration', state: 'pending' },
+        ],
+      }),
+      'utf8',
+    );
     await writeFile(join(malformedDir, 'plan.json'), '{', 'utf8');
     await writeFile(join(temp, 'outside-plan.json'), JSON.stringify([{ text: 'outside' }]), 'utf8');
     let symlinkCreated = false;
@@ -804,23 +885,26 @@ function assertSecurityHeaders(headers) {
 
 function rawHttpRequest(url, { method = 'GET', headers = {}, body = null } = {}) {
   return new Promise((resolve, reject) => {
-    const req = httpRequest({
-      hostname: url.hostname,
-      port: url.port,
-      path: `${url.pathname}${url.search}`,
-      method,
-      headers,
-    }, (res) => {
-      const chunks = [];
-      res.on('data', chunk => chunks.push(chunk));
-      res.on('end', () => {
-        resolve({
-          statusCode: res.statusCode,
-          headers: res.headers,
-          body: Buffer.concat(chunks).toString('utf8'),
+    const req = httpRequest(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: `${url.pathname}${url.search}`,
+        method,
+        headers,
+      },
+      (res) => {
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          resolve({
+            statusCode: res.statusCode,
+            headers: res.headers,
+            body: Buffer.concat(chunks).toString('utf8'),
+          });
         });
-      });
-    });
+      },
+    );
     req.on('error', reject);
     if (body) req.write(body);
     req.end();

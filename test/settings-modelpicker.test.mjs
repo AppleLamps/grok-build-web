@@ -19,6 +19,7 @@ const fieldDefaults = {
   noSubagents: false,
   noPlan: false,
   noMemory: false,
+  todoGate: false,
   restoreCode: false,
   alwaysApprove: false,
   noLeader: false,
@@ -31,7 +32,11 @@ installDomStubs({
     const path = String(url);
     requests.push({ url: path, body: opts.body ? JSON.parse(opts.body) : null });
     if (path === '/spawn-opts') {
-      return json({ ...fieldDefaults, _capabilities: { permissionMode: false }, _env: { XAI_API_KEY_set: false } });
+      return json({
+        ...fieldDefaults,
+        _capabilities: { permissionMode: false, todoGate: false },
+        _env: { XAI_API_KEY_set: false },
+      });
     }
     if (path === '/settings') {
       if (opts.method === 'POST') return json({ displayName: opts.body ? JSON.parse(opts.body).displayName : 'Lucas' });
@@ -60,9 +65,12 @@ test('settings display-name-only changes avoid respawn and skip unsupported perm
   await settings.__testApplySettings();
   await delay(0);
 
-  const settingsPost = requests.find(r => r.url === '/settings' && r.body);
+  const settingsPost = requests.find((r) => r.url === '/settings' && r.body);
   assert.deepEqual(settingsPost.body, { displayName: 'Private' });
-  assert.equal(requests.some(r => r.url === '/session/respawn'), false);
+  assert.equal(
+    requests.some((r) => r.url === '/session/respawn'),
+    false,
+  );
 });
 
 test('settings groups launch fields and summarizes pending changes', async () => {
@@ -77,7 +85,7 @@ test('settings groups launch fields and summarizes pending changes', async () =>
   const summary = panel.querySelector('.settings-change-summary');
   assert.equal(summary.textContent, 'No pending changes.');
 
-  const sandbox = panel.querySelectorAll('[data-key]').find(el => el.dataset.key === 'sandbox');
+  const sandbox = panel.querySelectorAll('[data-key]').find((el) => el.dataset.key === 'sandbox');
   sandbox.value = 'workspace-write';
   sandbox.dispatchEvent({ type: 'input' });
 
@@ -97,7 +105,9 @@ test('settings traps tab focus inside the dialog', async () => {
     type: 'keydown',
     key: 'Tab',
     shiftKey: true,
-    preventDefault() { prevented = true; },
+    preventDefault() {
+      prevented = true;
+    },
   });
   assert.equal(prevented, true);
   assert.equal(document.activeElement, cancel);
@@ -108,7 +118,9 @@ test('settings traps tab focus inside the dialog', async () => {
     type: 'keydown',
     key: 'Tab',
     shiftKey: false,
-    preventDefault() { prevented = true; },
+    preventDefault() {
+      prevented = true;
+    },
   });
   assert.equal(prevented, true);
   assert.equal(document.activeElement, close);
@@ -119,7 +131,9 @@ test('settings traps tab focus inside the dialog', async () => {
     type: 'keydown',
     key: 'Tab',
     shiftKey: false,
-    preventDefault() { prevented = true; },
+    preventDefault() {
+      prevented = true;
+    },
   });
   assert.equal(prevented, false);
   assert.equal(document.activeElement, close);
@@ -136,7 +150,9 @@ test('settings closes with Escape', async () => {
   panel.dispatchEvent({
     type: 'keydown',
     key: 'Escape',
-    preventDefault() { prevented = true; },
+    preventDefault() {
+      prevented = true;
+    },
   });
 
   assert.equal(prevented, true);
@@ -149,13 +165,13 @@ test('settings launch changes respawn without unsupported permissionMode', async
   const panel = await settings.__testOpenSettings();
   const modelInput = panel.querySelector('[data-key]');
   modelInput.value = 'Private';
-  const sandbox = panel.querySelectorAll('[data-key]').find(el => el.dataset.key === 'sandbox');
+  const sandbox = panel.querySelectorAll('[data-key]').find((el) => el.dataset.key === 'sandbox');
   sandbox.value = 'workspace-write';
 
   await settings.__testApplySettings();
   await delay(0);
 
-  const respawn = requests.find(r => r.url === '/session/respawn');
+  const respawn = requests.find((r) => r.url === '/session/respawn');
   assert.equal(respawn.body.sandbox, 'workspace-write');
   assert.equal(Object.hasOwn(respawn.body, 'permissionMode'), false);
 });
@@ -167,13 +183,13 @@ test('model picker parses CLI IDs and respawns with a custom model', async () =>
   assert.ok(modelIds.KNOWN_MODEL_IDS.includes('grok-build'));
 
   const { wrap } = await modelpicker.__testOpenModelPicker();
-  const optionValues = wrap.querySelectorAll('option').map(option => option.value);
+  const optionValues = wrap.querySelectorAll('option').map((option) => option.value);
   assert.ok(optionValues.includes('grok-4.3'));
   wrap.querySelector('[name="customModel"]').value = 'grok-custom-private';
   wrap.dispatchEvent({ type: 'submit', preventDefault() {} });
   await delay(0);
 
-  const respawn = requests.find(r => r.url === '/session/respawn');
+  const respawn = requests.find((r) => r.url === '/session/respawn');
   assert.deepEqual(respawn.body, { model: 'grok-custom-private' });
 });
 

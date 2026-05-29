@@ -10,9 +10,56 @@ import {
   startFakeServer,
   waitForEvent,
   withTempDir,
+  importFresh,
+  installDomStubs,
 } from './helpers.mjs';
 
 const TINY_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+
+test('attachment helpers classify pasted screenshot files by MIME type', async () => {
+  const nativeFetch = globalThis.fetch;
+  const nativeCreateObjectURL = globalThis.URL.createObjectURL;
+  installDomStubs({
+    fetchImpl: async (_url, opts = {}) => {
+      const body = JSON.parse(opts.body);
+      assert.equal(body.filename, 'pasted-image.png');
+      assert.equal(body.dataBase64, 'AQID');
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          path: 'C:\\Users\\lucas\\project\\.grok-web-uploads\\pasted-image.png',
+          filename: body.filename,
+          mediaUrl: '/upload-media?sessionId=sid&name=pasted-image.png',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    },
+  });
+  globalThis.URL.createObjectURL = () => 'blob:test-image';
+  try {
+    const attachments = await importFresh('public/js/attachments.js');
+    const file = {
+      name: '',
+      type: 'image/png',
+      size: 3,
+      async arrayBuffer() {
+        return Uint8Array.from([1, 2, 3]).buffer;
+      },
+    };
+
+    assert.equal(attachments.__test.kindForFile(file), 'image');
+    assert.equal(attachments.__test.fallbackName(file, 'image'), 'pasted-image.png');
+    await attachments.__test.handleFiles([file]);
+
+    const pending = attachments.getPendingAttachments();
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0].filename, 'pasted-image.png');
+    assert.equal(pending[0].kind, 'image');
+  } finally {
+    globalThis.fetch = nativeFetch;
+    globalThis.URL.createObjectURL = nativeCreateObjectURL;
+  }
+});
 
 test('upload route stores files in session cwd and serves them back via /upload-media', async () => {
   await withTempDir('grok-web-upload-', async (cwd) => {
@@ -69,7 +116,10 @@ test('upload route stores files in session cwd and serves them back via /upload-
       const bytes = new Uint8Array(await media.arrayBuffer());
       assert.equal(bytes.length, onDisk.length);
 
-      const traversalMedia = await fetch(makeUrl(base, '/upload-media?sessionId=' + encodeURIComponent(tab.sessionId) + '&name=..%2Fsecret.png'), { headers: { cookie } });
+      const traversalMedia = await fetch(
+        makeUrl(base, '/upload-media?sessionId=' + encodeURIComponent(tab.sessionId) + '&name=..%2Fsecret.png'),
+        { headers: { cookie } },
+      );
       assert.equal(traversalMedia.status, 400);
 
       const prompt = await fetch(makeUrl(base, '/prompt'), {
@@ -95,11 +145,18 @@ test('upload route stores files in session cwd and serves them back via /upload-
 
       const probe = await waitForEvent(
         events,
-        (e) => e.kind === 'meta' && e.method === '_x.ai/fake_prompt_probe' && e.params?.phase === 'start' && /Attached files:/.test(e.params?.text ?? ''),
+        (e) =>
+          e.kind === 'meta' &&
+          e.method === '_x.ai/fake_prompt_probe' &&
+          e.params?.phase === 'start' &&
+          /Attached files:/.test(e.params?.text ?? ''),
         'fake_prompt_probe with augmented prompt',
       );
       assert.match(probe.params.text, /what is in this image\?/);
-      assert.match(probe.params.text, new RegExp(`Attached files:[\\s\\S]*${goodData.path.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}`));
+      assert.match(
+        probe.params.text,
+        new RegExp(`Attached files:[\\s\\S]*${goodData.path.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}`),
+      );
 
       // Attachments whose path is outside the session uploads dir are silently dropped.
       const outsidePrompt = await fetch(makeUrl(base, '/prompt'), {

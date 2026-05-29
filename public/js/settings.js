@@ -55,6 +55,13 @@ const FIELDS = [
   { key: 'noPlan', label: 'No plan mode', type: 'checkbox' },
   { key: 'noMemory', label: 'No cross-session memory', type: 'checkbox' },
   {
+    key: 'todoGate',
+    label: 'Todo gate',
+    type: 'checkbox',
+    requiresCapability: 'todoGate',
+    hint: 'Requires completed todos before the agent finishes a turn.',
+  },
+  {
     key: 'restoreCode',
     label: 'Restore code on session load',
     type: 'checkbox',
@@ -76,7 +83,7 @@ const FIELDS = [
     key: 'permissionMode',
     label: 'Permission mode',
     type: 'select',
-    options: ['', 'auto', 'manual', 'yolo'],
+    options: ['', 'default', 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions', 'plan'],
     requiresCapability: 'permissionMode',
     hint: 'Launch-time --permission-mode. Disabled unless the installed grok CLI advertises it.',
   },
@@ -116,7 +123,7 @@ const LAUNCH_SECTIONS = [
   {
     title: 'Runtime',
     description: 'Session restore, memory, leader, and prompt overrides.',
-    keys: ['noMemory', 'restoreCode', 'noLeader', 'rules', 'systemPromptOverride'],
+    keys: ['noMemory', 'todoGate', 'restoreCode', 'noLeader', 'rules', 'systemPromptOverride'],
   },
 ];
 
@@ -458,6 +465,7 @@ function hasLaunchChanges(next) {
 function sameValue(a, b, type) {
   if (type === 'lines') return JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
   if (type === 'number') return (a ?? null) === (b ?? null);
+  if (type === 'checkbox') return !!a === !!b;
   return (a ?? null) === (b ?? null);
 }
 

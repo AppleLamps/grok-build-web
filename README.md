@@ -13,7 +13,7 @@ Created by [@lamps_apple](https://x.com/lamps_apple), creator of [grokify.ai](ht
 - Browser chat UI for `grok agent stdio`
 - Project sidebar grouped by workspace
 - Per-tab sessions with `?session=` URLs
-- Tool rendering for terminal, edits, browser actions, multimodal `read_file`, X/web search, images, videos, todos, scheduler, and plan cards
+- Tool rendering for terminal, edits, browser actions, multimodal `read_file`, X/web search, images, videos, todos, scheduler, subagents, and plan cards
 - Manual or auto approval mode
 - Settings panel for model, effort, sandbox, rules, tool allow-lists, and display name
 - Local project display aliases for screenshot-safe project names
@@ -102,11 +102,13 @@ The send mode selector supports:
 
 Headless modes do not append to the interactive ACP session history.
 
-### Attach text files
+### Attach files
 
-The attach button inserts text-like files into the prompt as fenced code blocks. Each attach action is capped at 5 files, and each file is capped at 256 KB.
+The attach button inserts text-like files into the prompt as fenced code blocks. Images and PDFs upload into the current session workspace and are sent as attached file paths so Grok can read them with its native multimodal tools. Drag-and-drop and clipboard paste handle the same file types. Each attach action is capped at 5 files. Text files are capped at 256 KB, and binary attachments are capped at 25 MB.
 
 Supported extensions include `.txt`, `.md`, `.js`, `.mjs`, `.ts`, `.tsx`, `.json`, `.css`, `.html`, `.py`, `.sh`, `.ps1`, `.yml`, `.yaml`, `.toml`, `.csv`, `.xml`, and `.log`.
+
+Images support `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, and `.svg`. PDFs support `.pdf`.
 
 ### Control approvals
 
@@ -263,24 +265,24 @@ $env:GROK_WEB_LIVE_X_SEARCH='1'; npm run test:live
 $env:GROK_WEB_LIVE_PLUGIN_MCP_NAME='<server-name>'; npm run test:live
 ```
 
-### Grok 0.1.218 Compatibility Checks
+### Grok 0.2.8 Compatibility Checks
 
-Grok CLI 0.1.218 ships additional platform and media-generation fixes. Run the automated live suite and manual compatibility checks against the installed CLI after updating.
+Grok CLI 0.2.8 includes the 0.2.7 platform, session, image, and slash-command fixes plus the current stable updater target. Run the automated live suite and manual compatibility checks against the installed CLI after updating.
 
-0.1.218 items to verify:
+0.2.7 and 0.2.8 items to verify:
 
-- Windows Ctrl+X default shortcut help binding
-- Linux image pasting and shortcut keybinding behavior
-- User-specified duration for video generation
-- Temporary screenshot image support on macOS
-- Image byte validation that prevents retry loops
-- Compaction prompt improvements for training alignment and skill rehydration
-- Increased macOS and Linux ulimit handling to avoid ENOSPC failures that can brick the CLI
-- Multi-line image links remain non-clickable and no longer break rendering
+- Slash autocomplete wraps with ArrowUp and ArrowDown.
+- Session resume replays tool and subagent UI without breaking grouped tool cards.
+- Windows image paste and screenshot file input work through browser paste, drag-and-drop, and attach.
+- Windows-friendly launch flags are detected from `grok --help`, including `--permission-mode`.
+- Multimodal `read_file` output continues rendering text, images, videos, PDFs, and PPTX text.
+- Image generation previews continue working for local Grok session media paths.
+- `/login` and `/usage` remain reachable through the web UI or slash autocomplete.
+- `--todo-gate` is available in Settings when the installed CLI advertises it.
 - `_x.ai/ask_user_question` renders as a web elicitation card and returns `{ outcome, answers?, partial_answers? }`
 - Active TODO state hydrates from persisted `plan.json` when loading a saved session
 
-The compatibility pass should include the existing `npm run test:live` suite, plus manual checks for Windows, Linux, and macOS behaviors where those fixes are platform-specific. Review the 0.1.218 release notes in the Grok TUI during the pass.
+The compatibility pass should include the existing `npm run test:live` suite, plus manual checks for Windows, Linux, and macOS behaviors where those fixes are platform-specific. Review the xAI Build changelog during the pass.
 
 Feature touch points:
 

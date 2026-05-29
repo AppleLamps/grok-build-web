@@ -8,15 +8,16 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 
 ## Turn lifecycle
 
-- **[done] Text file attachments** — `[plumbing]` Attach button inserts accepted text/code/markdown files into the composer as fenced code blocks. Unsupported or oversized files show a toast.
+- **[done] Text and multimodal attachments** — `[plumbing]` Attach button inserts accepted text/code/markdown files into the composer as fenced code blocks. Images and PDFs upload to the session workspace and can be added through attach, drag-and-drop, or paste. Unsupported or oversized files show a toast.
 - **[done] Browser voice input** — `[plumbing]` Mic button uses the browser Web Speech API when available and appends final transcripts to the composer without auto-sending.
 - **[done] Cancel running turn** — `[acp session/cancel]` Stop button in composer; `POST /cancel`.
 - **[done] Permission prompt UI** — `[acp session/request_permission]` Cards with per-option buttons; auto-deny after 5 min if forgotten. Active only when the pill is in Manual mode.
 - **[done] Always-approve toggle** — `[slash /always-approve]` `[flag --always-approve]` Composer pill toggles auto/manual; bridge mirrors state and best-effort syncs to the agent.
 - **[done] Plan mode rendering** — `[tool enter_plan_mode/exit_plan_mode]` Plan content rendered as a distinct blue card with **Accept plan / Suggest edits… / Reject** buttons that post a follow-up prompt.
-- **[done, guarded] Permission mode field** — `[flag --permission-mode]` Settings exposes `permissionMode` only when the installed CLI advertises `--permission-mode`; current `grok 0.1.217` agent help does not, so the field renders disabled with an unsupported notice.
+- **[done, guarded] Permission mode field** — `[flag --permission-mode]` Settings exposes current CLI permission modes when the installed CLI advertises `--permission-mode`; otherwise the field renders disabled with an unsupported notice.
 - **[done via Settings] Effort / reasoning controls** — `[flag --effort]` `[flag --reasoning-effort]` Settings panel exposes `low | medium | high | xhigh | max` for both. Respawns on apply.
 - **[done via Settings] Max turns limit** — `[flag --max-turns]` Settings panel field.
+- **[done via Settings] Todo gate** — `[flag --todo-gate]` Settings panel checkbox when the installed CLI advertises the flag.
 
 ## Sessions
 

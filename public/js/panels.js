@@ -1,7 +1,17 @@
 // Read-only panels backed by `/cli/*` endpoints: Inspect, MCP, Worktrees,
 // Plugins, Hooks, Models. Wired to a "Tools" menu in the sidebar.
 
-import { cliInspect, cliMcp, cliWorktree, cliModels, cliTrace, cliMemoryList, cliMemoryRead, getSpawnOpts, getSettings } from './api.js';
+import {
+  cliInspect,
+  cliMcp,
+  cliWorktree,
+  cliModels,
+  cliTrace,
+  cliMemoryList,
+  cliMemoryRead,
+  getSpawnOpts,
+  getSettings,
+} from './api.js';
 import { modal } from './modal.js';
 import { toast } from './toast.js';
 import { state, TAB_SESSION_ID } from './state.js';
@@ -27,10 +37,18 @@ function panelMessage(tag, className, text) {
   return el;
 }
 
-export function showInspect()   { return showJsonPanel('Grok inspect (current cwd)', cliInspect); }
-export function showMcp()       { return showJsonPanel('MCP servers', cliMcp); }
-export function showWorktrees() { return showJsonPanel('Worktrees', cliWorktree); }
-export function showModels()    { return showJsonPanel('Available models', cliModels); }
+export function showInspect() {
+  return showJsonPanel('Grok inspect (current cwd)', cliInspect);
+}
+export function showMcp() {
+  return showJsonPanel('MCP servers', cliMcp);
+}
+export function showWorktrees() {
+  return showJsonPanel('Worktrees', cliWorktree);
+}
+export function showModels() {
+  return showJsonPanel('Available models', cliModels);
+}
 
 export async function showSessionInfo() {
   const { body } = modal('Session info', panelMessage('div', 'panel-loading', 'Loading…'));
@@ -40,7 +58,9 @@ export async function showSessionInfo() {
   const usage = state.lastUsage;
   let spawnOpts = {};
   let settings = {};
-  try { [spawnOpts, settings] = await Promise.all([getSpawnOpts().catch(() => ({})), getSettings().catch(() => ({}))]); } catch {}
+  try {
+    [spawnOpts, settings] = await Promise.all([getSpawnOpts().catch(() => ({})), getSettings().catch(() => ({}))]);
+  } catch {}
 
   body.innerHTML = '';
   const grid = document.createElement('div');
@@ -65,9 +85,14 @@ export async function showSessionInfo() {
     ['Last activity', titleRecord?.lastActive ? new Date(titleRecord.lastActive).toLocaleString() : '(unknown)'],
   ];
   for (const [label, value] of rows) {
-    const dt = document.createElement('div'); dt.className = 'session-info-key'; dt.textContent = label;
-    const dd = document.createElement('div'); dd.className = 'session-info-val'; dd.textContent = String(value);
-    grid.appendChild(dt); grid.appendChild(dd);
+    const dt = document.createElement('div');
+    dt.className = 'session-info-key';
+    dt.textContent = label;
+    const dd = document.createElement('div');
+    dd.className = 'session-info-val';
+    dd.textContent = String(value);
+    grid.appendChild(dt);
+    grid.appendChild(dd);
   }
   body.appendChild(grid);
 }
@@ -76,6 +101,7 @@ function flagSummary(opts) {
   const flags = [];
   if (opts.experimentalMemory) flags.push('experimental-memory');
   if (opts.noMemory) flags.push('no-memory');
+  if (opts.todoGate) flags.push('todo-gate');
   if (opts.noSubagents) flags.push('no-subagents');
   if (opts.restoreCode) flags.push('restore-code');
   return flags.length ? flags.join(', ') : '(none)';
@@ -145,8 +171,9 @@ export async function showMemory() {
     if (tree.global) {
       const head = sectionHead('Global');
       listEl.appendChild(head);
-      listEl.appendChild(makeFileButton(tree.global.path, tree.global.name,
-        `${(tree.global.size / 1024).toFixed(1)} KB`));
+      listEl.appendChild(
+        makeFileButton(tree.global.path, tree.global.name, `${(tree.global.size / 1024).toFixed(1)} KB`),
+      );
     }
     for (const ws of tree.workspaces ?? []) {
       listEl.appendChild(sectionHead(ws.name));
@@ -175,23 +202,29 @@ export async function showMemory() {
 
 // Hooks / Plugins are triggered via slash commands. Open the input pre-filled.
 export function showHooks() {
-  modal('Hooks', commandHelp('Hooks management is via slash commands. Type:', [
-    ['/hooks-list', 'list configured hooks'],
-    ['/hooks-trust', 'trust current project for hooks'],
-    ['/hooks-untrust', 'remove trust'],
-    ['/hooks-add <path>', 'add a hook file or dir'],
-    ['/hooks-remove <path>', 'remove a hook'],
-  ]));
+  modal(
+    'Hooks',
+    commandHelp('Hooks management is via slash commands. Type:', [
+      ['/hooks-list', 'list configured hooks'],
+      ['/hooks-trust', 'trust current project for hooks'],
+      ['/hooks-untrust', 'remove trust'],
+      ['/hooks-add <path>', 'add a hook file or dir'],
+      ['/hooks-remove <path>', 'remove a hook'],
+    ]),
+  );
 }
 
 export function showPlugins() {
-  modal('Plugins', commandHelp('Plugins management is via slash commands. Type:', [
-    ['/plugins list', 'installed plugins'],
-    ['/plugins trust <path>', 'trust a plugin path'],
-    ['/plugins add <path>', 'add a plugin'],
-    ['/plugins remove <path>', 'remove'],
-    ['/reload-plugins', 'reload plugins from disk'],
-  ]));
+  modal(
+    'Plugins',
+    commandHelp('Plugins management is via slash commands. Type:', [
+      ['/plugins list', 'installed plugins'],
+      ['/plugins trust <path>', 'trust a plugin path'],
+      ['/plugins add <path>', 'add a plugin'],
+      ['/plugins remove <path>', 'remove'],
+      ['/reload-plugins', 'reload plugins from disk'],
+    ]),
+  );
 }
 
 function commandHelp(intro, commands) {
@@ -214,7 +247,10 @@ function commandHelp(intro, commands) {
 
 export async function downloadTrace() {
   const sid = state.currentSessionId;
-  if (!sid) { toast('No active session'); return; }
+  if (!sid) {
+    toast('No active session');
+    return;
+  }
   toast('Exporting trace…');
   try {
     const data = await cliTrace(sid);
@@ -222,5 +258,7 @@ export async function downloadTrace() {
     if (tracePath) toast(`Trace saved to ${tracePath}`, { duration: 9000 });
     else if (data.ok) toast('Trace exported (check ~/.grok/trace-exports/)');
     else toast(`Trace failed: ${data.error ?? 'unknown'}`);
-  } catch (e) { toast(`Trace failed: ${e.message}`); }
+  } catch (e) {
+    toast(`Trace failed: ${e.message}`);
+  }
 }

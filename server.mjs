@@ -11,6 +11,7 @@ import { CWD, GRACEFUL_SHUTDOWN_TIMEOUT_MS, PORT, SESSION_COOKIE } from './lib/c
 import { defaultUsername } from './lib/util.mjs';
 import { GrokBridge } from './lib/grok-bridge.mjs';
 import { createCliRunner } from './lib/cli-runner.mjs';
+import { ensureCurrentProjectTrusted } from './lib/project-trust.mjs';
 import { createSecurity } from './lib/http/security.mjs';
 import { createRouter } from './lib/http/router.mjs';
 import { invalidateSessionsCache, watchSessionsRoot } from './lib/sessions-store.mjs';
@@ -53,6 +54,14 @@ watchSessionsRoot(() => {
 });
 
 (async () => {
+  try {
+    const trust = await ensureCurrentProjectTrusted(CWD);
+    if (trust.changed) console.log(`[grok-web] trusted project for hooks: ${trust.entry}`);
+    else if (trust.skipped) console.warn(`[grok-web] skipped project trust: ${trust.reason}`);
+  } catch (e) {
+    console.warn('[grok-web] failed to trust project for hooks:', e);
+  }
+
   server.listen(PORT, '127.0.0.1', async () => {
     const port = server.address().port;
     const url = `http://127.0.0.1:${port}/?token=${BOOTSTRAP_TOKEN}`;

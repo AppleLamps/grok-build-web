@@ -30,6 +30,8 @@ const {
   appendThought,
   clearLog,
   finishStreaming,
+  newTurn,
+  __test,
   __testAssistantStreamStats,
 } = await importPublic('public/js/chat.js');
 
@@ -169,6 +171,19 @@ test('clearLog prevents stale scheduled assistant renders', () => {
   assert.doesNotMatch(dom.logInner.innerHTML, /stale text/);
 });
 
+test('newTurn prunes completed turns and keeps active turn', () => {
+  resetDomState();
+
+  for (let i = 0; i < 4; i++) newTurn();
+  __test.enforceLogTurnLimit(2);
+
+  const turns = dom.logInner.querySelectorAll('.turn');
+  assert.equal(turns.length, 3);
+  assert.equal(turns.at(-1), state.turnEl);
+  assert.equal(state.hiddenTurnCount, 1);
+  assert.equal(dom.logInner.querySelector('.truncated-seam').textContent, '1 earlier turn hidden to keep the chat responsive.');
+});
+
 function resetDomState() {
   rafQueue.length = 0;
   dom.logInner.innerHTML = '';
@@ -182,6 +197,7 @@ function resetDomState() {
   state.thinkingBuf = '';
   state.assistantEl = null;
   state.assistantBuf = '';
+  state.hiddenTurnCount = 0;
   state.toolEls.clear();
   state.planCards.clear();
   state.permCards.clear();

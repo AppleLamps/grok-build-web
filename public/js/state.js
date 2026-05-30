@@ -23,6 +23,7 @@ export const state = {
   autoApprove: true,
   lastUsage: null,
   turnCount: 0,
+  hiddenTurnCount: 0,
 
   // Per-turn rendering state — reset by chat.newTurn().
   turnEl: null,

@@ -22,6 +22,8 @@ let assistantStreamRenderer = null;
 const AUTO_SCROLL_NEAR_BOTTOM_PX = 120;
 const ASSISTANT_RENDER_INTERVAL_MS = 32;
 const THINKING_RENDER_INTERVAL_MS = 48;
+const MAX_LOG_TURNS = 500;
+const TRUNCATION_MARKER_CLASS = 'truncated-seam';
 
 export function autoScroll() {
   const nearBottom = dom.log.scrollHeight - dom.log.scrollTop - dom.log.clientHeight < AUTO_SCROLL_NEAR_BOTTOM_PX;
@@ -38,6 +40,7 @@ export function newTurn() {
   state.turnEl = document.createElement('div');
   state.turnEl.className = 'turn';
   dom.logInner.appendChild(state.turnEl);
+  enforceLogTurnLimit();
   state.thinkingEl = null;
   state.thinkingBuf = '';
   state.assistantEl = null;
@@ -73,7 +76,32 @@ export function clearLog() {
   state.toolEls.clear();
   state.planCards.clear();
   state.permCards.clear();
+  state.hiddenTurnCount = 0;
   resetAllToolState();
+}
+
+function enforceLogTurnLimit(maxTurns = MAX_LOG_TURNS) {
+  const turns = [...dom.logInner.querySelectorAll('.turn')];
+  const completedTurns = turns.filter((turn) => turn !== state.turnEl);
+  const overflow = completedTurns.length - maxTurns;
+  if (overflow <= 0) return;
+
+  for (const turn of completedTurns.slice(0, overflow)) turn.remove();
+  state.hiddenTurnCount += overflow;
+  renderTruncationMarker();
+}
+
+function renderTruncationMarker() {
+  let marker = dom.logInner.querySelector(`.${TRUNCATION_MARKER_CLASS}`);
+  if (!marker) {
+    marker = document.createElement('div');
+    marker.className = TRUNCATION_MARKER_CLASS;
+    const firstTurn = dom.logInner.querySelector('.turn');
+    if (firstTurn) firstTurn.before(marker);
+    else dom.logInner.appendChild(marker);
+  }
+  const label = state.hiddenTurnCount === 1 ? '1 earlier turn hidden' : `${state.hiddenTurnCount} earlier turns hidden`;
+  marker.textContent = `${label} to keep the chat responsive.`;
 }
 
 export function addUserItem(text, attachments = []) {
@@ -394,6 +422,10 @@ function formatTokens(n) {
   if (n < 1000000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
   return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
 }
+
+export const __test = {
+  enforceLogTurnLimit,
+};
 
 dom.log?.addEventListener('click', handleCodeCopyClick);
 

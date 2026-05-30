@@ -567,6 +567,17 @@ main {
   scroll-behavior: smooth;
 }
 .log-inner { max-width: 820px; margin: 0 auto; }
+.truncated-seam {
+  margin: 0 0 22px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.truncated-seam + .turn { margin-top: 0; }
 .turn + .turn { margin-top: 28px; }
 .turn { animation: turn-in .25s ease-out; }
 @keyframes turn-in {

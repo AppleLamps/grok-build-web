@@ -39,6 +39,13 @@ try {
   await assertWelcomeSubtitle(page);
   await page.screenshot({ path: join(screenshotsDir, 'visual-desktop-1280x720.png'), fullPage: false });
 
+  await page.setViewportSize({ width: 900, height: 920 });
+  await page.goto(sessionUrl);
+  await waitForReady(page);
+  await injectThinkingTrace(page);
+  await assertThinkingTraceFits(page);
+  await page.screenshot({ path: join(screenshotsDir, 'visual-thinking-900x920.png'), fullPage: false });
+
   await page.click('#customize-btn');
   await page.locator('.settings-panel.open').waitFor({ timeout: 10000 });
   await assertVisibleWithinViewport(page, '.settings-panel.open', 'settings panel');
@@ -170,6 +177,62 @@ async function assertComposerWrap(page) {
   assert.ok(result.inputTop >= result.wrapTop + 6, 'wrapped text keeps top padding inside composer');
   assert.ok(result.inputBottom <= result.wrapBottom - 6, 'wrapped text keeps bottom padding inside composer');
   assert.ok(result.statusTop >= result.wrapBottom + 6, 'ready status is separated from composer');
+}
+
+async function injectThinkingTrace(page) {
+  await page.evaluate(() => {
+    document.querySelector('#welcome')?.setAttribute('hidden', '');
+    const logInner = document.querySelector('#log-inner');
+    if (!logInner) throw new Error('missing log inner');
+    logInner.innerHTML = `
+      <div class="turn">
+        <div class="user-msg-row">
+          <div class="user-msg">Read through the contents to understand e. jean carroll.</div>
+        </div>
+        <div class="thinking">
+          <button class="label" type="button" aria-expanded="true" title="Toggle thinking trace">
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            <span class="label-main">Thinking trace</span>
+            <span class="label-state">live</span>
+          </button>
+          <div class="body">
+            <p>${'Investigation notes about e. jean carroll and related files. '.repeat(80)}</p>
+            <p>${'very-long-token-without-natural-breaks-'.repeat(18)}</p>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+}
+
+async function assertThinkingTraceFits(page) {
+  const result = await page.evaluate(() => {
+    const trace = document.querySelector('.thinking');
+    const body = document.querySelector('.thinking .body');
+    const log = document.querySelector('#log');
+    if (!trace || !body || !log) throw new Error('missing thinking trace');
+    const traceRect = trace.getBoundingClientRect();
+    const logRect = log.getBoundingClientRect();
+    return {
+      traceLeft: traceRect.left,
+      traceRight: traceRect.right,
+      traceWidth: traceRect.width,
+      logLeft: logRect.left,
+      logRight: logRect.right,
+      bodyScrollWidth: body.scrollWidth,
+      bodyClientWidth: body.clientWidth,
+      docScrollWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+    };
+  });
+  assert.ok(result.traceWidth > 0, 'thinking trace has width');
+  assert.ok(result.traceLeft >= result.logLeft - 1, 'thinking trace stays inside log left edge');
+  assert.ok(result.traceRight <= result.logRight + 1, 'thinking trace stays inside log right edge');
+  assert.ok(
+    result.bodyScrollWidth <= result.bodyClientWidth + 1,
+    'thinking trace body wraps without horizontal overflow',
+  );
+  assert.ok(result.docScrollWidth <= result.viewportWidth + 1, 'page has no horizontal overflow');
 }
 
 async function assertSettingsSections(page) {

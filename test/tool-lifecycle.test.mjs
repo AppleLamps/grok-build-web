@@ -5,7 +5,7 @@ import { importPublic, installDomStubs } from './helpers.mjs';
 installDomStubs();
 const { state, dom } = await importPublic('public/js/state.js');
 const { paintTool } = await importPublic('public/js/tools.js');
-const { setCurrentTodos, resetAllToolState } = await importPublic('public/js/tool-state.js');
+const { setBackgroundTask, setCurrentTodos, resetAllToolState } = await importPublic('public/js/tool-state.js');
 const { parseTodoSummary } = await importPublic('public/js/tools/render-todos.mjs');
 const { clearLog } = await importPublic('public/js/chat.js');
 
@@ -110,6 +110,89 @@ test('plain terminal and subagent tools are not tracked as background tasks', as
     rawInput: { tool: 'subagent' },
   });
   assert.equal(dom.bgPanel.hidden, true);
+});
+
+test('collapsed tool updates defer details until opened', async () => {
+  resetDomState();
+
+  paintTool({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'search-lazy',
+    title: 'web_search',
+    kind: 'search',
+    status: 'in_progress',
+    rawInput: { query: 'docs' },
+  });
+  const tool = state.turnEl.querySelector('.tool');
+  const details = tool.querySelector('.details');
+  assert.equal(details.innerHTML, '');
+  assert.match(tool.querySelector('.target').textContent, /docs/);
+
+  paintTool({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'search-lazy',
+    title: 'web_search',
+    kind: 'search',
+    status: 'completed',
+    rawInput: { query: 'docs' },
+    rawOutput: { results: [{ title: 'Docs', url: 'https://example.com/docs', snippet: 'Example docs' }] },
+  });
+  assert.equal(details.innerHTML, '');
+  assert.equal(tool.classList.contains('completed'), true);
+
+  tool.querySelector('.summary').click();
+  assert.match(details.innerHTML, /Docs/);
+  assert.match(details.innerHTML, /Example docs/);
+});
+
+test('open tool updates refresh rendered details', async () => {
+  resetDomState();
+
+  paintTool({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'search-open',
+    title: 'web_search',
+    kind: 'search',
+    status: 'in_progress',
+    rawInput: { query: 'docs' },
+  });
+  const tool = state.turnEl.querySelector('.tool');
+  const details = tool.querySelector('.details');
+  tool.querySelector('.summary').click();
+
+  paintTool({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'search-open',
+    title: 'web_search',
+    kind: 'search',
+    status: 'completed',
+    rawInput: { query: 'docs' },
+    rawOutput: { results: [{ title: 'Fresh Docs', url: 'https://example.com/fresh', snippet: 'Updated' }] },
+  });
+
+  assert.match(details.innerHTML, /Fresh Docs/);
+  assert.match(details.innerHTML, /Updated/);
+});
+
+test('background task updates preserve keyed DOM nodes', async () => {
+  resetDomState();
+
+  setBackgroundTask('a', { id: 'a', command: 'sleep 1', status: 'in_progress' });
+  const first = dom.bgList.children[0];
+  assert.equal(dom.bgPanel.hidden, false);
+  assert.equal(first.textContent, 'sleep 1');
+
+  setBackgroundTask('a', { id: 'a', command: 'sleep 1', status: 'completed' });
+  assert.equal(dom.bgList.children[0], first);
+  assert.equal(first.title, 'completed');
+  assert.equal(first.classList.contains('completed'), true);
+
+  setBackgroundTask('b', { id: 'b', command: 'sleep 2', status: 'in_progress' });
+  assert.deepEqual([...dom.bgList.children].map(el => el.textContent), ['sleep 1', 'sleep 2']);
+
+  resetAllToolState();
+  assert.equal(dom.bgPanel.hidden, true);
+  assert.equal(dom.bgList.children.length, 0);
 });
 
 test('todo sidebar merges partial updates without losing task text', async () => {

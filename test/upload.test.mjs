@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   bootstrap,
@@ -20,15 +20,18 @@ test('attachment helpers classify pasted screenshot files by MIME type', async (
   const nativeFetch = globalThis.fetch;
   const nativeCreateObjectURL = globalThis.URL.createObjectURL;
   installDomStubs({
-    fetchImpl: async (_url, opts = {}) => {
-      const body = JSON.parse(opts.body);
-      assert.equal(body.filename, 'pasted-image.png');
-      assert.equal(body.dataBase64, 'AQID');
+    fetchImpl: async (requestUrl, opts = {}) => {
+      const uploadUrl = new URL(requestUrl, 'http://127.0.0.1');
+      assert.equal(uploadUrl.pathname, '/upload');
+      assert.equal(uploadUrl.searchParams.get('filename'), 'pasted-image.png');
+      assert.equal(opts.method, 'POST');
+      assert.equal(opts.headers, undefined);
+      assert.equal(typeof opts.body?.arrayBuffer, 'function');
       return new Response(
         JSON.stringify({
           ok: true,
           path: 'C:\\Users\\lucas\\project\\.grok-web-uploads\\pasted-image.png',
-          filename: body.filename,
+          filename: uploadUrl.searchParams.get('filename'),
           mediaUrl: '/upload-media?sessionId=sid&name=pasted-image.png',
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
@@ -84,6 +87,22 @@ test('upload route stores files in session cwd and serves them back via /upload-
       assert.match(goodData.mediaUrl, /^\/upload-media\?sessionId=/);
       const onDisk = await readFile(goodData.path);
       assert.equal(onDisk.length, Buffer.from(TINY_PNG_B64, 'base64').length);
+
+      const rawBytes = Uint8Array.from([0, 1, 2, 3, 254, 255]);
+      const rawPng = await fetch(
+        makeUrl(base, `/upload?sessionId=${encodeURIComponent(tab.sessionId)}&filename=raw.png`),
+        {
+          method: 'POST',
+          headers: { cookie },
+          body: rawBytes,
+        },
+      );
+      assert.equal(rawPng.status, 200);
+      const rawData = await rawPng.json();
+      assert.equal(rawData.ok, true);
+      assert.equal(rawData.filename, 'raw.png');
+      const rawOnDisk = await readFile(rawData.path);
+      assert.deepEqual([...rawOnDisk], [...rawBytes]);
 
       const exeReject = await fetch(makeUrl(base, '/upload'), {
         method: 'POST',
@@ -182,3 +201,43 @@ test('upload route stores files in session cwd and serves them back via /upload-
     }
   });
 });
+
+test('raw upload enforces size limit and removes temp file', async () => {
+  await withTempDir('grok-web-upload-limit-', async (cwd) => {
+    const server = await startFakeServer({
+      cwd,
+      env: { GROK_WEB_MAX_UPLOAD_BYTES: '3' },
+    });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const events = [];
+      const abort = new AbortController();
+      readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
+      const tab = await openTestTab(base, cookie, events);
+
+      const tooLarge = await fetch(
+        makeUrl(base, `/upload?sessionId=${encodeURIComponent(tab.sessionId)}&filename=big.png`),
+        {
+          method: 'POST',
+          headers: { cookie },
+          body: Uint8Array.from([1, 2, 3, 4]),
+        },
+      );
+      assert.equal(tooLarge.status, 413);
+      const names = await uploadNames(cwd);
+      assert.deepEqual(names, []);
+
+      abort.abort();
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+async function uploadNames(cwd) {
+  try {
+    return await readdir(join(cwd, '.grok-web-uploads'));
+  } catch {
+    return [];
+  }
+}

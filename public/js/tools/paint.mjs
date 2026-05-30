@@ -4,10 +4,12 @@ import {
 } from '../tool-state.js';
 import { STATUS_ICONS, safeStatusClass } from './shared.mjs';
 import { summarizeTool } from './summarize.mjs';
-import { getToolEl } from './dom.mjs';
+import { getToolEl, getToolRefs, setToolOpenHandler } from './dom.mjs';
 import { renderToolDetails } from './details-registry.mjs';
 import { renderMultimodalDetails } from './render-multimodal.mjs';
-import { normalizedToolStatus, updateBackgroundTask } from './render-todos.mjs';
+import { isTodoUpdate, normalizedToolStatus, updateBackgroundTask } from './render-todos.mjs';
+
+setToolOpenHandler(renderLatestToolDetails);
 
 export function paintTool(update) {
   const titleLc = (update.title ?? '').toLowerCase();
@@ -21,29 +23,42 @@ export function paintTool(update) {
   updateBackgroundTask(update, titleLc);
 
   const el = getToolEl(update.toolCallId);
+  const refs = getToolRefs(el);
   const summary = summarizeTool(update);
-  el.querySelector('.verb').textContent = summary.verb ? summary.verb + ' ' : '';
-  const targetEl = el.querySelector('.target');
+  refs.verb.textContent = summary.verb ? summary.verb + ' ' : '';
+  const targetEl = refs.target;
   if (summary.target?.startsWith('`') && summary.target.endsWith('`')) {
     targetEl.textContent = summary.target.slice(1, -1);
   } else {
     targetEl.textContent = summary.target ?? '';
   }
-  el.querySelector('.delta-add').textContent = summary.deltaAdd ? `+${summary.deltaAdd}` : '';
-  el.querySelector('.delta-del').textContent = summary.deltaDel ? `-${summary.deltaDel}` : '';
+  refs.deltaAdd.textContent = summary.deltaAdd ? `+${summary.deltaAdd}` : '';
+  refs.deltaDel.textContent = summary.deltaDel ? `-${summary.deltaDel}` : '';
   const status = normalizedToolStatus(update);
   if (status) {
     const cls = safeStatusClass(status);
     el.classList.remove('in_progress', 'completed', 'failed', 'cancelled', 'killed', 'unknown');
     el.classList.add(cls);
-    const sicon = el.querySelector('.status-icon');
-    if (sicon) sicon.innerHTML = STATUS_ICONS[cls] ?? '';
+    refs.statusIcon.innerHTML = STATUS_ICONS[cls] ?? '';
   }
-  const body = el.querySelector('.details');
+  refs.latestUpdate = update;
+  refs.detailsDirty = true;
+  if (el.classList.contains('open') || isTodoUpdate(update, titleLc)) renderDetails(refs, update);
+}
+
+function renderLatestToolDetails(el) {
+  const refs = getToolRefs(el);
+  if (!refs?.latestUpdate || !refs.detailsDirty) return;
+  renderDetails(refs, refs.latestUpdate);
+}
+
+function renderDetails(refs, update) {
+  const body = refs.details;
   const specialHTML = renderToolDetails(update);
 
   if (specialHTML) {
     body.innerHTML = specialHTML;
+    refs.detailsDirty = false;
     return;
   }
 
@@ -69,4 +84,5 @@ export function paintTool(update) {
       body.appendChild(pre);
     }
   }
+  refs.detailsDirty = false;
 }

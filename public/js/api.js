@@ -58,6 +58,17 @@ export async function postUpload({ filename, dataBase64 }) {
   return readJsonResponse(r, 'upload');
 }
 
+export async function postUploadFile({ filename, file }) {
+  const u = new URL(url('/upload'), location.origin);
+  if (filename) u.searchParams.set('filename', filename);
+  if (TAB_SESSION_ID) u.searchParams.set('sessionId', TAB_SESSION_ID);
+  const r = await fetch(u.pathname + u.search, {
+    method: 'POST',
+    body: file,
+  });
+  return readJsonResponse(r, 'upload');
+}
+
 export async function cliOneshot(body) {
   const r = await fetch(url('/cli/oneshot'), {
     method: 'POST', headers: json, body: JSON.stringify(withSid(body)),

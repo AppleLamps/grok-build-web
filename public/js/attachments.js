@@ -4,7 +4,7 @@
 
 import { dom } from './state.js';
 import { toast } from './toast.js';
-import { postUpload } from './api.js';
+import { postUploadFile } from './api.js';
 
 const MAX_FILES = 5;
 const TEXT_MAX_BYTES = 256 * 1024;
@@ -201,9 +201,7 @@ async function handleBinaryFile(file, kind) {
     return;
   }
   try {
-    const buf = await file.arrayBuffer();
-    const b64 = bytesToBase64(new Uint8Array(buf));
-    const result = await postUpload({ filename: name, dataBase64: b64 });
+    const result = await postUploadFile({ filename: name, file });
     if (!result?.ok || !result.path) {
       throw new Error(result?.error ?? 'upload failed');
     }
@@ -220,15 +218,6 @@ async function handleBinaryFile(file, kind) {
   } catch (e) {
     toast(`Upload failed for ${name}: ${e.message}`);
   }
-}
-
-function bytesToBase64(bytes) {
-  let bin = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-  }
-  return btoa(bin);
 }
 
 async function handleFiles(files) {

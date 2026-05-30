@@ -2,6 +2,7 @@ import { dom } from './state.js';
 
 let subagentDepth = 0;
 const bgTasks = new Map();
+const bgTaskEls = new Map();
 const todosById = new Map();
 const idlessTodos = [];
 const SAFE_STATUS_CLASSES = new Set(['pending', 'in_progress', 'completed', 'failed', 'cancelled', 'killed']);
@@ -9,6 +10,7 @@ const SAFE_STATUS_CLASSES = new Set(['pending', 'in_progress', 'completed', 'fai
 export function resetTransientToolState() {
   subagentDepth = 0;
   bgTasks.clear();
+  bgTaskEls.clear();
   renderBgPanel();
 }
 
@@ -37,7 +39,8 @@ export function getBackgroundTask(id) {
 
 export function setBackgroundTask(id, task) {
   bgTasks.set(id, task);
-  renderBgPanel();
+  renderBgTask(id, task);
+  if (dom.bgPanel) dom.bgPanel.hidden = bgTasks.size === 0;
 }
 
 export function getCurrentTodos() {
@@ -71,13 +74,24 @@ export function setCurrentTodos(todos, { merge = false } = {}) {
 export function renderBgPanel() {
   if (!dom.bgPanel || !dom.bgList) return;
   dom.bgPanel.hidden = bgTasks.size === 0;
-  dom.bgList.innerHTML = Array.from(bgTasks.values()).map(t => {
-    const status = safeStatusClass(t.status ?? 'running');
-    const label = String(t.command ?? t.id ?? '').slice(0, 60);
-    return `<div class="todo-item ${status}" title="${status}">${
-      escapeHTML(label)
-    }</div>`;
-  }).join('');
+  dom.bgList.replaceChildren();
+  bgTaskEls.clear();
+  for (const [id, task] of bgTasks) renderBgTask(id, task);
+}
+
+function renderBgTask(id, task) {
+  if (!dom.bgPanel || !dom.bgList) return;
+  let item = bgTaskEls.get(id);
+  if (!item) {
+    item = document.createElement('div');
+    bgTaskEls.set(id, item);
+    dom.bgList.appendChild(item);
+  }
+  const status = safeStatusClass(task.status ?? 'running');
+  const label = String(task.command ?? task.id ?? '').slice(0, 60);
+  item.className = `todo-item ${status}`;
+  item.title = status;
+  item.textContent = label;
 }
 
 function renderTodoPanel() {

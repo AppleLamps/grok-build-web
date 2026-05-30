@@ -24,7 +24,14 @@ globalThis.window.requestAnimationFrame = requestFrame;
 globalThis.window.cancelAnimationFrame = cancelFrame;
 
 const { state, dom } = await importPublic('public/js/state.js');
-const { appendMessage, appendThought, clearLog, finishStreaming } = await importPublic('public/js/chat.js');
+const { renderMarkdown } = await importPublic('public/js/markdown.js');
+const {
+  appendMessage,
+  appendThought,
+  clearLog,
+  finishStreaming,
+  __testAssistantStreamStats,
+} = await importPublic('public/js/chat.js');
 
 test('appendMessage batches markdown rendering to one frame', () => {
   resetDomState();
@@ -39,8 +46,9 @@ test('appendMessage batches markdown rendering to one frame', () => {
   flushFrames();
 
   assert.equal(activeFrameCount(), 0);
-  assert.match(state.assistantEl.innerHTML, /abc/);
+  assert.match(state.assistantEl.querySelector('.markdown-live-tail').innerHTML, /abc/);
   assert.equal(state.assistantEl.classList.contains('streaming'), true);
+  assert.equal(__testAssistantStreamStats().fullRenderCount, 0);
 });
 
 test('finishStreaming renders pending content synchronously', () => {
@@ -58,6 +66,60 @@ test('finishStreaming renders pending content synchronously', () => {
   flushFrames({ includeCancelled: true });
   assert.match(state.assistantEl.innerHTML, /abc/);
   assert.equal(state.assistantEl.classList.contains('streaming'), false);
+  assert.equal(__testAssistantStreamStats().fullRenderCount, 1);
+});
+
+test('appendMessage commits stable markdown blocks and renders only the live tail', () => {
+  resetDomState();
+  const source = '## One\n\nSecond paragraph with [link](https://example.com)';
+
+  for (const ch of source) appendMessage(ch);
+  flushFrames();
+
+  const stats = __testAssistantStreamStats();
+  assert.equal(stats.fullRenderCount, 0);
+  assert.equal(stats.committedBlockCount, 1);
+  assert.ok(stats.maxLiveSourceLength < source.length);
+  assert.match(state.assistantEl.querySelector('.markdown-live-tail').innerHTML, /Second paragraph/);
+});
+
+test('appendMessage streams large open code fences without full-buffer markdown rendering', () => {
+  resetDomState();
+  const code = '```js\n' + 'console.log("x");\n'.repeat(300);
+
+  appendMessage(code);
+  flushFrames();
+
+  const stats = __testAssistantStreamStats();
+  assert.equal(stats.fullRenderCount, 0);
+  assert.match(state.assistantEl.querySelector('.markdown-live-tail').innerHTML, /code-block/);
+  assert.match(state.assistantEl.querySelector('.markdown-live-tail').innerHTML, /console\.log/);
+});
+
+test('finishStreaming final assistant HTML matches canonical markdown renderer', () => {
+  resetDomState();
+  const source = [
+    '# Heading',
+    '',
+    '1. First',
+    '1. Second',
+    '',
+    '> quoted **text**',
+    '',
+    '| A | B |',
+    '| --- | --- |',
+    '| [x](https://example.com) | `code` |',
+    '',
+    '```js',
+    '<unsafe>',
+    '```',
+  ].join('\n');
+
+  appendMessage(source);
+  flushFrames();
+  finishStreaming();
+
+  assert.equal(state.assistantEl.innerHTML, renderMarkdown(source));
 });
 
 test('appendThought batches markdown rendering to one frame', () => {

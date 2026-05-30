@@ -5,6 +5,7 @@
 
 import { state, dom } from './state.js';
 import { renderMarkdown, escapeHTML } from './markdown.js';
+import { createMarkdownStreamRenderer } from './streaming-markdown.js';
 import { resetAllToolState, resetTransientToolState } from './tool-state.js';
 
 let assistantRenderPending = false;
@@ -17,6 +18,7 @@ let thinkingRenderHandle = null;
 let thinkingRenderCancel = null;
 let thinkingRenderGeneration = 0;
 let lastThinkingRenderAt = 0;
+let assistantStreamRenderer = null;
 const AUTO_SCROLL_NEAR_BOTTOM_PX = 120;
 const ASSISTANT_RENDER_INTERVAL_MS = 32;
 const THINKING_RENDER_INTERVAL_MS = 48;
@@ -40,6 +42,7 @@ export function newTurn() {
   state.thinkingBuf = '';
   state.assistantEl = null;
   state.assistantBuf = '';
+  assistantStreamRenderer = null;
   state.toolEls.clear();
   state.planCards.clear();
   // Reset subagent depth between turns so a failed use_tool can't leak
@@ -66,6 +69,7 @@ export function clearLog() {
   state.thinkingBuf = '';
   state.assistantEl = null;
   state.assistantBuf = '';
+  assistantStreamRenderer = null;
   state.toolEls.clear();
   state.planCards.clear();
   state.permCards.clear();
@@ -128,14 +132,18 @@ export function appendMessage(text) {
     state.assistantEl = document.createElement('div');
     state.assistantEl.className = 'assistant streaming';
     state.turnEl.appendChild(state.assistantEl);
+    assistantStreamRenderer = createMarkdownStreamRenderer(state.assistantEl);
   }
+  if (!assistantStreamRenderer) assistantStreamRenderer = createMarkdownStreamRenderer(state.assistantEl);
   state.assistantBuf += text;
+  assistantStreamRenderer.append(text);
   scheduleAssistantRender();
 }
 
 function renderAssistantNow() {
   if (!state.assistantEl) return;
-  state.assistantEl.innerHTML = renderMarkdown(state.assistantBuf);
+  if (!assistantStreamRenderer) assistantStreamRenderer = createMarkdownStreamRenderer(state.assistantEl);
+  assistantStreamRenderer.render();
   state.assistantEl.classList.add('streaming');
   lastAssistantRenderAt = Date.now();
   autoScroll();
@@ -154,7 +162,10 @@ export function finishStreaming() {
   finishThinkingRender();
   if (!state.assistantEl) return;
   cancelPendingAssistantRender();
-  renderAssistantNow();
+  if (!assistantStreamRenderer) assistantStreamRenderer = createMarkdownStreamRenderer(state.assistantEl);
+  assistantStreamRenderer.finish(state.assistantBuf);
+  lastAssistantRenderAt = Date.now();
+  autoScroll();
   state.assistantEl.classList.remove('streaming');
 }
 
@@ -222,6 +233,10 @@ function cancelPendingAssistantRender() {
   }
   assistantRenderHandle = null;
   assistantRenderCancel = null;
+}
+
+export function __testAssistantStreamStats() {
+  return assistantStreamRenderer?.stats ?? null;
 }
 
 function cancelPendingThinkingRender() {

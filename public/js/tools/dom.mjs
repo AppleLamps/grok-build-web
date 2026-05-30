@@ -2,6 +2,17 @@ import { state } from '../state.js';
 import { newTurn, autoScroll } from '../chat.js';
 import { getSubagentDepth } from '../tool-state.js';
 
+const toolRefs = new WeakMap();
+let toolOpenHandler = null;
+
+export function setToolOpenHandler(handler) {
+  toolOpenHandler = typeof handler === 'function' ? handler : null;
+}
+
+export function getToolRefs(el) {
+  return toolRefs.get(el) ?? null;
+}
+
 function currentToolGroup() {
   if (!state.turnEl) newTurn();
   const last = state.turnEl.lastElementChild;
@@ -41,9 +52,22 @@ export function getToolEl(id) {
     </span>
     <div class="details"></div>
   `;
-  el.querySelector('.summary').addEventListener('click', (e) => {
+  const refs = {
+    summary: el.querySelector('.summary'),
+    statusIcon: el.querySelector('.status-icon'),
+    verb: el.querySelector('.verb'),
+    target: el.querySelector('.target'),
+    deltaAdd: el.querySelector('.delta-add'),
+    deltaDel: el.querySelector('.delta-del'),
+    details: el.querySelector('.details'),
+    latestUpdate: null,
+    detailsDirty: false,
+  };
+  toolRefs.set(el, refs);
+  refs.summary.addEventListener('click', (e) => {
     e.stopPropagation();
-    el.classList.toggle('open');
+    const isOpen = el.classList.toggle('open');
+    if (isOpen) toolOpenHandler?.(el);
   });
   group.querySelector('.tool-group-items').appendChild(el);
   state.toolEls.set(id, el);

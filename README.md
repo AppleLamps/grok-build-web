@@ -265,22 +265,25 @@ $env:GROK_WEB_LIVE_X_SEARCH='1'; npm run test:live
 $env:GROK_WEB_LIVE_PLUGIN_MCP_NAME='<server-name>'; npm run test:live
 ```
 
-### Grok 0.2.8 Compatibility Checks
+### Grok 0.2.14 Compatibility Checks
 
-Grok CLI 0.2.8 includes the 0.2.7 platform, session, image, and slash-command fixes plus the current stable updater target. Run the automated live suite and manual compatibility checks against the installed CLI after updating.
+The local stable updater currently targets Grok CLI 0.2.14. The public xAI Build changelog may lag the updater, so verify both `grok update --check --json` and the latest visible changelog entry when reviewing a new CLI release.
 
-0.2.7 and 0.2.8 items to verify:
+Current items to verify after updating:
 
 - Slash autocomplete wraps with ArrowUp and ArrowDown.
 - Session resume replays tool and subagent UI without breaking grouped tool cards.
 - Windows image paste and screenshot file input work through browser paste, drag-and-drop, and attach.
-- Windows-friendly launch flags are detected from `grok --help`, including `--permission-mode`.
+- Windows-friendly launch flags are detected from `grok --help`, including `--permission-mode`, `--todo-gate`, `--check`, and `--best-of-n`.
 - Multimodal `read_file` output continues rendering text, images, videos, PDFs, and PPTX text.
-- Image generation previews continue working for local Grok session media paths.
+- Image and video generation previews continue working for URLs and local Grok session media paths, with Open links when a safe URL is available.
 - `/login` and `/usage` remain reachable through the web UI or slash autocomplete.
 - `--todo-gate` is available in Settings when the installed CLI advertises it.
 - `_x.ai/ask_user_question` renders as a web elicitation card and returns `{ outcome, answers?, partial_answers? }`
 - Active TODO state hydrates from persisted `plan.json` when loading a saved session
+- Terminal tool cards continue to update while command output streams.
+- Model switching shows an immediate busy status while the agent respawns.
+- TUI-only fixes, such as terminal resize handling, terminal video playback, and extension modal keyboard focus, should be validated in the Grok TUI. They do not require a web wrapper change unless the CLI exposes new ACP data or flags.
 
 The compatibility pass should include the existing `npm run test:live` suite, plus manual checks for Windows, Linux, and macOS behaviors where those fixes are platform-specific. Review the xAI Build changelog during the pass.
 

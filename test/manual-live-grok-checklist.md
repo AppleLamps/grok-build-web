@@ -20,7 +20,24 @@ Keep these visual/account checks manual when needed:
 - Open Settings and confirm unsupported launch flags are disabled for the installed CLI.
 - Run `grok mcp list` and test a plugin-provided MCP server that requires auth when available.
 
-## Grok 0.1.217 Compatibility Status
+## Grok 0.2.14 Compatibility Status
+
+Local compatibility work has been completed against `grok 0.2.14 (e0d895dcd) [stable]` on 2026-05-31. The updater reported `currentVersion` and `latestVersion` as `0.2.14` with `updateAvailable:false`.
+
+Automated verification completed:
+
+- `npm run check` passed syntax, Biome lint, and format checks.
+- `npm test` passed 126 account-free tests, with 6 live-only checks skipped.
+- `npm run test:live` passed bootstrap/SSE/settings/models/MCP, real web search, multimodal `read_file`, and cancellation recovery. X search and plugin MCP checks remained opt-in.
+- `npm run test:visual` passed desktop, settings, thinking-trace, and mobile viewport checks.
+
+Public changelog review:
+
+- The xAI Build changelog visible on 2026-05-31 listed `v 0.2.11` as the newest public notes, while the CLI updater installed 0.2.14.
+- Web-relevant 0.2.11 items are already covered by slash autocomplete tests, generated media Open links, streamed terminal card updates, Settings/model busy status, and live web/multimodal checks.
+- TUI-only items, including terminal resize, terminal video playback, and extension modal keyboard focus, should be checked in the native Grok TUI when doing full CLI acceptance.
+
+## Grok 0.1.217 Historical Compatibility Status
 
 Local compatibility work has been completed against `grok 0.1.217 (332caedb7)`. The automated live suite passed, and follow-up web fixes landed for slash command compatibility, generated media previews, search/X result cards, Worktrees panel environment handling, and renderer escaping.
 
@@ -39,9 +56,9 @@ Keep these checks in the manual pass when validating future Grok CLI updates:
 - If testing Linux, paste an image into the TUI separately for CLI validation; Grok Build Web still only supports text-file attachments in the browser.
 - If testing a repo with an empty git index, verify `grok -w` no longer crashes in the CLI and that the web Worktrees panel still lists worktrees normally.
 
-## Grok 0.1.218 Compatibility Status
+## Grok 0.1.218 Historical Follow-up Notes
 
-Grok CLI 0.1.218 is available. After updating, run `npm run test:live`, review the release notes in the Grok TUI, and manually verify:
+Grok CLI 0.1.218 introduced the following items. Keep them in future manual compatibility passes when relevant:
 
 - Windows Ctrl+X default shortcut help binding.
 - Linux image pasting and shortcut keybinding behavior.

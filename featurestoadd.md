@@ -74,7 +74,7 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 - **[done] Web search / fetch rendering** — `[tool web_search / web_fetch]` Labels recognized with robust nested result extraction, links, timestamps, and snippets when present.
 - **[done] X search rendering** — `[tool x_search / x_search_posts / twitter_search / search_x]` Labels recognized with query, count, handles, timestamps, links, and snippets when present.
 - **[done] Multimodal read_file rendering** — `[tool read_file]` Content arrays and raw output fields render text, images, videos, PDFs, file cards, and extracted PDF/PPTX text.
-- **[done] Image / video gen rendering** — `[tool image_gen / video_gen]` Inline preview when `rawOutput.url` is present or when 0.1.217 emits local Grok session media paths served through `/session-media`.
+- **[done] Image / video gen rendering** — `[tool image_gen / video_gen]` Inline preview when `rawOutput.url` is present or when the CLI emits local Grok session media paths served through `/session-media`.
 - **[done, partial] Scheduler / Routines UI** — `[tool scheduler_create / scheduler_delete / scheduler_list]` Sidebar Tools → "Routines" opens an agent-driven panel for list/create/delete prompts. **Still missing:** live scheduled-tasks status outside the normal turn output.
 - **[done] Tool call grouping** — When 3+ tool calls happen back-to-back, they collapse into a single "N tools ▾" line.
 - **[done, partial] Subagent nesting** — CSS class `.tool.subagent-child` exists for indentation; logic to apply it on `use_tool` spawns is still wiring-only (not auto-applied).

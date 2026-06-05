@@ -87,6 +87,7 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 ## Advanced
 
 - **[done] Best-of-N tournaments** — `[flag --best-of-n N]` `[skill /best-of-n]` Composer send-mode dropdown runs `POST /cli/oneshot {bestOfN:N, text, cwd}` as a headless one-shot using the same grok.com-subscription/API-key billing setting as the agent process.
+- **[done] Configurable headless runner** — `[flag -p]` `[flag --output-format]` `[flag --session-id]` `[flag --resume]` `[flag --continue]` Sidebar Tools → "Headless" opens a one-shot runner with selectable output format and new/named/resume/continue session modes.
 - **[done via Settings] Subagents toggle** — `[flag --no-subagents]`
 - **[done, partial] Subagent nested cards** — `[flag --agents <JSON>]` See "Subagent nesting" above.
 - **[done] Self-verification (`--check`)** — `[flag --check]` Composer send-mode dropdown runs a headless one-shot via `POST /cli/oneshot {check:true, text, cwd}`.

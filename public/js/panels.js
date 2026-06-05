@@ -2,6 +2,7 @@
 // Plugins, Hooks, Models. Wired to a "Tools" menu in the sidebar.
 
 import {
+  cliHeadless,
   cliInspect,
   cliMcp,
   cliWorktree,
@@ -16,6 +17,7 @@ import { modal } from './modal.js';
 import { toast } from './toast.js';
 import { state, TAB_SESSION_ID } from './state.js';
 import { escapeHTML } from './markdown.js';
+import { el } from './ui/dom.js';
 
 async function showJsonPanel(title, fetcher) {
   const { body } = modal(title, panelMessage('div', 'panel-loading', 'Loading…'));
@@ -48,6 +50,83 @@ export function showWorktrees() {
 }
 export function showModels() {
   return showJsonPanel('Available models', cliModels);
+}
+
+export function showHeadlessRun() {
+  const result = el('pre', {
+    className: 'panel-content headless-result',
+    attrs: { hidden: true, 'aria-live': 'polite' },
+  });
+  const runButton = el('button', { className: 'headless-run', text: 'Run headless', attrs: { type: 'submit' } });
+  const sessionMode = selectField('Session', 'sessionMode', [
+    ['new', 'New one-shot'],
+    ['session', 'Named session'],
+    ['resume', 'Resume session'],
+    ['continue', 'Continue latest'],
+  ]);
+  const sessionId = textField('Session ID', 'sessionId', 'name-or-id', 'Used with Named session.');
+  const resumeId = textField('Resume ID', 'resumeId', 'optional session id', 'Leave blank to resume the latest session.');
+  const form = el(
+    'form',
+    { className: 'headless-panel' },
+    el(
+      'div',
+      { className: 'headless-grid' },
+      selectField('Output', 'outputFormat', [
+        ['plain', 'plain'],
+        ['json', 'json'],
+        ['streaming-json', 'streaming-json'],
+      ]),
+      sessionMode,
+      sessionId,
+      resumeId,
+      textField('CWD', 'cwd', state.currentCwd || 'current server cwd', 'Optional working directory for this run.'),
+      textField('Model', 'model', 'default model', 'Optional model ID.'),
+      selectField('Effort', 'effort', [
+        ['', '(default)'],
+        ['low', 'low'],
+        ['medium', 'medium'],
+        ['high', 'high'],
+        ['xhigh', 'xhigh'],
+        ['max', 'max'],
+      ]),
+      numberField('Max turns', 'maxTurns', 'Optional turn limit.'),
+    ),
+    checkboxField('Always approve tool requests', 'alwaysApprove', true),
+    textareaField('Prompt', 'text', 'Describe the headless task to run.'),
+    el('div', { className: 'headless-actions' }, runButton),
+    result,
+  );
+  const sessionSelect = sessionMode.querySelector('[name="sessionMode"]');
+  const syncSessionFields = () => {
+    const mode = sessionSelect.value;
+    sessionId.hidden = mode !== 'session';
+    resumeId.hidden = mode !== 'resume';
+  };
+  sessionSelect.addEventListener('change', syncSessionFields);
+  syncSessionFields();
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const body = collectHeadlessForm(form);
+    runButton.disabled = true;
+    runButton.textContent = 'Running...';
+    result.hidden = false;
+    result.textContent = 'Running headless command...';
+    try {
+      const data = await cliHeadless(body);
+      result.textContent = formatHeadlessResult(data);
+      if (data.ok) toast('Headless run complete');
+    } catch (e) {
+      result.textContent = String(e?.message ?? e);
+    } finally {
+      runButton.disabled = false;
+      runButton.textContent = 'Run headless';
+    }
+  });
+
+  modal('Headless run', form);
+  return form;
 }
 
 export async function showSessionInfo() {
@@ -105,6 +184,107 @@ function flagSummary(opts) {
   if (opts.noSubagents) flags.push('no-subagents');
   if (opts.restoreCode) flags.push('restore-code');
   return flags.length ? flags.join(', ') : '(none)';
+}
+
+function textField(label, name, placeholder = '', hint = '') {
+  return fieldWrap(
+    label,
+    name,
+    el('input', {
+      attrs: { name, type: 'text', placeholder },
+      props: { type: 'text' },
+    }),
+    hint,
+  );
+}
+
+function numberField(label, name, hint = '') {
+  return fieldWrap(
+    label,
+    name,
+    el('input', {
+      attrs: { name, type: 'number', min: '1', placeholder: 'optional' },
+      props: { type: 'number' },
+    }),
+    hint,
+  );
+}
+
+function textareaField(label, name, placeholder = '') {
+  return fieldWrap(
+    label,
+    name,
+    el('textarea', {
+      attrs: { name, rows: '7', placeholder },
+    }),
+  );
+}
+
+function selectField(label, name, options) {
+  const select = el('select', { attrs: { name } });
+  for (const [value, text] of options) {
+    select.appendChild(el('option', { text, attrs: { value } }));
+  }
+  return fieldWrap(label, name, select);
+}
+
+function checkboxField(label, name, checked = false) {
+  return el(
+    'label',
+    { className: 'headless-check' },
+    el('input', {
+      attrs: { name, type: 'checkbox' },
+      props: { type: 'checkbox', checked },
+    }),
+    el('span', { text: label }),
+  );
+}
+
+function fieldWrap(label, name, input, hint = '') {
+  return el(
+    'label',
+    { className: 'headless-field' },
+    el('span', { text: label }),
+    input,
+    hint ? el('small', { text: hint }) : null,
+  );
+}
+
+function collectHeadlessForm(form) {
+  const value = (name) => form.querySelector(`[name="${name}"]`)?.value?.trim() ?? '';
+  const body = {
+    text: value('text'),
+    outputFormat: value('outputFormat') || 'plain',
+    sessionMode: value('sessionMode') || 'new',
+    cwd: value('cwd') || null,
+    model: value('model') || null,
+    effort: value('effort') || null,
+    maxTurns: value('maxTurns') || null,
+    alwaysApprove: !!form.querySelector('[name="alwaysApprove"]')?.checked,
+  };
+  if (body.sessionMode === 'session') body.sessionId = value('sessionId');
+  if (body.sessionMode === 'resume') body.resumeId = value('resumeId');
+  return body;
+}
+
+function formatHeadlessResult(data) {
+  const args = Array.isArray(data.args) ? data.args : [];
+  const lines = [
+    `status: ${data.ok ? 'ok' : 'failed'}`,
+    `cwd: ${data.cwd || '(server default)'}`,
+    `command: grok ${args.map(quoteArg).join(' ')}`,
+    '',
+    'stdout:',
+    data.stdout || '(empty)',
+  ];
+  if (data.stderr) lines.push('', 'stderr:', data.stderr);
+  return lines.join('\n');
+}
+
+function quoteArg(value) {
+  const text = String(value ?? '');
+  if (!text) return '""';
+  return /\s|["']/.test(text) ? JSON.stringify(text) : text;
 }
 
 function formatTokens(n) {
@@ -262,3 +442,8 @@ export async function downloadTrace() {
     toast(`Trace failed: ${e.message}`);
   }
 }
+
+export const __testHeadless = {
+  collectHeadlessForm,
+  formatHeadlessResult,
+};

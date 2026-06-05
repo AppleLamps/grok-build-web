@@ -129,6 +129,43 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
       assert.equal(fakeResult.XAI_API_KEY_set, false);
       assert.equal(fakeResult.GROK_API_KEY_set, false);
 
+      const headlessText = 'resume this run';
+      const headless = await fetch(makeUrl(base, '/cli/headless'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          text: headlessText,
+          outputFormat: 'streaming-json',
+          sessionMode: 'resume',
+          resumeId: 'resume-session',
+          cwd: temp,
+          model: 'grok-4.3',
+          effort: 'high',
+          maxTurns: '2',
+          alwaysApprove: false,
+        }),
+      });
+      assert.equal(headless.status, 200);
+      const headlessData = await headless.json();
+      const headlessResult = JSON.parse(headlessData.stdout);
+      assert.deepEqual(headlessData.args, [
+        '--model',
+        'grok-4.3',
+        '--effort',
+        'high',
+        '--max-turns',
+        '2',
+        '--resume',
+        'resume-session',
+        '--output-format',
+        'streaming-json',
+        '-p',
+        headlessText,
+      ]);
+      assert.deepEqual(headlessResult.args, headlessData.args);
+      assert.equal(headlessResult.prompt, headlessText);
+      assert.equal(headlessResult.cwd, temp);
+
       const apiKeyMode = await fetch(makeUrl(base, '/session/respawn'), {
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
@@ -665,6 +702,8 @@ test('API bad requests return JSON error bodies', async () => {
       await assertJsonError(base, cookie, '/elicitation', { rpcId: 404, action: 'accept' }, 404, /not found/);
       await assertJsonError(base, cookie, '/session/load', {}, 400, /sessionId required/);
       await assertJsonError(base, cookie, '/cli/oneshot', { text: 'x', bestOfN: 0 }, 400, /positive integer/);
+      await assertJsonError(base, cookie, '/cli/headless', { text: 'x', outputFormat: 'xml' }, 400, /bad outputFormat/);
+      await assertJsonError(base, cookie, '/cli/headless', { text: 'x', sessionMode: 'session' }, 400, /sessionId required/);
 
       const unauthorized = await fetch(makeUrl(base, '/prompt'), {
         method: 'POST',

@@ -1779,6 +1779,7 @@ body:has(#welcome:not([hidden])) .send-mode {
   background: none; color: var(--mute); border: 1px solid var(--line);
 }
 .model-picker-form,
+.headless-panel,
 .routines-panel {
   display: flex; flex-direction: column; gap: 14px;
 }
@@ -1790,15 +1791,20 @@ body:has(#welcome:not([hidden])) .send-mode {
   color: var(--mute);
 }
 .model-picker-form label,
+.headless-panel label,
 .routines-panel label {
   display: flex; flex-direction: column; gap: 6px;
 }
 .model-picker-form label span,
+.headless-panel label span,
 .routines-panel label span {
   font-size: 12px; font-weight: 500; color: var(--ink-2);
 }
 .model-picker-form select,
 .model-picker-form input,
+.headless-panel select,
+.headless-panel input,
+.headless-panel textarea,
 .routines-panel input,
 .routines-panel textarea,
 .share-fallback input {
@@ -1809,9 +1815,53 @@ body:has(#welcome:not([hidden])) .send-mode {
 }
 .model-picker-form select:focus,
 .model-picker-form input:focus,
+.headless-panel select:focus,
+.headless-panel input:focus,
+.headless-panel textarea:focus,
 .routines-panel input:focus,
 .routines-panel textarea:focus,
 .share-fallback input:focus { border-color: var(--focus-line); }
+.headless-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.headless-field[hidden] { display: none; }
+.headless-field small {
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+.headless-check {
+  align-items: center;
+  flex-direction: row !important;
+  gap: 8px !important;
+}
+.headless-check input {
+  width: 16px;
+  height: 16px;
+}
+.headless-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.headless-run {
+  border: 0;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.headless-run:disabled {
+  cursor: wait;
+  opacity: .68;
+}
+.headless-result {
+  max-height: 36vh;
+}
 .routine-section,
 .routine-create,
 .routine-delete {
@@ -1929,6 +1979,7 @@ body:has(#welcome:not([hidden])) .send-mode {
 }
 .memory-preview-meta { color: var(--mute); white-space: nowrap; }
 @media (max-width: 760px) {
+  .headless-grid { grid-template-columns: 1fr; }
   .memory-browser { grid-template-columns: 1fr; }
   .memory-list { max-height: 30vh; }
 }

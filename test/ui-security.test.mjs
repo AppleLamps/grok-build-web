@@ -54,6 +54,36 @@ test('CLI panel output is inserted as text, not HTML', async () => {
   assert.equal(body.querySelectorAll('img').length, 0);
 });
 
+test('headless run output is inserted as text, not HTML', async () => {
+  const { body } = installDomStubs({
+    fetchImpl: async (url, opts = {}) => {
+      assert.equal(String(url), '/cli/headless');
+      const request = JSON.parse(opts.body);
+      assert.equal(request.outputFormat, 'streaming-json');
+      return json({
+        ok: true,
+        args: ['--output-format', 'streaming-json', '-p', request.text],
+        cwd: 'C:\\Users\\lucas\\grok-web',
+        stdout: '<script>alert(1)</script><img src=x onerror=alert(1)>',
+        stderr: '<svg onload=alert(1)>',
+      });
+    },
+  });
+  const { showHeadlessRun } = await importFresh('public/js/panels.js');
+
+  const form = showHeadlessRun();
+  form.querySelector('[name="outputFormat"]').value = 'streaming-json';
+  form.querySelector('[name="text"]').value = '<b>prompt</b>';
+  form.dispatchEvent({ type: 'submit', preventDefault() {} });
+  await delay(0);
+
+  const result = body.querySelector('.headless-result');
+  assert.match(result.textContent, /<script>alert\(1\)<\/script>/);
+  assert.match(result.textContent, /<svg onload=alert\(1\)>/);
+  assert.equal(body.querySelectorAll('script').length, 0);
+  assert.equal(body.querySelectorAll('img').length, 0);
+});
+
 test('login modal renders CLI prompt as text and closes after auth status is detected', async () => {
   let statusChecks = 0;
   const { body } = installDomStubs({

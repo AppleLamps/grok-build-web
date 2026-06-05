@@ -84,6 +84,15 @@ export async function cliOneshot(body) {
   return r.json();
 }
 
+export async function cliHeadless(body) {
+  const r = await fetch(url('/cli/headless'), {
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify(withSid(body)),
+  });
+  return readJsonResponse(r, 'headless run');
+}
+
 export async function postCancel() {
   return fetch(url('/cancel'), {
     method: 'POST',

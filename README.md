@@ -102,6 +102,8 @@ The send mode selector supports:
 
 Headless modes do not append to the interactive ACP session history.
 
+For more control, Sidebar Tools -> Headless opens a one-shot runner for `grok -p` with selectable `plain`, `json`, or `streaming-json` output, plus new/named/resume/continue session modes.
+
 ### Attach files
 
 The attach button inserts text-like files into the prompt as fenced code blocks. Other files upload into the current session workspace and are sent as attached file paths so Grok can read them with its native multimodal tools. Drag-and-drop and clipboard paste handle the same file types. Each attach action is capped at 5 files. Text files are capped at 256 KB, and binary attachments are capped at 25 MB.
@@ -236,6 +238,7 @@ grok-web/
 | `/cli/login/status` | GET | Whether `~/.grok/auth.json` exists after device auth |
 | `/cli/import` | POST | `grok import --json -- <targets>` |
 | `/cli/oneshot` | POST | Headless `grok -p` for check and best-of-N modes |
+| `/cli/headless` | POST | Configurable headless `grok -p` runner |
 
 ## Development
 

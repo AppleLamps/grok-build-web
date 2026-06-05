@@ -55,4 +55,7 @@ test('bootstrap failure shows recovery banner and skips SSE until retry succeeds
   assert.equal(sources.length, 1, 'retry should start SSE after session creation');
   assert.match(sources[0].url, /sessionId=new-session/);
   assert.equal(banner.hidden, true);
+  assert.equal(document.getElementById('send').disabled, false);
+  assert.match(document.getElementById('status').textContent, /ready/);
+  assert.match(document.getElementById('crumb').textContent, /proj/);
 });

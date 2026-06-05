@@ -27,6 +27,28 @@ export function showRecoveryBanner({ title, message, actionLabel, onAction }) {
   slot.querySelector('.close')?.addEventListener('click', () => hideRecoveryBanner());
 }
 
+export function showReadinessBanner({ title, message, actionLabel = 'Retry', onAction }) {
+  const slot = slotEl();
+  if (!slot) return;
+  activeAction = onAction;
+  slot.hidden = false;
+  const action = onAction
+    ? `<button type="button" class="recovery-action">${escapeHTML(actionLabel)}</button>`
+    : '';
+  slot.innerHTML = `
+    <div class="recovery-banner readiness-banner" role="status" aria-live="polite">
+      <span class="recovery-spinner" aria-hidden="true"></span>
+      <div class="recovery-copy">
+        <strong>${escapeHTML(title)}</strong>
+        <span>${escapeHTML(message)}</span>
+      </div>
+      ${action}
+    </div>`;
+  slot.querySelector('.recovery-action')?.addEventListener('click', () => {
+    activeAction?.();
+  });
+}
+
 export function hideRecoveryBanner() {
   activeAction = null;
   const slot = slotEl();

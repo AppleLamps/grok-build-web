@@ -20,7 +20,7 @@ import { paintTool, renderPlanCard } from './tools.js';
 import { addPermissionCard, resolvePermissionCard } from './permissions.js';
 import { addElicitationCard, resolveElicitationCard } from './elicitation.js';
 import { renderRecents, loadRecents } from './sidebar.js';
-import { setBusy, renderModePill } from './composer.js';
+import { renderModePill, setBusy, setSessionReady } from './composer.js';
 import { setCommands } from './slashcommands.js';
 import { setTabSessionId } from './state.js';
 import { getSessionPlan, postRespawn, postTabNew } from './api.js';
@@ -114,6 +114,7 @@ export function dispatch(event) {
       hideRecoveryBanner();
       state.currentCwd = event.cwd ?? state.currentCwd;
       dom.crumb.textContent = event.cwd?.split(/[\\/]/).slice(-2).join(' / ') ?? 'session';
+      setSessionReady(true);
       setBusy(false);
       setStatus('connected', 'ready');
       break;
@@ -123,6 +124,7 @@ export function dispatch(event) {
       state.currentCwd = event.cwd ?? state.currentCwd;
       dom.crumb.textContent = event.cwd?.split(/[\\/]/).slice(-2).join(' / ') ?? 'session';
       if (event.loaded) hydrateTodosFromPlan(event.sessionId, event.cwd);
+      setSessionReady(true);
       setBusy(false);
       setStatus('ready', 'ready');
       renderRecents();
@@ -136,6 +138,7 @@ export function dispatch(event) {
       dom.crumb.textContent = event.cwd?.split(/[\\/]/).slice(-2).join(' / ') ?? 'session';
       if (event.loaded) hydrateTodosFromPlan(event.sessionId, event.cwd);
       else resetAllToolState();
+      setSessionReady(true);
       setBusy(false);
       setStatus(event.loaded ? 'session loaded' : 'new session', 'ready');
       renderRecents();
@@ -203,11 +206,15 @@ export function dispatch(event) {
       // The previous child died — bridge sessions on it are gone. Create a
       // fresh tab session and reconnect SSE without reloading the page.
       hideRecoveryBanner();
+      setSessionReady(false);
       setStatus('agent restarting…', 'busy');
       setTabSessionId(null);
       postTabNew()
         .then((tab) => {
           setTabSessionId(tab.sessionId);
+          state.currentSessionId = tab.sessionId;
+          state.currentCwd = tab.cwd ?? state.currentCwd;
+          setSessionReady(true);
           reconnectSSE();
           setStatus('reconnected', 'ready');
         })
@@ -228,6 +235,7 @@ export function dispatch(event) {
 
     case 'agent_exit':
       if (event.sessionId && event.sessionId !== TAB_SESSION_ID) break;
+      setSessionReady(false);
       setStatus(`agent exited (code ${event.code})`, 'disconnected');
       setBusy(false);
       showRecoveryBanner({
@@ -240,6 +248,7 @@ export function dispatch(event) {
 
     case 'error':
       addError(event.error);
+      setSessionReady(false);
       setStatus('error', 'disconnected');
       setBusy(false);
       break;
@@ -347,11 +356,15 @@ function hydrateTodosFromPlan(sessionId, cwd = null) {
 
 async function recoverAfterRespawn() {
   hideRecoveryBanner();
+  setSessionReady(false);
   setStatus('agent restarting…', 'busy');
   setTabSessionId(null);
   try {
     const tab = await postTabNew();
     setTabSessionId(tab.sessionId);
+    state.currentSessionId = tab.sessionId;
+    state.currentCwd = tab.cwd ?? state.currentCwd;
+    setSessionReady(true);
     reconnectSSE();
     setStatus('reconnected', 'ready');
   } catch (e) {
@@ -367,6 +380,7 @@ async function recoverAfterRespawn() {
 
 async function restartAgent() {
   hideRecoveryBanner();
+  setSessionReady(false);
   setStatus('restarting agent…', 'busy');
   try {
     await postRespawn();

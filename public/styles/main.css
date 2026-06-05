@@ -1095,6 +1095,10 @@ main {
   border-color: var(--line);
   box-shadow: 0 2px 8px rgba(0, 0, 0, .04);
 }
+.input-wrap.session-pending {
+  background: var(--paper-2);
+  border-color: var(--line-soft);
+}
 textarea {
   width: 100%; background: transparent;
   min-width: 0;
@@ -1357,6 +1361,9 @@ body:has(#welcome:not([hidden])) .composer {
 body:has(#welcome:not([hidden])) .send-mode {
   display: none;
 }
+body:has(.readiness-banner):has(#welcome:not([hidden])) .welcome-tiles {
+  display: none;
+}
 
 /* Recents search box */
 .recents-search { padding: 0 12px 4px; }
@@ -1459,6 +1466,17 @@ body:has(#welcome:not([hidden])) .send-mode {
   background: var(--recovery-dot);
   box-shadow: 0 0 0 3px var(--recovery-dot-glow);
 }
+.readiness-banner .recovery-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 2px solid var(--line);
+  border-top-color: var(--ink);
+  animation: readiness-spin .8s linear infinite;
+}
+@keyframes readiness-spin {
+  to { transform: rotate(360deg); }
+}
 .recovery-banner strong {
   color: var(--ink);
   font-weight: 600;
@@ -1493,6 +1511,9 @@ body:has(#welcome:not([hidden])) .send-mode {
 }
 .recovery-banner .close:hover {
   color: var(--ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .readiness-banner .recovery-spinner { animation: none; }
 }
 
 /* Update available banner */

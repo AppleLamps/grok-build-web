@@ -7,10 +7,33 @@ import { addError, setStatus, appendMessage, addUserItem } from './chat.js';
 import { getPendingAttachments, clearAttachments, hasPendingAttachments } from './attachments.js';
 import { getString, setString } from './ui/storage.js';
 
+let busyState = false;
+let sessionReady = false;
+
 export function setBusy(busy) {
-  dom.sendBtn.disabled = busy;
-  dom.sendBtn.style.display = busy ? 'none' : '';
-  dom.stopBtn.style.display = busy ? '' : 'none';
+  busyState = !!busy;
+  renderComposerAvailability();
+}
+
+export function setSessionReady(ready) {
+  sessionReady = !!ready;
+  renderComposerAvailability();
+}
+
+function renderComposerAvailability() {
+  dom.sendBtn.disabled = busyState || !sessionReady;
+  dom.sendBtn.style.display = busyState ? 'none' : '';
+  dom.stopBtn.style.display = busyState ? '' : 'none';
+  const wrap = dom.input.closest?.('.input-wrap');
+  wrap?.classList.toggle('session-pending', !sessionReady);
+  wrap?.setAttribute('data-session-state', sessionReady ? 'ready' : 'starting');
+  dom.form?.classList.toggle('session-pending', !sessionReady);
+  if (!sessionReady) {
+    dom.sendBtn.title = 'Waiting for the local Grok session to finish starting';
+    dom.sendBtn.setAttribute('aria-disabled', 'true');
+  } else {
+    dom.sendBtn.toggleAttribute?.('aria-disabled', false);
+  }
 }
 
 export function renderModePill() {
@@ -49,6 +72,10 @@ export function initComposer() {
   dom.form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = dom.input.value.trim();
+    if (!sessionReady) {
+      setStatus('waiting for session…', 'busy');
+      return;
+    }
     if (dom.sendBtn.disabled) return;
     if (!text && !hasPendingAttachments()) return;
     const attachments = getPendingAttachments();

@@ -4,6 +4,9 @@
 import { dispatch } from './dispatch.js';
 import { streamUrl } from './api.js';
 import { setStatus } from './chat.js';
+import { setSessionReady } from './composer.js';
+import { hideRecoveryBanner, showReadinessBanner } from './recovery.mjs';
+import { state } from './state.js';
 
 let es = null;
 let backoffMs = 1000;
@@ -35,9 +38,29 @@ function connect() {
   es = new EventSource(streamUrl({ since: lastEventId }));
   es.onopen = () => {
     backoffMs = 1000;
-    setStatus('connected — waiting for agent…');
+    if (state.currentSessionId) {
+      setSessionReady(true);
+      hideRecoveryBanner();
+      setStatus('ready', 'ready');
+      return;
+    }
+    setSessionReady(false);
+    showReadinessBanner({
+      title: 'Waiting for local Grok session',
+      message: 'The browser stream is connected. Sending unlocks once the agent reports a session.',
+      actionLabel: 'Retry',
+      onAction: () => connect(),
+    });
+    setStatus('connected — waiting for agent…', 'busy');
   };
   es.onerror = () => {
+    setSessionReady(false);
+    showReadinessBanner({
+      title: 'Reconnecting to local Grok session',
+      message: 'The browser lost the event stream. You can keep drafting; sending unlocks after reconnect.',
+      actionLabel: 'Retry now',
+      onAction: () => connect(),
+    });
     setStatus(`disconnected · retry in ${(backoffMs / 1000) | 0}s`, 'disconnected');
     try {
       es.close();

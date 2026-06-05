@@ -26,6 +26,17 @@ test('stop button cancellation clears composer busy state', async () => {
   assert.equal(dom.stopBtn.disabled, false);
 });
 
+test('send stays disabled until the session is ready', async () => {
+  composer.setSessionReady(false);
+  composer.setBusy(false);
+  assert.equal(dom.sendBtn.disabled, true);
+  assert.equal(dom.form.classList.contains('session-pending'), true);
+
+  composer.setSessionReady(true);
+  assert.equal(dom.sendBtn.disabled, false);
+  assert.equal(dom.form.classList.contains('session-pending'), false);
+});
+
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,

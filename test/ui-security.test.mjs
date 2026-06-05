@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { importFresh, installDomStubs } from './helpers.mjs';
+import { delay, importFresh, installDomStubs } from './helpers.mjs';
 
 test('toast renders hostile markup as literal text', async () => {
   const { body } = installDomStubs();
@@ -52,6 +52,35 @@ test('CLI panel output is inserted as text, not HTML', async () => {
   assert.equal(pre.textContent, '<script>alert(1)</script><img src=x onerror=alert(1)>');
   assert.equal(body.querySelectorAll('script').length, 0);
   assert.equal(body.querySelectorAll('img').length, 0);
+});
+
+test('login modal renders CLI prompt as text and closes after auth status is detected', async () => {
+  let statusChecks = 0;
+  const { body } = installDomStubs({
+    fetchImpl: async (url) => {
+      const path = String(url);
+      if (path === '/cli/login') {
+        return new Response('<script>alert(1)</script> Visit https://example.test/device', { status: 200 });
+      }
+      if (path === '/cli/login/status') {
+        statusChecks++;
+        return json({
+          authenticated: statusChecks > 1,
+          credential: '~/.grok/auth.json',
+          updatedAt: '2026-06-04T00:00:00.000Z',
+        });
+      }
+      return json({});
+    },
+  });
+  const { __testShowLogin } = await importFresh('public/js/tools-menu.js');
+
+  await __testShowLogin({ pollMs: 1, closeDelayMs: 1 });
+  await waitForModalClose(body);
+
+  assert.equal(statusChecks >= 2, true);
+  assert.equal(body.querySelectorAll('script').length, 0);
+  assert.equal(body.querySelector('.modal-backdrop'), null);
 });
 
 test('model picker treats hostile model IDs as text', async () => {
@@ -151,4 +180,11 @@ test('sidebar recents and global search results treat hostile strings as text', 
 
 function json(value) {
   return new Response(JSON.stringify(value), { status: 200, headers: { 'content-type': 'application/json' } });
+}
+
+async function waitForModalClose(body) {
+  for (let i = 0; i < 50; i++) {
+    if (!body.querySelector('.modal-backdrop')) return;
+    await delay(10);
+  }
 }

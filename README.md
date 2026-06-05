@@ -233,6 +233,7 @@ grok-web/
 | `/cli/share` | POST | `grok share <sessionId>` |
 | `/cli/trace` | POST | `grok trace --local --json` |
 | `/cli/login` | POST | `grok login --device-auth` |
+| `/cli/login/status` | GET | Whether `~/.grok/auth.json` exists after device auth |
 | `/cli/import` | POST | `grok import --json -- <targets>` |
 | `/cli/oneshot` | POST | Headless `grok -p` for check and best-of-N modes |
 

@@ -39,6 +39,11 @@ if (args[0] === 'worktree' && args[1] === 'list') {
   process.exit(0);
 }
 
+if (args[0] === 'login' && args.includes('--device-auth')) {
+  console.log('Visit https://grok.example/device and enter code TEST-CODE');
+  process.exit(0);
+}
+
 if (args.includes('-p')) {
   const promptIndex = args.indexOf('-p');
   console.log(

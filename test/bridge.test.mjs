@@ -870,6 +870,45 @@ test('cli worktree receives Windows HOME fallback when parent HOME is empty', as
   });
 });
 
+test('cli login status reports cached auth without exposing local secrets', async () => {
+  await withTempDir('grok-web-login-status-', async (temp) => {
+    const grokHome = join(temp, 'grok-home');
+    const server = await startFakeServer({
+      sessionsRoot: join(temp, 'sessions'),
+      env: { GROK_HOME: grokHome, HOME: join(temp, 'home') },
+    });
+    try {
+      const { base, cookie } = await bootstrap(server);
+
+      const login = await fetch(makeUrl(base, '/cli/login'), { method: 'POST', headers: { cookie } });
+      assert.equal(login.status, 200);
+      assert.match(await login.text(), /TEST-CODE/);
+
+      const missing = await fetch(makeUrl(base, '/cli/login/status'), { headers: { cookie } });
+      assert.equal(missing.status, 200);
+      assert.deepEqual(await missing.json(), {
+        authenticated: false,
+        credential: '~/.grok/auth.json',
+        updatedAt: null,
+      });
+
+      await mkdir(grokHome, { recursive: true });
+      await writeFile(join(grokHome, 'auth.json'), '{"refreshToken":"secret-test-token"}', 'utf8');
+
+      const present = await fetch(makeUrl(base, '/cli/login/status'), { headers: { cookie } });
+      assert.equal(present.status, 200);
+      const body = await present.json();
+      assert.equal(body.authenticated, true);
+      assert.equal(body.credential, '~/.grok/auth.json');
+      assert.match(body.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
+      assert.doesNotMatch(JSON.stringify(body), /secret-test-token/);
+      assert.doesNotMatch(JSON.stringify(body), new RegExp(escapeRegExp(temp)));
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
 async function assertJsonError(base, cookie, path, body, status, pattern) {
   const response = await fetch(makeUrl(base, path), {
     method: 'POST',

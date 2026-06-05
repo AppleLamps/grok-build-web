@@ -15,19 +15,26 @@ test('SSE reconnect keeps only one pending reconnect timer', async () => {
       this.closed = false;
       sources.push(this);
     }
-    close() { this.closed = true; }
+    close() {
+      this.closed = true;
+    }
   };
   globalThis.setTimeout = (fn, ms) => {
     const timer = { fn, ms, cleared: false };
     timers.push(timer);
     return timer;
   };
-  globalThis.clearTimeout = (timer) => { timer.cleared = true; };
+  globalThis.clearTimeout = (timer) => {
+    timer.cleared = true;
+  };
 
   try {
     const sse = await importFresh('public/js/sse.js');
     sse.initSSE();
     assert.equal(sources.length, 1);
+    assert.doesNotMatch(sources[0].url, /since=/);
+    sources[0].onmessage({ data: '{"kind":"noop"}', lastEventId: '42' });
+    assert.equal(sse.__testLastEventId(), '42');
 
     sources[0].onerror();
     sources[0].onerror();
@@ -43,10 +50,12 @@ test('SSE reconnect keeps only one pending reconnect timer', async () => {
     assert.equal(timers.length, 2);
     timers[1].fn();
     assert.equal(sources.length, 3);
+    assert.match(sources[2].url, /since=42/);
 
     sse.reconnectSSE();
     assert.equal(sources[2].closed, true);
     assert.equal(sources.length, 4);
+    assert.match(sources[3].url, /since=42/);
   } finally {
     globalThis.EventSource = originalEventSource;
     globalThis.setTimeout = originalSetTimeout;

@@ -37,12 +37,14 @@ const security = createSecurity({
   getServerPort: () => server?.address()?.port,
 });
 
-server = createServer(createRouter({
-  grok,
-  bridgeSettings,
-  runGrokCli,
-  ...security,
-}));
+server = createServer(
+  createRouter({
+    grok,
+    bridgeSettings,
+    runGrokCli,
+    ...security,
+  }),
+);
 
 async function openBrowser(url) {
   const { spawn } = await import('node:child_process');
@@ -51,7 +53,7 @@ async function openBrowser(url) {
   else spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
 }
 
-watchSessionsRoot(() => {
+const stopSessionsWatcher = watchSessionsRoot(() => {
   invalidateSessionsCache();
   grok.broadcast({ kind: 'sessions_changed' });
 });
@@ -74,15 +76,37 @@ watchSessionsRoot(() => {
 })();
 
 let shuttingDown = false;
-async function shutdown() {
+async function shutdown(exitCode = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
-  try { server?.close(); } catch {}
-  try { await grok.gracefulShutdown(GRACEFUL_SHUTDOWN_TIMEOUT_MS); }
-  catch (e) { console.error('[grok-web] graceful shutdown error:', e); }
-  try { server?.closeAllConnections?.(); } catch {}
-  process.exit(0);
+  try {
+    stopSessionsWatcher?.();
+  } catch {}
+  try {
+    server?.close();
+  } catch {}
+  try {
+    await grok.gracefulShutdown(GRACEFUL_SHUTDOWN_TIMEOUT_MS);
+  } catch (e) {
+    console.error('[grok-web] graceful shutdown error:', e);
+  }
+  try {
+    server?.closeAllConnections?.();
+  } catch {}
+  process.exit(exitCode);
 }
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on('SIGINT', () => {
+  shutdown(0);
+});
+process.on('SIGTERM', () => {
+  shutdown(0);
+});
+process.on('uncaughtException', (e) => {
+  console.error('[grok-web] uncaught exception:', e);
+  shutdown(1);
+});
+process.on('unhandledRejection', (e) => {
+  console.error('[grok-web] unhandled rejection:', e);
+  shutdown(1);
+});

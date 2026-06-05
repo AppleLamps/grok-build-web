@@ -38,7 +38,9 @@ export async function getSettings() {
 
 export async function setSettings(body) {
   const r = await fetch(url('/settings'), {
-    method: 'POST', headers: json, body: JSON.stringify(withSid(body)),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify(withSid(body)),
   });
   return r.json();
 }
@@ -47,13 +49,17 @@ export async function postPrompt(text, attachments = null) {
   const body = { text };
   if (Array.isArray(attachments) && attachments.length) body.attachments = attachments;
   return fetch(url('/prompt'), {
-    method: 'POST', headers: json, body: JSON.stringify(withSid(body)),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify(withSid(body)),
   });
 }
 
 export async function postUpload({ filename, dataBase64 }) {
   const r = await fetch(url('/upload'), {
-    method: 'POST', headers: json, body: JSON.stringify(withSid({ filename, dataBase64 })),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify(withSid({ filename, dataBase64 })),
   });
   return readJsonResponse(r, 'upload');
 }
@@ -71,42 +77,54 @@ export async function postUploadFile({ filename, file }) {
 
 export async function cliOneshot(body) {
   const r = await fetch(url('/cli/oneshot'), {
-    method: 'POST', headers: json, body: JSON.stringify(withSid(body)),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify(withSid(body)),
   });
   return r.json();
 }
 
 export async function postCancel() {
   return fetch(url('/cancel'), {
-    method: 'POST', headers: json, body: JSON.stringify(withSid({})),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify(withSid({})),
   });
 }
 
 // Per-tab session management
 export async function postTabNew(cwd = null) {
   const r = await fetch(url('/tab/new'), {
-    method: 'POST', headers: json, body: JSON.stringify(withSid(cwd ? { cwd } : {})),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify(withSid(cwd ? { cwd } : {})),
   });
   return readJsonResponse(r, 'tab/new');
 }
 
 export async function postTabLoad(sessionId, cwd = null) {
   const r = await fetch(url('/tab/load'), {
-    method: 'POST', headers: json, body: JSON.stringify({ sessionId, cwd }),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify({ sessionId, cwd }),
   });
   return readJsonResponse(r, 'tab/load');
 }
 
 export async function postPermission(rpcId, optionId) {
   return fetch(url('/permission'), {
-    method: 'POST', headers: json, body: JSON.stringify(withSid({ rpcId, optionId })),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify(withSid({ rpcId, optionId })),
   });
 }
 
 export async function postElicitation(rpcId, action, content) {
   const body = content === undefined ? { rpcId, action } : { rpcId, action, content };
   return fetch(url('/elicitation'), {
-    method: 'POST', headers: json, body: JSON.stringify(withSid(body)),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify(withSid(body)),
   });
 }
 
@@ -129,7 +147,9 @@ export async function getSessionPlan(sessionId = TAB_SESSION_ID, cwd = null) {
 // postTabNew/postTabLoad so multi-tab session isolation is preserved.
 export async function postNewSession(body = {}) {
   const r = await fetch(url('/session/new'), {
-    method: 'POST', headers: json, body: JSON.stringify(body),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify(body),
   });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
@@ -137,7 +157,9 @@ export async function postNewSession(body = {}) {
 
 export async function postLoadSession(sessionId, cwd) {
   const r = await fetch(url('/session/load'), {
-    method: 'POST', headers: json, body: JSON.stringify({ sessionId, cwd }),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify({ sessionId, cwd }),
   });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
@@ -155,15 +177,18 @@ export async function getIdentity() {
 
 export async function postRespawn(opts = {}) {
   const r = await fetch(url('/session/respawn'), {
-    method: 'POST', headers: json, body: JSON.stringify(opts),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify(opts),
   });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
-export function streamUrl() {
+export function streamUrl({ since = null } = {}) {
   const u = new URL('/stream', location.origin);
   if (TAB_SESSION_ID) u.searchParams.set('sessionId', TAB_SESSION_ID);
+  if (since != null) u.searchParams.set('since', String(since));
   return u.pathname + u.search;
 }
 
@@ -171,13 +196,17 @@ export function streamUrl() {
 export async function cliShare(sessionId) {
   const body = sessionId ? { sessionId } : {};
   const r = await fetch(url('/cli/share'), {
-    method: 'POST', headers: json, body: JSON.stringify(body),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify(body),
   });
   return r.json();
 }
 export async function cliTrace(sessionId) {
   const r = await fetch(url('/cli/trace'), {
-    method: 'POST', headers: json, body: JSON.stringify({ sessionId }),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify({ sessionId }),
   });
   return r.json();
 }
@@ -215,7 +244,9 @@ export async function cliSessionsSearch(query, limit = null) {
   const body = { query };
   if (limit) body.limit = limit;
   const r = await fetch(url('/cli/sessions/search'), {
-    method: 'POST', headers: json, body: JSON.stringify(body),
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify(body),
   });
   return readJsonResponse(r, 'sessions search');
 }

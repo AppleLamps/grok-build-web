@@ -13,6 +13,8 @@ if (args[0] === '--help') {
 Usage: grok [OPTIONS] [COMMAND]
 
 Options:
+      --agent <NAME>
+      --agents <JSON>
       --always-approve
       --permission-mode <MODE>
       --todo-gate

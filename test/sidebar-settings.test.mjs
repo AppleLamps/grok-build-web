@@ -79,3 +79,12 @@ test('settings exposes current permission modes when supported', async () => {
   const values = [...el.querySelector('select').children].map((child) => child.value);
   assert.deepEqual(values, ['', 'default', 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions', 'plan']);
 });
+
+test('settings disables inline agents JSON when the CLI does not support it', async () => {
+  const field = settings.__testFields.find((f) => f.key === 'agents');
+  const el = settings.__testFieldEl(field, null, { _capabilities: { agents: false } });
+  const textarea = el.querySelector('textarea');
+  assert.equal(textarea.disabled, true);
+  assert.equal(textarea.dataset.unsupported, '1');
+  assert.ok(el.querySelectorAll('.setting-hint').some((h) => /Unsupported/.test(h.textContent)));
+});

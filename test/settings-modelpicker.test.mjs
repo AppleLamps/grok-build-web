@@ -9,6 +9,8 @@ const fieldDefaults = {
   maxTurns: null,
   sandbox: null,
   model: null,
+  agent: null,
+  agents: null,
   rules: null,
   systemPromptOverride: null,
   allow: [],
@@ -34,7 +36,7 @@ installDomStubs({
     if (path === '/spawn-opts') {
       return json({
         ...fieldDefaults,
-        _capabilities: { permissionMode: false, todoGate: false },
+        _capabilities: { agent: true, agents: true, permissionMode: false, todoGate: false },
         _env: { XAI_API_KEY_set: false },
       });
     }
@@ -77,7 +79,7 @@ test('settings groups launch fields and summarizes pending changes', async () =>
   requests.length = 0;
   const panel = await settings.__testOpenSettings();
   const sections = panel.querySelectorAll('.settings-section');
-  assert.equal(sections.length, 6);
+  assert.equal(sections.length, 7);
   assert.equal(sections[0].open, true);
   assert.equal(sections[1].open, true);
   assert.notEqual(sections[2].open, true);
@@ -174,6 +176,22 @@ test('settings launch changes respawn without unsupported permissionMode', async
   const respawn = requests.find((r) => r.url === '/session/respawn');
   assert.equal(respawn.body.sandbox, 'workspace-write');
   assert.equal(Object.hasOwn(respawn.body, 'permissionMode'), false);
+});
+
+test('settings exposes agent and subagent JSON launch fields', async () => {
+  requests.length = 0;
+  const panel = await settings.__testOpenSettings();
+  const agent = panel.querySelectorAll('[data-key]').find((el) => el.dataset.key === 'agent');
+  const agents = panel.querySelectorAll('[data-key]').find((el) => el.dataset.key === 'agents');
+  agent.value = 'reviewer';
+  agents.value = '[{"name":"fast","description":"Quick pass"}]';
+
+  await settings.__testApplySettings();
+  await delay(0);
+
+  const respawn = requests.find((r) => r.url === '/session/respawn');
+  assert.equal(respawn.body.agent, 'reviewer');
+  assert.equal(respawn.body.agents, '[{"name":"fast","description":"Quick pass"}]');
 });
 
 test('model picker parses CLI IDs and respawns with a custom model', async () => {

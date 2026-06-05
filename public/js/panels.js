@@ -149,6 +149,8 @@ export async function showSessionInfo() {
     ['Title', titleRecord?.title || '(no recent metadata)'],
     ['CWD', cwd || '(not yet known)'],
     ['Model', spawnOpts.model || '(default)'],
+    ['Agent', spawnOpts.agent || '(default)'],
+    ['Subagent definitions', spawnOpts.agents ? 'configured' : '(none)'],
     ['Effort', spawnOpts.effort ?? '(default)'],
     ['Reasoning effort', spawnOpts.reasoningEffort ?? '(default)'],
     ['Max turns', spawnOpts.maxTurns ?? '(unlimited)'],

@@ -34,6 +34,20 @@ const FIELDS = [
   { key: 'maxTurns', label: 'Max turns', type: 'number', hint: 'Cap how many tool/think cycles per prompt.' },
   { key: 'sandbox', label: 'Sandbox profile', type: 'text', hint: 'Filesystem/network sandbox profile name.' },
   { key: 'model', label: 'Model', type: 'model-select', hint: 'Model ID. Leave blank to let grok pick its default.' },
+  {
+    key: 'agent',
+    label: 'Agent',
+    type: 'text',
+    requiresCapability: 'agent',
+    hint: 'Agent name or agent definition file path. Repeats --agent.',
+  },
+  {
+    key: 'agents',
+    label: 'Subagent definitions JSON',
+    type: 'textarea',
+    requiresCapability: 'agents',
+    hint: 'Inline subagent definitions passed through --agents. Must be valid JSON.',
+  },
   { key: 'rules', label: 'Extra rules', type: 'textarea', hint: 'Appended to the system prompt.' },
   {
     key: 'systemPromptOverride',
@@ -118,7 +132,12 @@ const LAUNCH_SECTIONS = [
   {
     title: 'Tools',
     description: 'Tool availability for the next agent process.',
-    keys: ['tools', 'disallowedTools', 'disableWebSearch', 'noSubagents', 'noPlan'],
+    keys: ['tools', 'disallowedTools', 'disableWebSearch', 'noPlan'],
+  },
+  {
+    title: 'Agents',
+    description: 'Primary agent and inline subagent configuration.',
+    keys: ['agent', 'agents', 'noSubagents'],
   },
   {
     title: 'Runtime',

@@ -15,7 +15,7 @@ Created by [@lamps_apple](https://x.com/lamps_apple), creator of [grokify.ai](ht
 - Per-tab sessions with `?session=` URLs
 - Tool rendering for terminal, edits, browser actions, multimodal `read_file`, X/web search, images, videos, todos, scheduler, subagents, and plan cards
 - Manual or auto approval mode
-- Settings panel for model, effort, sandbox, rules, tool allow-lists, and display name
+- Settings panel for model, agents, effort, sandbox, rules, tool allow-lists, and display name
 - Local project display aliases for screenshot-safe project names
 - Built-in panels for inspect, MCP servers, worktrees, models, hooks, plugins, traces, imports, and routines
 - Share link support through `grok share`
@@ -81,7 +81,7 @@ grok --web
 
 5. Configure the agent
 
-   Open Settings to choose model, effort, sandbox behavior, rules, approval mode, and the sidebar display name.
+   Open Settings to choose model, agent profile, subagent definitions, effort, sandbox behavior, rules, approval mode, and the sidebar display name.
 
 ## Daily Use
 

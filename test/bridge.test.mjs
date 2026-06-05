@@ -99,6 +99,8 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
 
       const opts = await fetch(makeUrl(base, '/spawn-opts'), { headers: { cookie } }).then((r) => r.json());
       assert.equal(opts.alwaysApprove, true);
+      assert.equal(opts._capabilities.agent, true);
+      assert.equal(opts._capabilities.agents, true);
       assert.equal(opts._capabilities.noLeader, true);
       assert.equal(opts._capabilities.permissionMode, true);
       assert.equal(opts._capabilities.todoGate, true);
@@ -701,6 +703,7 @@ test('API bad requests return JSON error bodies', async () => {
       await assertJsonError(base, cookie, '/elicitation', {}, 400, /rpcId \+ action required/);
       await assertJsonError(base, cookie, '/elicitation', { rpcId: 404, action: 'accept' }, 404, /not found/);
       await assertJsonError(base, cookie, '/session/load', {}, 400, /sessionId required/);
+      await assertJsonError(base, cookie, '/session/respawn', { agents: '{' }, 400, /agents must be valid JSON/);
       await assertJsonError(base, cookie, '/cli/oneshot', { text: 'x', bestOfN: 0 }, 400, /positive integer/);
       await assertJsonError(base, cookie, '/cli/headless', { text: 'x', outputFormat: 'xml' }, 400, /bad outputFormat/);
       await assertJsonError(base, cookie, '/cli/headless', { text: 'x', sessionMode: 'session' }, 400, /sessionId required/);

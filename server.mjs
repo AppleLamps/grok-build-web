@@ -24,7 +24,10 @@ const bridgeSettings = {
 };
 
 const grok = new GrokBridge();
-const runGrokCli = createCliRunner({ defaultCwd: () => grok.cwd ?? CWD });
+const runGrokCli = createCliRunner({
+  defaultCwd: () => grok.cwd ?? CWD,
+  defaultIgnoreApiKey: () => grok.spawnOpts.ignoreApiKey,
+});
 
 let server;
 const security = createSecurity({

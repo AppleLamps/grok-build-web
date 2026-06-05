@@ -2,8 +2,7 @@ import { extractTodoUpdate } from './render-todos.mjs';
 
 export function isXSearchTool(title, raw = {}) {
   const source = String(raw.source ?? raw.platform ?? raw.provider ?? '').toLowerCase();
-  return source === 'x'
-    || /\b(x[_ -]?search|x[_ -]?search[_ -]?posts|twitter[_ -]?search|search[_ -]?x)\b/.test(title);
+  return source === 'x' || /\b(x[_ -]?search|x[_ -]?search[_ -]?posts|twitter[_ -]?search|search[_ -]?x)\b/.test(title);
 }
 
 export function summarizeTool(toolUpdate) {
@@ -18,7 +17,7 @@ export function summarizeTool(toolUpdate) {
   if (/video[_ -]?gen|imagine[_ -]?video/.test(lower)) {
     return { verb: 'Generated video', target: raw.prompt ?? raw.description ?? title };
   }
-  if (/web[_ -]?search/.test(lower) || raw.query !== undefined && /search/.test(lower)) {
+  if (/web[_ -]?search/.test(lower) || (raw.query !== undefined && /search/.test(lower))) {
     return { verb: source === 'x' ? 'Searched X for' : 'Searched the web for', target: raw.query ?? raw.q ?? '' };
   }
   if (/web[_ -]?fetch/.test(lower)) {
@@ -51,6 +50,12 @@ export function summarizeTool(toolUpdate) {
   }
   if (/browser[_ -]?network/.test(lower)) {
     return { verb: 'Inspected network', target: raw.url ?? title };
+  }
+  if (/browser[_ -]?replay/.test(lower)) {
+    return { verb: 'Replayed browser steps', target: raw.url ?? title };
+  }
+  if (/browser[_ -]?(snapshot|dom|html)/.test(lower)) {
+    return { verb: 'Captured browser snapshot', target: raw.url ?? title };
   }
   if (/kill[_ -]?command|kill[_ -]?subagent/.test(lower)) {
     return { verb: 'Killed background task', target: raw.id ?? raw.pid ?? title };

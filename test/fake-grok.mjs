@@ -46,6 +46,8 @@ if (args.includes('-p')) {
       args,
       prompt: args[promptIndex + 1] ?? '',
       cwd: process.cwd(),
+      XAI_API_KEY_set: !!process.env.XAI_API_KEY,
+      GROK_API_KEY_set: !!process.env.GROK_API_KEY,
     }),
   );
   process.exit(0);

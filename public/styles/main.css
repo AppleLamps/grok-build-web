@@ -790,6 +790,9 @@ main {
   padding: 0;
   font-size: inherit;
 }
+.syntax-keyword { color: var(--accent); font-weight: 600; }
+.syntax-literal { color: var(--orange); }
+.syntax-number { color: var(--green); }
 .assistant ul,
 .assistant ol {
   margin: 4px 0 12px 24px;

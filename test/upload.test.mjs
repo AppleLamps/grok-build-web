@@ -52,6 +52,9 @@ test('attachment helpers classify pasted screenshot files by MIME type', async (
 
     assert.equal(attachments.__test.kindForFile(file), 'image');
     assert.equal(attachments.__test.fallbackName(file, 'image'), 'pasted-image.png');
+    assert.equal(attachments.__test.kindForFile({ name: 'clip.mp3', type: 'audio/mpeg' }), 'audio');
+    assert.equal(attachments.__test.kindForFile({ name: 'movie.mp4', type: 'video/mp4' }), 'video');
+    assert.equal(attachments.__test.kindForFile({ name: 'archive.zip', type: 'application/zip' }), 'binary');
     await attachments.__test.handleFiles([file]);
 
     const pending = attachments.getPendingAttachments();
@@ -104,12 +107,18 @@ test('upload route stores files in session cwd and serves them back via /upload-
       const rawOnDisk = await readFile(rawData.path);
       assert.deepEqual([...rawOnDisk], [...rawBytes]);
 
-      const exeReject = await fetch(makeUrl(base, '/upload'), {
+      const binaryUpload = await fetch(makeUrl(base, '/upload'), {
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ sessionId: tab.sessionId, filename: 'evil.exe', dataBase64: TINY_PNG_B64 }),
+        body: JSON.stringify({ sessionId: tab.sessionId, filename: 'archive.zip', dataBase64: TINY_PNG_B64 }),
       });
-      assert.equal(exeReject.status, 415);
+      assert.equal(binaryUpload.status, 200);
+      const binaryData = await binaryUpload.json();
+      assert.equal(binaryData.ok, true);
+      assert.equal(binaryData.filename, 'archive.zip');
+      assert.equal(binaryData.mediaUrl, undefined);
+      const binaryOnDisk = await readFile(binaryData.path);
+      assert.equal(binaryOnDisk.length, Buffer.from(TINY_PNG_B64, 'base64').length);
 
       const empty = await fetch(makeUrl(base, '/upload'), {
         method: 'POST',

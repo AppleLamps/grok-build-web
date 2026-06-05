@@ -361,7 +361,7 @@ function renderAttachmentChip(a) {
   }
   const icon = document.createElement('span');
   icon.className = 'user-attach-icon';
-  icon.textContent = kind === 'pdf' ? 'PDF' : 'FILE';
+  icon.textContent = kind === 'pdf' ? 'PDF' : kind === 'audio' ? 'AUD' : kind === 'video' ? 'VID' : 'FILE';
   chip.appendChild(icon);
   const label = document.createElement('span');
   label.className = 'user-attach-name';

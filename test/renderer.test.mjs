@@ -14,30 +14,35 @@ test('markdown tables render safe links and escape unsafe HTML', async () => {
 test('markdown renders expanded formatting safely', async () => {
   installDomStubs();
   const { renderMarkdown } = await importFresh('public/js/markdown.js');
-  const html = renderMarkdown([
-    '# Heading',
-    '',
-    '1. First',
-    '2. Second',
-    '',
-    '+ Plus bullet',
-    '- [x] Done',
-    '- [ ] Later',
-    '',
-    '> quoted **text**',
-    '',
-    '~~removed~~',
-    '',
-    '---',
-    '',
-    '```js',
-    '<script>alert(1)</script>',
-    '```',
-  ].join('\n'));
+  const html = renderMarkdown(
+    [
+      '# Heading',
+      '',
+      '1. First',
+      '2. Second',
+      '',
+      '+ Plus bullet',
+      '- [x] Done',
+      '- [ ] Later',
+      '',
+      '> quoted **text**',
+      '',
+      '~~removed~~',
+      '',
+      '---',
+      '',
+      '```js',
+      '<script>alert(1)</script>',
+      '```',
+    ].join('\n'),
+  );
 
   assert.match(html, /<h3>Heading<\/h3>/);
   assert.match(html, /<ol><li value="1">First<\/li><li value="2">Second<\/li><\/ol>/);
-  assert.match(html, /<ul><li>Plus bullet<\/li><li class="task-item"><input type="checkbox" disabled checked>Done<\/li><li class="task-item"><input type="checkbox" disabled>Later<\/li><\/ul>/);
+  assert.match(
+    html,
+    /<ul><li>Plus bullet<\/li><li class="task-item"><input type="checkbox" disabled checked>Done<\/li><li class="task-item"><input type="checkbox" disabled>Later<\/li><\/ul>/,
+  );
   assert.match(html, /<blockquote><p>quoted <strong>text<\/strong><\/p><\/blockquote>/);
   assert.match(html, /<del>removed<\/del>/);
   assert.match(html, /<hr>/);
@@ -54,6 +59,24 @@ test('markdown ordered lists display sequential numbers when source repeats one'
   const html = renderMarkdown('1. First\n1. Second\n1. Third');
 
   assert.match(html, /<ol><li value="1">First<\/li><li value="2">Second<\/li><li value="3">Third<\/li><\/ol>/);
+});
+
+test('markdown handles nested lists, lazy blockquotes, soft breaks, and code highlighting', async () => {
+  installDomStubs();
+  const { renderMarkdown } = await importFresh('public/js/markdown.js');
+
+  const nested = renderMarkdown('- Parent\n  - Child');
+  assert.match(nested, /<ul><li>Parent<ul><li>Child<\/li><\/ul><\/li><\/ul>/);
+
+  const quote = renderMarkdown('> quoted line\ncontinued line');
+  assert.match(quote, /<blockquote><p>quoted line<br>continued line<\/p><\/blockquote>/);
+
+  const para = renderMarkdown('first line\nsecond line');
+  assert.match(para, /<p>first line<br>second line<\/p>/);
+
+  const code = renderMarkdown('```js\nconst n = 42;\n```');
+  assert.match(code, /<span class="syntax-keyword">const<\/span>/);
+  assert.match(code, /<span class="syntax-number">42<\/span>/);
 });
 
 test('markdown image links stay literal and non-clickable', async () => {
@@ -92,7 +115,12 @@ test('multimodal read_file output renders text, image, PDF, PPT, and video', asy
       { type: 'text', text: 'Extracted text' },
       { type: 'image', mimeType: 'image/png', data: tinyPngBase64() },
       { type: 'pdf', mimeType: 'application/pdf', path: 'doc.pdf', text: 'PDF body' },
-      { type: 'file', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', path: 'deck.pptx', text: 'Slide text' },
+      {
+        type: 'file',
+        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        path: 'deck.pptx',
+        text: 'Slide text',
+      },
       { type: 'video', mimeType: 'video/mp4', url: 'https://example.com/out.mp4' },
     ],
   });
@@ -112,7 +140,9 @@ test('X and web search render query, count, links, snippets, and timestamps', as
     kind: 'search',
     title: 'x_search_posts',
     rawInput: { query: 'grok build' },
-    rawOutput: { posts: [{ handle: '@skcd42', timestamp: '2026-05-21', url: 'https://x.com/skcd42/status/1', text: 'update' }] },
+    rawOutput: {
+      posts: [{ handle: '@skcd42', timestamp: '2026-05-21', url: 'https://x.com/skcd42/status/1', text: 'update' }],
+    },
   });
   assert.match(xHtml, /query/);
   assert.match(xHtml, /X results · 1/);
@@ -190,14 +220,18 @@ test('0.1.217 search shapes render nested and JSON-string results safely', async
     rawInput: { query: 'docs' },
     rawOutput: {
       output: {
-        content: [{
-          results: [{
-            title: 'Docs',
-            source: { url: 'https://example.com/docs' },
-            description: 'Nested docs',
-            publishedAt: '2026-05-23',
-          }],
-        }],
+        content: [
+          {
+            results: [
+              {
+                title: 'Docs',
+                source: { url: 'https://example.com/docs' },
+                description: 'Nested docs',
+                publishedAt: '2026-05-23',
+              },
+            ],
+          },
+        ],
       },
     },
   });
@@ -209,7 +243,8 @@ test('0.1.217 search shapes render nested and JSON-string results safely', async
     kind: 'search',
     title: 'web_search',
     rawOutput: {
-      output_for_prompt: '{"results":[{"name":"JSON result","metadata":{"url":"https://example.com/json"},"summary":"From JSON"}]}',
+      output_for_prompt:
+        '{"results":[{"name":"JSON result","metadata":{"url":"https://example.com/json"},"summary":"From JSON"}]}',
     },
   });
   assert.match(jsonHtml, /From JSON/);
@@ -220,12 +255,14 @@ test('0.1.217 search shapes render nested and JSON-string results safely', async
     title: 'x_search_posts',
     rawOutput: {
       structuredContent: {
-        results: [{
-          author: { handle: '@skcd42' },
-          createdAt: '2026-05-22T01:02:03Z',
-          text: 'X result',
-          permalink: 'https://x.com/skcd42/status/2',
-        }],
+        results: [
+          {
+            author: { handle: '@skcd42' },
+            createdAt: '2026-05-22T01:02:03Z',
+            text: 'X result',
+            permalink: 'https://x.com/skcd42/status/2',
+          },
+        ],
       },
     },
   });
@@ -236,11 +273,13 @@ test('0.1.217 search shapes render nested and JSON-string results safely', async
     kind: 'search',
     title: 'web_search',
     rawOutput: {
-      results: [{
-        title: '<img src=x onerror=alert(1)>',
-        snippet: '<script>alert(1)</script>',
-        url: 'javascript:alert(1)',
-      }],
+      results: [
+        {
+          title: '<img src=x onerror=alert(1)>',
+          snippet: '<script>alert(1)</script>',
+          url: 'javascript:alert(1)',
+        },
+      ],
     },
   });
   assert.doesNotMatch(hostileHtml, /<script>/);
@@ -277,16 +316,62 @@ test('tool renderers escape hostile status-like values', async () => {
     kind: 'execute',
     title: 'browser_network',
     rawOutput: {
-      requests: [{
-        status: '<img src=x onerror=alert(1)>',
-        method: '<script>',
-        url: 'https://example.com/<x>',
-      }],
+      requests: [
+        {
+          status: '<img src=x onerror=alert(1)>',
+          method: '<script>',
+          url: 'https://example.com/<x>',
+        },
+      ],
     },
   });
   assert.doesNotMatch(browserHtml, /<script>/);
   assert.doesNotMatch(browserHtml, /<img /);
   assert.doesNotMatch(browserHtml, /<[^>]+\sonerror=/);
+});
+
+test('browser replay and DOM snapshots render structured views safely', async () => {
+  installDomStubs();
+  const { __testRenderToolDetails } = await importFresh('public/js/tools.js');
+
+  const replayHtml = __testRenderToolDetails({
+    kind: 'execute',
+    title: 'browser_replay',
+    rawOutput: {
+      replay: [
+        { action: 'navigate', url: 'https://example.com/start', status: 200 },
+        { action: 'click', selector: 'button.buy', text: '<script>alert(1)</script>' },
+      ],
+      html: '<html><head><title>Shop</title></head><body><h1>Checkout</h1><button aria-label="Buy now">Buy</button><script>alert(1)</script></body></html>',
+    },
+  });
+  assert.match(replayHtml, /browser replay · 2 steps/);
+  assert.match(replayHtml, /Navigated/);
+  assert.match(replayHtml, /button\.buy/);
+  assert.match(replayHtml, /DOM outline/);
+  assert.match(replayHtml, /Checkout/);
+  assert.match(replayHtml, /Buy now/);
+  assert.match(replayHtml, /HTML snapshot/);
+  assert.doesNotMatch(replayHtml, /<script>/);
+  assert.doesNotMatch(replayHtml, /<[^>]+\sonerror=/);
+
+  const domHtml = __testRenderToolDetails({
+    kind: 'execute',
+    title: 'browser_dom_snapshot',
+    rawOutput: {
+      dom: {
+        tag: 'main',
+        children: [
+          { tag: 'h1', text: 'Account' },
+          { tag: 'a', href: 'https://example.com/settings', text: 'Settings' },
+        ],
+      },
+    },
+  });
+  assert.match(domHtml, /DOM tree/);
+  assert.match(domHtml, /main/);
+  assert.match(domHtml, /Account/);
+  assert.match(domHtml, /Settings/);
 });
 
 test('edit output renders locations, hunks, and old-new diffs', async () => {

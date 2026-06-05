@@ -4,7 +4,7 @@ Scoped to **CLI feature parity** — every item below maps to an existing `grok`
 
 Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<name>]`, `[acp <method>]`, `[tool <name>]`, or `[plumbing]` for browser-side glue with no CLI analogue.
 
-`[done]` = shipped. `[done, partial]` = shipped with notable refinement opportunities. `[N/A]` = blocked by a hard CLI constraint or external dependency (xAI account credits, headless-only flags).
+`[done]` = shipped. `[done, partial]` = shipped with notable refinement opportunities. `[N/A]` = blocked by a hard CLI constraint or external dependency.
 
 ## Turn lifecycle
 
@@ -70,7 +70,7 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 - **[done] Terminal output styling** — `[tool run_terminal_command]` ANSI color codes are parsed into styled spans (bold, italic, underline, foreground colors).
 - **[partial] Background task tracking** — `[tool kill_command_or_subagent / get_command_or_subagent_output / wait_commands_or_subagents / monitor]` Recognized by name with appropriate labels. **Still missing:** dedicated panel showing live status of all background tasks.
 - **[done] Todo board** — `[tool todo_write]` Renders both inline (as a checklist in tool details) and in a sidebar panel that updates live.
-- **[done, partial] Browser tool rendering** — `[tool browser_tab / browser_network_details]` Labels recognized with URL/action/page text, screenshots, console errors, cookies, and network tables when structured data is present. **Still missing:** DOM snapshot/replay-specific UI.
+- **[done] Browser tool rendering** — `[tool browser_tab / browser_network_details / browser_replay / browser_snapshot]` Labels recognized with URL/action/page text, screenshots, console errors, cookies, DOM/HTML snapshot outlines and source, browser replay timelines, and network tables when structured data is present.
 - **[done] Web search / fetch rendering** — `[tool web_search / web_fetch]` Labels recognized with robust nested result extraction, links, timestamps, and snippets when present.
 - **[done] X search rendering** — `[tool x_search / x_search_posts / twitter_search / search_x]` Labels recognized with query, count, handles, timestamps, links, and snippets when present.
 - **[done] Multimodal read_file rendering** — `[tool read_file]` Content arrays and raw output fields render text, images, videos, PDFs, file cards, and extracted PDF/PPTX text.
@@ -86,7 +86,7 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 
 ## Advanced
 
-- **[done] Best-of-N tournaments** — `[flag --best-of-n N]` `[skill /best-of-n]` Composer send-mode dropdown runs `POST /cli/oneshot {bestOfN:N, text, cwd}` as a headless one-shot. **Note:** xAI account credits required; verified the endpoint returns a sensible error when out of credits.
+- **[done] Best-of-N tournaments** — `[flag --best-of-n N]` `[skill /best-of-n]` Composer send-mode dropdown runs `POST /cli/oneshot {bestOfN:N, text, cwd}` as a headless one-shot using the same grok.com-subscription/API-key billing setting as the agent process.
 - **[done via Settings] Subagents toggle** — `[flag --no-subagents]`
 - **[done, partial] Subagent nested cards** — `[flag --agents <JSON>]` See "Subagent nesting" above.
 - **[done] Self-verification (`--check`)** — `[flag --check]` Composer send-mode dropdown runs a headless one-shot via `POST /cli/oneshot {check:true, text, cwd}`.
@@ -127,5 +127,4 @@ These weren't features in the original list but unlock most of the rest:
 ## Remaining items
 
 All items in this document have been shipped to at least `[done]` or `[done, partial]` status.
-- `[done, partial]` entries (subagent nesting, browser tool, scheduler) have backend recognition and minimal UI; richer dedicated panels are nice-to-have refinements but the underlying data flow works today.
-- `[N/A]` entries are blocked by external factors (xAI billing limits for headless one-shots) but the code path is verified correct.
+- `[done, partial]` entries (subagent nesting, scheduler) have backend recognition and minimal UI; richer dedicated panels are nice-to-have refinements but the underlying data flow works today.

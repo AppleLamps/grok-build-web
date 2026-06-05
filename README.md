@@ -104,11 +104,11 @@ Headless modes do not append to the interactive ACP session history.
 
 ### Attach files
 
-The attach button inserts text-like files into the prompt as fenced code blocks. Images and PDFs upload into the current session workspace and are sent as attached file paths so Grok can read them with its native multimodal tools. Drag-and-drop and clipboard paste handle the same file types. Each attach action is capped at 5 files. Text files are capped at 256 KB, and binary attachments are capped at 25 MB.
+The attach button inserts text-like files into the prompt as fenced code blocks. Other files upload into the current session workspace and are sent as attached file paths so Grok can read them with its native multimodal tools. Drag-and-drop and clipboard paste handle the same file types. Each attach action is capped at 5 files. Text files are capped at 256 KB, and binary attachments are capped at 25 MB.
 
 Supported extensions include `.txt`, `.md`, `.js`, `.mjs`, `.ts`, `.tsx`, `.json`, `.css`, `.html`, `.py`, `.sh`, `.ps1`, `.yml`, `.yaml`, `.toml`, `.csv`, `.xml`, and `.log`.
 
-Images support `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, and `.svg`. PDFs support `.pdf`.
+Images support `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, and `.svg`. PDFs support `.pdf`. Audio, video, archives, and other binary formats upload by path; images, PDFs, audio, and video receive browser preview links when their type is recognized.
 
 ### Control approvals
 
@@ -150,11 +150,11 @@ Environment variables read at startup:
 | `GROK_CWD` | `process.cwd()` | Initial workspace directory. |
 | `GROK_WEB_USER` | OS username | Default sidebar display name. |
 | `GROK_WEB_NO_OPEN` | unset | Set to skip opening the browser automatically. |
-| `GROK_WEB_USE_API_KEY` | unset | Set to `1` to keep `XAI_API_KEY` in the agent environment. |
+| `GROK_WEB_USE_API_KEY` | unset | Set to `1` to keep `XAI_API_KEY` in spawned agent and one-shot CLI environments. |
 | `GROK_WEB_RPC_TIMEOUT_MS` | `120000` | JSON-RPC timeout for non-prompt ACP calls. |
 | `GROK_WEB_PROMPT_TIMEOUT_MS` | `1800000` | JSON-RPC timeout for `session/prompt`. |
 
-By default, Grok Build Web strips `XAI_API_KEY` and `GROK_API_KEY` from the spawned agent process so the CLI uses the cached grok.com login from `~/.grok/auth.json`. Set `GROK_WEB_USE_API_KEY=1` to use API key billing instead.
+By default, Grok Build Web strips `XAI_API_KEY` and `GROK_API_KEY` from spawned agent processes and one-shot CLI runs so the CLI uses the cached grok.com login from `~/.grok/auth.json`. Set `GROK_WEB_USE_API_KEY=1` to use API key billing instead.
 
 ## Architecture
 
@@ -265,9 +265,9 @@ $env:GROK_WEB_LIVE_X_SEARCH='1'; npm run test:live
 $env:GROK_WEB_LIVE_PLUGIN_MCP_NAME='<server-name>'; npm run test:live
 ```
 
-### Grok 0.2.14 Compatibility Checks
+### Grok 0.2.22 Compatibility Checks
 
-The local stable updater currently targets Grok CLI 0.2.14. The public xAI Build changelog may lag the updater, so verify both `grok update --check --json` and the latest visible changelog entry when reviewing a new CLI release.
+The local stable updater currently targets Grok CLI 0.2.22. The public xAI Build changelog may lag the updater, so verify both `grok update --check --json` and the latest visible changelog entry when reviewing a new CLI release.
 
 Current items to verify after updating:
 

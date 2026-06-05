@@ -19,7 +19,10 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
   await withTempDir('grok-web-bridge-', async (temp) => {
     const sessionsRoot = join(temp, 'sessions');
     await seedSessions(sessionsRoot);
-    const server = await startFakeServer({ sessionsRoot });
+    const server = await startFakeServer({
+      sessionsRoot,
+      env: { XAI_API_KEY: 'fake-xai-key', GROK_API_KEY: 'fake-grok-key' },
+    });
     try {
       const { base, cookie } = await bootstrap(server);
 
@@ -123,6 +126,25 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
         oneshotText,
       ]);
       assert.equal(fakeResult.prompt, oneshotText);
+      assert.equal(fakeResult.XAI_API_KEY_set, false);
+      assert.equal(fakeResult.GROK_API_KEY_set, false);
+
+      const apiKeyMode = await fetch(makeUrl(base, '/session/respawn'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ ignoreApiKey: false }),
+      });
+      assert.equal(apiKeyMode.status, 200);
+
+      const apiKeyOneshot = await fetch(makeUrl(base, '/cli/oneshot'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'api key mode' }),
+      });
+      assert.equal(apiKeyOneshot.status, 200);
+      const apiKeyResult = JSON.parse((await apiKeyOneshot.json()).stdout);
+      assert.equal(apiKeyResult.XAI_API_KEY_set, true);
+      assert.equal(apiKeyResult.GROK_API_KEY_set, true);
 
       for (const body of [{ bestOfN: 0 }, { bestOfN: 1.2 }, { bestOfN: true }, { maxTurns: 'abc' }]) {
         const bad = await fetch(makeUrl(base, '/cli/oneshot'), {

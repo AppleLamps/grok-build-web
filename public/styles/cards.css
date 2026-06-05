@@ -371,6 +371,48 @@
   white-space: pre-wrap; word-break: break-all;
   margin: 2px 0;
 }
+.browser-replay,
+.browser-dom-outline,
+.browser-dom-tree {
+  margin: 4px 0 10px; padding: 0; list-style: none;
+  background: var(--paper-2); border-radius: 6px; overflow: hidden;
+}
+.browser-replay li,
+.browser-dom-outline li,
+.browser-dom-tree li {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 7px 10px; border-bottom: 1px solid var(--line-soft);
+  font-size: 12.5px; color: var(--ink-2);
+}
+.browser-replay li:last-child,
+.browser-dom-outline li:last-child,
+.browser-dom-tree li:last-child { border-bottom: 0; }
+.browser-replay-index {
+  flex: 0 0 auto; min-width: 18px; height: 18px;
+  border-radius: 999px; display: inline-grid; place-items: center;
+  background: var(--paper-3); color: var(--mute); font-size: 10.5px;
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+.browser-replay-main { min-width: 0; flex: 1; }
+.browser-replay-main > div {
+  display: inline-flex; align-items: center; gap: 5px; font-weight: 500;
+}
+.browser-replay-main code {
+  display: block; width: fit-content; max-width: 100%; margin-top: 4px;
+  background: var(--paper-3); color: var(--ink-2);
+  padding: 2px 6px; border-radius: 4px; font-size: 11.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.browser-dom-outline li span,
+.browser-dom-tree li span {
+  flex: 0 0 auto; min-width: 44px; color: var(--mute);
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 11px;
+}
+.browser-dom-outline li strong,
+.browser-dom-tree li strong {
+  min-width: 0; font-weight: 500; color: var(--ink); overflow-wrap: anywhere;
+}
+.browser-dom-tree li { padding-left: calc(10px + var(--depth, 0) * 16px); }
 .net-initiator {
   font-size: 10.5px; color: var(--faint); margin-top: 2px;
   font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;

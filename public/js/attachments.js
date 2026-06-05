@@ -1,4 +1,4 @@
-// Composer attachments: text files inline as fenced code; images and PDFs
+// Composer attachments: text files inline as fenced code; binary files
 // upload to the session cwd and attach by path so grok's own read_file tool
 // can load them. Adds drag-and-drop on the whole window.
 
@@ -32,6 +32,8 @@ const TEXT_EXTS = new Set([
 ]);
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg']);
 const PDF_EXTS = new Set(['.pdf']);
+const AUDIO_EXTS = new Set(['.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg', '.oga', '.opus', '.webm']);
+const VIDEO_EXTS = new Set(['.mp4', '.webm', '.mov', '.m4v', '.avi', '.mkv', '.mpeg', '.mpg', '.ogv']);
 const MIME_EXTS = new Map([
   ['image/png', '.png'],
   ['image/jpeg', '.jpg'],
@@ -40,11 +42,23 @@ const MIME_EXTS = new Map([
   ['image/bmp', '.bmp'],
   ['image/svg+xml', '.svg'],
   ['application/pdf', '.pdf'],
+  ['audio/mpeg', '.mp3'],
+  ['audio/mp4', '.m4a'],
+  ['audio/wav', '.wav'],
+  ['audio/x-wav', '.wav'],
+  ['audio/aac', '.aac'],
+  ['audio/flac', '.flac'],
+  ['audio/ogg', '.ogg'],
+  ['video/mp4', '.mp4'],
+  ['video/webm', '.webm'],
+  ['video/quicktime', '.mov'],
+  ['video/x-msvideo', '.avi'],
+  ['video/x-matroska', '.mkv'],
   ['text/plain', '.txt'],
   ['text/markdown', '.md'],
 ]);
 
-const ACCEPT_LIST = [...TEXT_EXTS, ...IMAGE_EXTS, ...PDF_EXTS].join(',');
+const ACCEPT_LIST = '';
 
 const pending = [];
 const changeListeners = new Set();
@@ -62,8 +76,25 @@ function fallbackName(file, kind) {
   const ext =
     extOf(file?.name) ||
     MIME_EXTS.get(String(file?.type ?? '').toLowerCase()) ||
-    (kind === 'pdf' ? '.pdf' : kind === 'image' ? '.png' : '.txt');
+    (kind === 'pdf'
+      ? '.pdf'
+      : kind === 'image'
+        ? '.png'
+        : kind === 'audio'
+          ? '.mp3'
+          : kind === 'video'
+            ? '.mp4'
+            : kind === 'text'
+              ? '.txt'
+              : '.bin');
   return file?.name || `pasted-${kind}${ext}`;
+}
+
+function iconForKind(kind) {
+  if (kind === 'pdf') return 'PDF';
+  if (kind === 'audio') return 'AUD';
+  if (kind === 'video') return 'VID';
+  return 'FILE';
 }
 
 function fenceFor(text) {
@@ -159,7 +190,7 @@ function renderStrip() {
     } else {
       const icon = document.createElement('span');
       icon.className = 'attach-chip-icon';
-      icon.textContent = a.kind === 'pdf' ? 'PDF' : 'FILE';
+      icon.textContent = iconForKind(a.kind);
       chip.appendChild(icon);
     }
     const label = document.createElement('span');
@@ -230,9 +261,7 @@ async function handleFiles(files) {
   for (const file of list.slice(0, slots)) {
     const kind = kindForFile(file);
     if (kind === 'text') await handleTextFile(file);
-    else if (kind === 'image') await handleBinaryFile(file, 'image');
-    else if (kind === 'pdf') await handleBinaryFile(file, 'pdf');
-    else toast(`${file.name || 'Clipboard item'} was skipped (unsupported type).`);
+    else await handleBinaryFile(file, kind);
   }
 }
 
@@ -242,7 +271,9 @@ function kindForFile(file) {
   if (TEXT_EXTS.has(ext) || type.startsWith('text/')) return 'text';
   if (IMAGE_EXTS.has(ext) || type.startsWith('image/')) return 'image';
   if (PDF_EXTS.has(ext) || type === 'application/pdf') return 'pdf';
-  return null;
+  if (AUDIO_EXTS.has(ext) || type.startsWith('audio/')) return 'audio';
+  if (VIDEO_EXTS.has(ext) || type.startsWith('video/')) return 'video';
+  return 'binary';
 }
 
 function filesFromClipboard(data) {

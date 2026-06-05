@@ -11,7 +11,10 @@ import { renderSchedulerDetails } from './render-scheduler.mjs';
 export const DETAIL_RENDERERS = [
   { match: (u) => u.kind === 'edit', render: renderEditDetails },
   { match: (u) => isTodoUpdate(u, toolTitle(u)), render: renderTodos },
-  { match: (u) => /browser[_ -]?(tab|network)/.test(toolTitle(u)), render: renderBrowserDetails },
+  {
+    match: (u) => /browser[_ -]?(tab|network|replay|snapshot|dom|html|console|cookies)/.test(toolTitle(u)),
+    render: renderBrowserDetails,
+  },
   { match: (u) => u.kind === 'execute' || /run_terminal_command/.test(toolTitle(u)), render: renderTerminalDetails },
   { match: (u) => /video[_ -]?gen|imagine[_ -]?video/.test(toolTitle(u)), render: renderVideoDetails },
   { match: (u) => /image[_ -]?gen|imagine/.test(toolTitle(u)), render: renderImageDetails },

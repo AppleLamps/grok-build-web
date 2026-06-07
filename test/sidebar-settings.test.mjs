@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { importPublic, installDomStubs } from './helpers.mjs';
 
-const cwd = 'C:\\Users\\lucas\\project';
+const cwd = 'C:\\Users\\apple\\project';
 const { storage } = installDomStubs({
   storage: {
     'grokweb.projectAliases': JSON.stringify({ [cwd]: 'Private Project' }),
@@ -25,7 +25,7 @@ test('sidebar hides empty sessions by default and persists the show-empty toggle
   let project = dom.recentsEl.children[0];
   assert.equal(project.querySelector('.project-name').textContent, 'Private Project');
   assert.match(project.querySelector('.project-head').title, /Private Project/);
-  assert.match(project.querySelector('.project-head').title, /C:\\Users\\lucas\\project/);
+  assert.match(project.querySelector('.project-head').title, /C:\\Users\\apple\\project/);
   assert.equal(project.querySelector('.project-sessions').children.length, 1);
 
   sidebar.__testSetShowEmptySessions(true);

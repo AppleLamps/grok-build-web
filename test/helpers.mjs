@@ -39,7 +39,7 @@ export async function seedSessions(root) {
   await writeFile(
     join(active, 'summary.json'),
     JSON.stringify({
-      info: { id: 'active-session', cwd: 'C:\\Users\\lucas\\project' },
+      info: { id: 'active-session', cwd: 'C:\\Users\\apple\\project' },
       generated_title: 'Active session',
       last_active_at: '2026-05-22T01:00:00Z',
       num_chat_messages: 6,
@@ -49,7 +49,7 @@ export async function seedSessions(root) {
   await writeFile(
     join(empty, 'summary.json'),
     JSON.stringify({
-      info: { id: 'empty-session', cwd: 'C:\\Users\\lucas\\project' },
+      info: { id: 'empty-session', cwd: 'C:\\Users\\apple\\project' },
       generated_title: 'Empty session',
       last_active_at: '2026-05-22T00:59:00Z',
       num_chat_messages: 0,

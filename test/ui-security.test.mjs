@@ -63,7 +63,7 @@ test('headless run output is inserted as text, not HTML', async () => {
       return json({
         ok: true,
         args: ['--output-format', 'streaming-json', '-p', request.text],
-        cwd: 'C:\\Users\\lucas\\grok-web',
+        cwd: 'C:\\Users\\apple\\grok-web',
         stdout: '<script>alert(1)</script><img src=x onerror=alert(1)>',
         stderr: '<svg onload=alert(1)>',
       });
@@ -189,7 +189,7 @@ test('sidebar recents and global search results treat hostile strings as text', 
     sessions: [
       {
         id: 'active',
-        cwd: 'C:\\Users\\lucas\\project',
+        cwd: 'C:\\Users\\apple\\project',
         title: '<img src=x onerror=alert(1)>',
         lastActive: '2026-05-22T01:00:00Z',
         numMessages: 2,

@@ -14,7 +14,7 @@ test('sessions endpoint skips malformed summaries and preserves Unicode cwd meta
     await mkdir(malformed, { recursive: true });
     await mkdir(missing, { recursive: true });
     await writeFile(join(valid, 'summary.json'), JSON.stringify({
-      info: { id: 'unicode-session', cwd: 'C:\\Users\\lucas\\项目 空格' },
+      info: { id: 'unicode-session', cwd: 'C:\\Users\\apple\\项目 空格' },
       generated_title: 'Unicode workspace',
       last_active_at: '2026-05-22T02:00:00Z',
       num_chat_messages: 3,
@@ -30,7 +30,7 @@ test('sessions endpoint skips malformed summaries and preserves Unicode cwd meta
       assert.equal(data.sessions.length, 1);
       assert.deepEqual(data.sessions[0], {
         id: 'unicode-session',
-        cwd: 'C:\\Users\\lucas\\项目 空格',
+        cwd: 'C:\\Users\\apple\\项目 空格',
         title: 'Unicode workspace',
         lastActive: '2026-05-22T02:00:00Z',
         numMessages: 3,

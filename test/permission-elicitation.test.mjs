@@ -63,7 +63,7 @@ test('elicitation form cards collect typed values and post decline or cancel act
   });
 
   const card = state.elicitationCards.get('elic-1');
-  card.querySelector('[name="name"]').value = 'Lucas';
+  card.querySelector('[name="name"]').value = 'Apple';
   card.querySelector('[name="age"]').value = '42';
   card.querySelector('[name="confirmed"]').checked = true;
   card.querySelector('form').dispatchEvent({ type: 'submit', preventDefault() {} });
@@ -74,7 +74,7 @@ test('elicitation form cards collect typed values and post decline or cancel act
     body: {
       rpcId: 'elic-1',
       action: 'accept',
-      content: { name: 'Lucas', age: 42, confirmed: true },
+      content: { name: 'Apple', age: 42, confirmed: true },
     },
   });
 

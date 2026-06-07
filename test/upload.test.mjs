@@ -30,7 +30,7 @@ test('attachment helpers classify pasted screenshot files by MIME type', async (
       return new Response(
         JSON.stringify({
           ok: true,
-          path: 'C:\\Users\\lucas\\project\\.grok-web-uploads\\pasted-image.png',
+          path: 'C:\\Users\\apple\\project\\.grok-web-uploads\\pasted-image.png',
           filename: uploadUrl.searchParams.get('filename'),
           mediaUrl: '/upload-media?sessionId=sid&name=pasted-image.png',
         }),

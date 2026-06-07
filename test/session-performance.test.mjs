@@ -29,7 +29,7 @@ test('sessions endpoint caches summaries briefly and refreshes after TTL', async
       await writeFile(
         join(sessionsRoot, 'cwd', 'active', 'summary.json'),
         JSON.stringify({
-          info: { id: 'active-session', cwd: 'C:\\Users\\lucas\\project' },
+          info: { id: 'active-session', cwd: 'C:\\Users\\apple\\project' },
           generated_title: 'Updated session',
           last_active_at: '2026-05-22T01:01:00Z',
           num_chat_messages: 7,
@@ -194,7 +194,7 @@ test('sessions watcher polling invalidates cache when fs.watch is disabled', asy
       await writeFile(
         join(sessionsRoot, 'cwd', 'active', 'summary.json'),
         JSON.stringify({
-          info: { id: 'active-session', cwd: 'C:\\Users\\lucas\\project' },
+          info: { id: 'active-session', cwd: 'C:\\Users\\apple\\project' },
           generated_title: 'Polled session update',
           last_active_at: '2026-05-22T01:02:00Z',
           num_chat_messages: 8,

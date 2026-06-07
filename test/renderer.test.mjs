@@ -191,14 +191,14 @@ test('generated session media paths render through authenticated media endpoint'
   const winHtml = __testRenderToolDetails({
     kind: 'fetch',
     title: 'image_gen',
-    rawOutput: { path: 'C:\\Users\\lucas\\.grok\\sessions\\sid\\images\\1.webp' },
+    rawOutput: { path: 'C:\\Users\\apple\\.grok\\sessions\\sid\\images\\1.webp' },
   });
   assert.match(winHtml, /src="\/session-media\?path=/);
 
   const secretHtml = __testRenderToolDetails({
     kind: 'fetch',
     title: 'image_gen',
-    rawOutput: { path: 'C:\\Users\\lucas\\secret.jpg' },
+    rawOutput: { path: 'C:\\Users\\apple\\secret.jpg' },
   });
   assert.doesNotMatch(secretHtml, /<img class="tool-image"/);
 

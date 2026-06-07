@@ -41,8 +41,8 @@ installDomStubs({
       });
     }
     if (path === '/settings') {
-      if (opts.method === 'POST') return json({ displayName: opts.body ? JSON.parse(opts.body).displayName : 'Lucas' });
-      return json({ displayName: 'Lucas' });
+      if (opts.method === 'POST') return json({ displayName: opts.body ? JSON.parse(opts.body).displayName : 'Apple' });
+      return json({ displayName: 'Apple' });
     }
     if (path === '/identity') return json({ displayName: 'Private' });
     if (path === '/cli/models') return new Response('grok-build\ngrok-4.3\ngrok/custom-beta', { status: 200 });

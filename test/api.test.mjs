@@ -43,17 +43,17 @@ test('api postTabNew includes current tab session id for cwd inheritance', async
     storage: { 'grokweb.tabSessionId': 'tab-123' },
     fetchImpl: async (url, opts) => {
       calls.push({ url: String(url), body: JSON.parse(opts.body) });
-      return new Response(JSON.stringify({ sessionId: 'tab-new', cwd: 'C:\\Users\\lucas\\project' }), { status: 200 });
+      return new Response(JSON.stringify({ sessionId: 'tab-new', cwd: 'C:\\Users\\apple\\project' }), { status: 200 });
     },
   });
 
   const api = await importFresh('public/js/api.js');
   await api.postTabNew();
-  await api.postTabNew('C:\\Users\\lucas\\other');
+  await api.postTabNew('C:\\Users\\apple\\other');
 
   assert.deepEqual(calls, [
     { url: '/tab/new', body: { sessionId: 'tab-123' } },
-    { url: '/tab/new', body: { sessionId: 'tab-123', cwd: 'C:\\Users\\lucas\\other' } },
+    { url: '/tab/new', body: { sessionId: 'tab-123', cwd: 'C:\\Users\\apple\\other' } },
   ]);
 });
 
@@ -85,11 +85,11 @@ test('api getSessionPlan includes tab session id and cwd when provided', async (
   const api = await importFresh('public/js/api.js');
   assert.deepEqual(await api.getSessionPlan(), { sessionId: 'tab-123', todos: [] });
   assert.deepEqual(
-    await api.getSessionPlan('session-2', 'C:\\Users\\lucas\\project'),
+    await api.getSessionPlan('session-2', 'C:\\Users\\apple\\project'),
     { sessionId: 'tab-123', todos: [] },
   );
   assert.deepEqual(calls, [
     '/session/plan?sessionId=tab-123',
-    '/session/plan?sessionId=session-2&cwd=C%3A%5CUsers%5Clucas%5Cproject',
+    '/session/plan?sessionId=session-2&cwd=C%3A%5CUsers%5Capple%5Cproject',
   ]);
 });

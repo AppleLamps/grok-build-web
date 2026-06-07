@@ -122,18 +122,19 @@ export function appendThought(text) {
   if (!state.turnEl) newTurn();
   if (!state.thinkingEl) {
     state.thinkingEl = document.createElement('div');
-    state.thinkingEl.className = 'thinking';
+    state.thinkingEl.className = 'thinking collapsed';
     state.thinkingEl.innerHTML = `
-      <button class="label" type="button" aria-expanded="true" title="Toggle thinking trace">
+      <button class="label" type="button" aria-expanded="false" title="Toggle thinking trace">
         <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
         <span class="label-main">Thinking trace</span>
         <span class="label-state">live</span>
       </button>
       <div class="body"></div>
     `;
-    state.thinkingEl.querySelector('.label').addEventListener('click', (e) => {
+    const label = state.thinkingEl.querySelector('.label');
+    label.addEventListener('click', () => {
       const collapsed = state.thinkingEl.classList.toggle('collapsed');
-      e.currentTarget.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      label.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     });
     state.turnEl.appendChild(state.thinkingEl);
   }

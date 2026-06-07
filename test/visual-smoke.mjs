@@ -42,6 +42,13 @@ try {
   await page.setViewportSize({ width: 900, height: 920 });
   await page.goto(sessionUrl);
   await waitForReady(page);
+  await injectLiveThinkingViaRenderer(page);
+  await assertThinkingTraceCollapsedByDefault(page);
+  await page.screenshot({ path: join(screenshotsDir, 'visual-thinking-collapsed-900x920.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 900, height: 920 });
+  await page.goto(sessionUrl);
+  await waitForReady(page);
   await injectThinkingTrace(page);
   await assertThinkingTraceFits(page);
   await page.screenshot({ path: join(screenshotsDir, 'visual-thinking-900x920.png'), fullPage: false });
@@ -103,6 +110,54 @@ async function waitForReady(page) {
   await page.waitForFunction(() => /ready/i.test(document.querySelector('#status')?.textContent ?? ''), null, {
     timeout: 10000,
   });
+}
+
+async function injectLiveThinkingViaRenderer(page) {
+  await page.evaluate(async () => {
+    const { appendThought } = await import('/static/js/chat.js');
+    appendThought('Reading the code paths and checking tool activity.');
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+}
+
+async function assertThinkingTraceCollapsedByDefault(page) {
+  const collapsed = await page.evaluate(() => {
+    const trace = document.querySelector('.thinking');
+    const label = trace?.querySelector('.label');
+    const body = trace?.querySelector('.body');
+    const traceRect = trace?.getBoundingClientRect();
+    return {
+      exists: !!trace,
+      collapsed: trace?.classList.contains('collapsed') ?? false,
+      expanded: label?.getAttribute('aria-expanded') ?? null,
+      bodyDisplay: body ? getComputedStyle(body).display : null,
+      traceHeight: traceRect?.height ?? 0,
+    };
+  });
+
+  assert.equal(collapsed.exists, true, 'live thinking trace exists');
+  assert.equal(collapsed.collapsed, true, 'live thinking trace starts collapsed');
+  assert.equal(collapsed.expanded, 'false', 'live thinking trace announces collapsed state');
+  assert.equal(collapsed.bodyDisplay, 'none', 'collapsed live thinking trace hides body');
+  assert.ok(collapsed.traceHeight > 0 && collapsed.traceHeight < 60, 'collapsed live thinking trace stays compact');
+
+  await page.click('.thinking .label');
+  const expanded = await page.evaluate(() => {
+    const trace = document.querySelector('.thinking');
+    const label = trace?.querySelector('.label');
+    const body = trace?.querySelector('.body');
+    return {
+      collapsed: trace?.classList.contains('collapsed') ?? true,
+      expanded: label?.getAttribute('aria-expanded') ?? null,
+      bodyDisplay: body ? getComputedStyle(body).display : null,
+      bodyText: body?.textContent ?? '',
+    };
+  });
+
+  assert.equal(expanded.collapsed, false, 'thinking trace expands on click');
+  assert.equal(expanded.expanded, 'true', 'expanded thinking trace announces expanded state');
+  assert.notEqual(expanded.bodyDisplay, 'none', 'expanded thinking trace shows body');
+  assert.match(expanded.bodyText, /Reading the code paths/);
 }
 
 async function assertVisibleWithinViewport(page, selector, label) {

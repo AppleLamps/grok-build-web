@@ -62,6 +62,7 @@ export function getToolEl(id) {
     details: el.querySelector('.details'),
     latestUpdate: null,
     detailsDirty: false,
+    displaySummary: null,
   };
   toolRefs.set(el, refs);
   refs.summary.addEventListener('click', (e) => {

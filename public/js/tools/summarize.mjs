@@ -41,6 +41,12 @@ export function summarizeTool(toolUpdate) {
   if (/memory[_ -]?get/.test(lower)) {
     return { verb: 'Read memory', target: raw.id ?? raw.path ?? title };
   }
+  if (/^list[_ -]?dir/.test(lower) || /^list\b/.test(lower)) {
+    return { verb: 'Listed', target: raw.path ?? raw.file_path ?? title.replace(/^List\s+/, '') };
+  }
+  if (/^write\b/.test(lower)) {
+    return { verb: 'Wrote', target: raw.path ?? raw.file_path ?? title.replace(/^Write\s+/, '') };
+  }
   if (/todo[_ -]?write/.test(lower)) {
     const count = extractTodoUpdate(toolUpdate)?.todos.length ?? 0;
     return { verb: 'Updated todos', target: count ? `(${count} items)` : '' };
@@ -84,7 +90,7 @@ export function summarizeTool(toolUpdate) {
     case 'read':
       return { verb: 'Read', target: raw.path ?? raw.file_path ?? title?.replace(/^Read\s+/, '') ?? '' };
     case 'edit': {
-      const p = raw.path ?? raw.file_path ?? '';
+      const p = raw.path ?? raw.file_path ?? title?.replace(/^(Write|Edit)\s+/, '') ?? '';
       const out = toolUpdate.rawOutput ?? {};
       const add = out.lines_added ?? out.linesAdded;
       const del = out.lines_removed ?? out.linesRemoved;

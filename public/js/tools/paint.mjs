@@ -25,15 +25,17 @@ export function paintTool(update) {
   const el = getToolEl(update.toolCallId);
   const refs = getToolRefs(el);
   const summary = summarizeTool(update);
-  refs.verb.textContent = summary.verb ? summary.verb + ' ' : '';
+  if (isInformativeSummary(summary) || !refs.displaySummary) refs.displaySummary = summary;
+  const displaySummary = refs.displaySummary;
+  refs.verb.textContent = displaySummary.verb ? displaySummary.verb + ' ' : '';
   const targetEl = refs.target;
-  if (summary.target?.startsWith('`') && summary.target.endsWith('`')) {
-    targetEl.textContent = summary.target.slice(1, -1);
+  if (displaySummary.target?.startsWith('`') && displaySummary.target.endsWith('`')) {
+    targetEl.textContent = displaySummary.target.slice(1, -1);
   } else {
-    targetEl.textContent = summary.target ?? '';
+    targetEl.textContent = displaySummary.target ?? '';
   }
-  refs.deltaAdd.textContent = summary.deltaAdd ? `+${summary.deltaAdd}` : '';
-  refs.deltaDel.textContent = summary.deltaDel ? `-${summary.deltaDel}` : '';
+  refs.deltaAdd.textContent = displaySummary.deltaAdd ? `+${displaySummary.deltaAdd}` : '';
+  refs.deltaDel.textContent = displaySummary.deltaDel ? `-${displaySummary.deltaDel}` : '';
   const status = normalizedToolStatus(update);
   if (status) {
     const cls = safeStatusClass(status);
@@ -44,6 +46,10 @@ export function paintTool(update) {
   refs.latestUpdate = update;
   refs.detailsDirty = true;
   if (el.classList.contains('open') || isTodoUpdate(update, titleLc)) renderDetails(refs, update);
+}
+
+function isInformativeSummary(summary) {
+  return summary.verb !== 'used tool' || !!summary.target || !!summary.deltaAdd || !!summary.deltaDel;
 }
 
 function renderLatestToolDetails(el) {

@@ -133,6 +133,8 @@ test('appendThought batches markdown rendering to one frame', () => {
 
   assert.equal(activeFrameCount(), 1);
   assert.equal(state.thinkingBuf, 'Thinking with **structure**\n- one');
+  assert.equal(state.thinkingEl.classList.contains('collapsed'), true);
+  assert.equal(state.thinkingEl.querySelector('.label').getAttribute('aria-expanded'), 'false');
   assert.equal(state.thinkingEl.querySelector('.body').innerHTML, '');
 
   flushFrames();
@@ -141,6 +143,10 @@ test('appendThought batches markdown rendering to one frame', () => {
   assert.equal(activeFrameCount(), 0);
   assert.match(html, /<strong>structure<\/strong>/);
   assert.match(html, /<ul><li>one<\/li><\/ul>/);
+
+  state.thinkingEl.querySelector('.label').click();
+  assert.equal(state.thinkingEl.classList.contains('collapsed'), false);
+  assert.equal(state.thinkingEl.querySelector('.label').getAttribute('aria-expanded'), 'true');
 });
 
 test('finishStreaming renders pending thinking without assistant output', () => {

@@ -902,7 +902,6 @@ main {
   align-items: center;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid var(--line-soft);
   color: var(--ink-2);
   cursor: pointer;
   display: flex;
@@ -914,6 +913,7 @@ main {
   user-select: none;
   width: 100%;
 }
+.thinking:not(.collapsed) .label { border-bottom: 1px solid var(--line-soft); }
 .thinking .label:hover { background: var(--hover); }
 .thinking .label:focus-visible {
   outline: 2px solid var(--accent);
@@ -1044,13 +1044,7 @@ main {
   background: none;
 }
 .thinking.collapsed .body {
-  display: block;
-  max-height: 3.1em;
-  overflow: hidden;
-  opacity: .72;
-  pointer-events: none;
-  -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent);
-  mask-image: linear-gradient(180deg, #000 55%, transparent);
+  display: none;
 }
 .thinking.collapsed .label svg { transform: rotate(-90deg); }
 

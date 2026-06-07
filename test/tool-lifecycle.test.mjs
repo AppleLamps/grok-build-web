@@ -43,6 +43,34 @@ test('tool groups expand, collapse, and keep their header', async () => {
   assert.ok(group.querySelector('.tool-group-summary'), 'group header still exists after collapse');
 });
 
+test('blank completion updates preserve meaningful tool labels', async () => {
+  resetDomState();
+
+  paintTool({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'write-real-shape',
+    title: 'write',
+    rawInput: { path: 'nyt-mock/js/data.js' },
+  });
+  paintTool({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'write-real-shape',
+    title: 'Write `nyt-mock/js/data.js`',
+    kind: 'edit',
+    rawInput: { path: 'nyt-mock/js/data.js' },
+  });
+  paintTool({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'write-real-shape',
+    status: 'completed',
+  });
+
+  const tool = state.turnEl.querySelector('.tool');
+  assert.equal(tool.querySelector('.verb').textContent, 'Wrote ');
+  assert.equal(tool.querySelector('.target').textContent, 'nyt-mock/js/data.js');
+  assert.equal(tool.classList.contains('completed'), true);
+});
+
 test('background and subagent statuses include cancelled and failed states', async () => {
   resetDomState();
 

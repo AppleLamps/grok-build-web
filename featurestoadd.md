@@ -135,8 +135,16 @@ Source: `x.ai_build_changelog.2026-06-18T06_03_22.310Z.md`, covering public Grok
   and concurrent session-load coalescing so plugin/managed MCP server reconnects
   do not fan out into duplicate agent connections. The live checklist also keeps
   plugin MCP reconnect and bad-stdio checks for real-account validation.
-- **[todo] Windows path cleanliness regression coverage** — `[plumbing]` Verify external tool prompts and rendered paths do not expose `\\?\` prefixes or cross-cwd resume path confusion on Windows.
-- **[todo] Large session replay / fork regression coverage** — `[plumbing]` Changelog mentions oversized replay logs and forked sessions retaining full pre-compaction transcripts. Add live/manual checks if the relevant session artifacts are accessible.
+- **[DONE] Windows path cleanliness regression coverage** — `[plumbing]`
+  Added regression coverage for model-facing attachment prompt paths, rendered
+  attachment labels, and same-session cross-cwd tab resumes. Windows
+  extended-length `\\?\` / `\\?\UNC\` prefixes are stripped from display/prompt
+  text while the remembered session cwd stays scoped to the loaded session.
+- **[DONE] Large session replay / fork regression coverage** — `[plumbing]`
+  Added account-free bridge coverage for oversized replay history pruning and
+  fork-session replay isolation. Real saved-session artifacts that prove CLI
+  forked sessions retain pre-compaction transcripts remain in the live checklist
+  because they require accessible local Grok session data.
 
 ## Cut from the previous version (out of scope for parity)
 

@@ -42,6 +42,35 @@ test('user prompts include a local date rollover notice after midnight', async (
   );
 });
 
+test('attachment prompt paths omit Windows extended-length prefixes', async () => {
+  const sent = [];
+  const agent = new AgentConnection({
+    emit: () => {},
+    spawnOpts: {},
+    autoApproveFor: () => true,
+  });
+  agent.ready = true;
+  agent.readyPromise = Promise.resolve();
+  agent.bindSession('session-paths', process.cwd());
+  agent.call = async (method, params) => {
+    sent.push({ method, params });
+    return { stopReason: 'end_turn' };
+  };
+
+  await agent.prompt('inspect these files', {
+    attachments: [
+      { path: '\\\\?\\C:\\Users\\apple\\project\\.grok-web-uploads\\image.png' },
+      { path: '\\\\?\\UNC\\server\\share\\clip.mp4' },
+    ],
+  }).promise;
+
+  const text = sent[0].params.prompt[0].text;
+  assert.match(text, /Attached files:/);
+  assert.match(text, /C:\\Users\\apple\\project\\.grok-web-uploads\\image\.png/);
+  assert.match(text, /\\\\server\\share\\clip\.mp4/);
+  assert.doesNotMatch(text, /\\\\\?\\/);
+});
+
 test('stdout parser ignores undecodable stdio lines and handles later JSON messages', async () => {
   const events = [];
   const agent = new AgentConnection({

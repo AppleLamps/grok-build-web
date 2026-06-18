@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { importPublic, installDomStubs, delay } from './helpers.mjs';
+import { delay, importPublic, installDomStubs } from './helpers.mjs';
 
 const requests = [];
 const { body } = installDomStubs({
@@ -37,6 +37,16 @@ test('user messages render in right-aligned rows', () => {
   assert.equal(replayRow.querySelector('.user-msg').textContent, 'hello');
 });
 
+test('user attachment labels omit Windows extended-length prefixes', () => {
+  resetChatState();
+
+  chat.addUserItem('', [{ kind: 'file', path: '\\\\?\\C:\\Users\\apple\\project\\report.pdf' }]);
+  const label = state.turnEl.querySelector('.user-attach-name');
+
+  assert.equal(label.textContent, 'C:\\Users\\apple\\project\\report.pdf');
+  assert.doesNotMatch(label.textContent, /\\\\\?\\/);
+});
+
 test('empty replay chunks keep the welcome screen visible', () => {
   resetChatState();
   dom.welcome.hidden = false;
@@ -55,7 +65,13 @@ test('code block copy button copies from the matching block', async () => {
   let copied = '';
   Object.defineProperty(globalThis, 'navigator', {
     configurable: true,
-    value: { clipboard: { writeText: async (text) => { copied = text; } } },
+    value: {
+      clipboard: {
+        writeText: async (text) => {
+          copied = text;
+        },
+      },
+    },
   });
 
   const block = document.createElement('div');
@@ -99,14 +115,18 @@ test('global shortcuts focus composer and open slash entry outside inputs', () =
     key: 'k',
     ctrlKey: true,
     target: body,
-    preventDefault() { this.prevented = true; },
+    preventDefault() {
+      this.prevented = true;
+    },
   });
   assert.equal(dom.input.focused, true);
 
   composer.handleGlobalShortcut({
     key: '/',
     target: body,
-    preventDefault() { this.prevented = true; },
+    preventDefault() {
+      this.prevented = true;
+    },
   });
   assert.equal(dom.input.value, '/');
 
@@ -114,7 +134,9 @@ test('global shortcuts focus composer and open slash entry outside inputs', () =
   composer.handleGlobalShortcut({
     key: '/',
     target: dom.input,
-    preventDefault() { this.prevented = true; },
+    preventDefault() {
+      this.prevented = true;
+    },
   });
   assert.equal(dom.input.value, 'keep');
 });

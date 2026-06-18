@@ -348,7 +348,7 @@ function appendAttachmentList(row, attachments) {
 
 function renderAttachmentChip(a) {
   const kind = a?.kind ?? 'file';
-  const filename = a?.filename ?? 'attachment';
+  const filename = cleanDisplayPath(a?.filename ?? a?.path ?? 'attachment');
   if (kind === 'image' && a?.mediaUrl) {
     const link = document.createElement('a');
     link.className = 'user-attach image';
@@ -379,6 +379,13 @@ function renderAttachmentChip(a) {
   label.textContent = filename;
   chip.appendChild(label);
   return chip;
+}
+
+function cleanDisplayPath(path) {
+  const value = String(path ?? '');
+  if (value.startsWith('\\\\?\\UNC\\')) return `\\\\${value.slice('\\\\?\\UNC\\'.length)}`;
+  if (value.startsWith('\\\\?\\')) return value.slice('\\\\?\\'.length);
+  return value;
 }
 
 export function addError(msg) {

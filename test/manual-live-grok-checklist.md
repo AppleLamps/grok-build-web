@@ -15,6 +15,10 @@ Keep these visual/account checks manual when needed:
 - Ask for a real web search and inspect the rendered result card.
 - Ask for a real X search if enabled for the account and inspect handles, timestamps, links, and snippets.
 - Run `read_file` on `.png`, `.jpg`, `.pdf`, and `.pptx` files and inspect multimodal output.
+- On Windows, attach or reference a file from a long path and confirm prompts,
+  tool cards, session lists, and attachment chips do not show `\\?\` prefixes.
+- On Windows, resume the same saved session from two different cwd values and
+  confirm subsequent prompts/tool output remain scoped to the loaded session cwd.
 - Start a background command, fetch output, kill it, and confirm status leaves the composer usable.
 - Run a subagent task, cancel during execution, and confirm failed/cancelled status renders.
 - Open Settings and confirm unsupported launch flags are disabled for the installed CLI.
@@ -24,6 +28,11 @@ Keep these visual/account checks manual when needed:
   connections or flood reconnect attempts.
 - If a local stdio MCP fixture is available, emit non-JSON or invalid UTF-8
   lines before valid JSON-RPC output and confirm the session keeps streaming.
+- If large saved-session artifacts are available, replay a session with an
+  oversized transcript/log and confirm the web SSE replay stays responsive.
+- If forked saved-session artifacts are available, open a fork created before
+  or after compaction and confirm its transcript includes the expected
+  pre-compaction context without leaking unrelated session events.
 
 ## Grok 0.2.14 Compatibility Status
 

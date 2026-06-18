@@ -12,6 +12,7 @@ import {
   setStatus,
   clearLog,
   addHookLine,
+  addInfoLine,
   collapseLastThinking,
   updateUsage,
   finishStreaming,
@@ -173,6 +174,7 @@ export function dispatch(event) {
       collapseLastThinking();
       finishStreaming();
       updateUsage(event.result?._meta);
+      handleCompactionMetadata(event.result?._meta?.compaction ?? event.result?._meta?.compactionResult);
       dom.input.focus({ preventScroll: true });
       break;
 
@@ -265,6 +267,7 @@ export function dispatch(event) {
 }
 
 function handleUpdate(u) {
+  if (handleCompactionMetadata(u)) return;
   // Plan mode: agent calls enter_plan_mode / exit_plan_mode as tools
   if (
     (u.sessionUpdate === 'tool_call' || u.sessionUpdate === 'tool_call_update') &&
@@ -339,6 +342,110 @@ function handleUpdate(u) {
       break;
     }
   }
+}
+
+function handleCompactionMetadata(raw) {
+  const meta = normalizeCompactionMetadata(raw);
+  if (!meta) return false;
+  state.lastCompaction = meta;
+  addInfoLine('Compaction', formatCompactionMetadata(meta), meta.status === 'failed' ? 'warn' : '');
+  return true;
+}
+
+function normalizeCompactionMetadata(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const updateName = raw.sessionUpdate ?? raw.type ?? raw.kind ?? raw.event ?? raw.name;
+  const nested =
+    raw.compaction ?? raw.compactionResult ?? raw.compaction_result ?? raw.result ?? raw.metadata ?? raw.meta ?? null;
+  const source = nested && typeof nested === 'object' ? { ...nested, sessionUpdate: updateName } : raw;
+  const marker = String(source.sessionUpdate ?? source.type ?? source.kind ?? source.event ?? source.name ?? '');
+  const hasCompactionMarker = /compact/i.test(marker);
+  const hasCompactionShape =
+    firstValue(source, ['beforeTokens', 'before_tokens', 'tokensBefore', 'tokens_before', 'inputTokens']) != null ||
+    firstValue(source, ['afterTokens', 'after_tokens', 'tokensAfter', 'tokens_after', 'outputTokens']) != null ||
+    firstValue(source, ['transcriptPath', 'transcript_path', 'rawTranscriptPath', 'raw_transcript_path']) != null ||
+    firstValue(source, ['summaryQuality', 'summary_quality', 'quality']) != null ||
+    firstValue(source, ['promptPrefixReused', 'prompt_prefix_reused', 'prefixReused', 'prefix_reused']) != null;
+  if (!hasCompactionMarker && !hasCompactionShape) return null;
+  const statusRaw = firstValue(source, ['status', 'outcome', 'result']);
+  const error = firstValue(source, ['error', 'errorMessage', 'error_message', 'failureReason', 'failure_reason']);
+  const beforeTokens = toNumber(
+    firstValue(source, ['beforeTokens', 'before_tokens', 'tokensBefore', 'tokens_before', 'inputTokens']),
+  );
+  const afterTokens = toNumber(
+    firstValue(source, ['afterTokens', 'after_tokens', 'tokensAfter', 'tokens_after', 'outputTokens']),
+  );
+  return {
+    status: error ? 'failed' : String(statusRaw ?? 'completed'),
+    beforeTokens,
+    afterTokens,
+    reductionTokens: toNumber(firstValue(source, ['reductionTokens', 'reduction_tokens', 'tokensReduced'])),
+    reductionPercent: toNumber(
+      firstValue(source, ['reductionPercent', 'reduction_percent', 'tokenReductionPercent', 'token_reduction_percent']),
+    ),
+    transcriptPath: firstValue(source, [
+      'transcriptPath',
+      'transcript_path',
+      'rawTranscriptPath',
+      'raw_transcript_path',
+    ]),
+    segmentsPath: firstValue(source, ['segmentsPath', 'segments_path', 'segmentPath', 'segment_path']),
+    summaryPath: firstValue(source, ['summaryPath', 'summary_path']),
+    promptPrefixReused: firstValue(source, [
+      'promptPrefixReused',
+      'prompt_prefix_reused',
+      'prefixReused',
+      'prefix_reused',
+    ]),
+    summaryQuality: firstValue(source, ['summaryQuality', 'summary_quality', 'quality']),
+    error,
+    raw: source,
+  };
+}
+
+function firstValue(obj, keys) {
+  for (const key of keys) {
+    if (obj?.[key] != null && obj[key] !== '') return obj[key];
+  }
+  return null;
+}
+
+function toNumber(value) {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatCompactionMetadata(meta) {
+  const parts = [];
+  if (meta.status) parts.push(`status ${meta.status}`);
+  if (meta.beforeTokens != null && meta.afterTokens != null) {
+    parts.push(`${formatTokens(meta.beforeTokens)} -> ${formatTokens(meta.afterTokens)} tokens`);
+  }
+  const reduction =
+    meta.reductionPercent ??
+    (meta.beforeTokens && meta.afterTokens != null
+      ? ((meta.beforeTokens - meta.afterTokens) / meta.beforeTokens) * 100
+      : null);
+  if (reduction != null) parts.push(`${reduction.toFixed(1).replace(/\.0$/, '')}% reduction`);
+  if (meta.promptPrefixReused != null) parts.push(`prompt prefix reused ${formatBool(meta.promptPrefixReused)}`);
+  if (meta.summaryQuality != null) parts.push(`summary quality ${meta.summaryQuality}`);
+  if (meta.transcriptPath) parts.push(`transcript ${meta.transcriptPath}`);
+  if (meta.segmentsPath) parts.push(`segments ${meta.segmentsPath}`);
+  if (meta.summaryPath) parts.push(`summary ${meta.summaryPath}`);
+  if (meta.error) parts.push(`error ${meta.error}`);
+  return parts.join(' | ') || 'metadata received';
+}
+
+function formatBool(value) {
+  if (typeof value === 'boolean') return value ? 'yes' : 'no';
+  return String(value);
+}
+
+function formatTokens(n) {
+  if (n < 1000) return String(n);
+  if (n < 1000000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
 }
 
 function firstCommandList(update) {

@@ -383,6 +383,19 @@ export function addError(msg) {
   autoScroll();
 }
 
+export function addInfoLine(label, msg, variant = '') {
+  if (!state.turnEl) newTurn();
+  const div = document.createElement('div');
+  div.className = `info-line${variant ? ` ${variant}` : ''}`;
+  const labelEl = document.createElement('span');
+  labelEl.className = 'label';
+  labelEl.textContent = label;
+  div.appendChild(labelEl);
+  div.append(` ${msg}`);
+  state.turnEl.appendChild(div);
+  autoScroll();
+}
+
 export function setStatus(text, cls = '') {
   dom.statusEl.textContent = text;
   dom.statusEl.className = 'status ' + cls;

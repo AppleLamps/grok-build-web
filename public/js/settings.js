@@ -102,6 +102,22 @@ const FIELDS = [
     hint: 'Launch-time --permission-mode. Disabled unless the installed grok CLI advertises it.',
   },
   {
+    key: 'compactionMode',
+    label: 'Compaction mode',
+    type: 'select',
+    options: ['', 'summary', 'transcript', 'segments'],
+    requiresCapability: 'compactionMode',
+    hint: 'Launch-time --compaction-mode. Summary is the CLI default; transcript and segments persist more context pointers.',
+  },
+  {
+    key: 'compactionDetail',
+    label: 'Compaction detail',
+    type: 'select',
+    options: ['', 'none', 'minimal', 'balanced', 'verbose'],
+    requiresCapability: 'compactionDetail',
+    hint: 'Launch-time --compaction-detail for segment compaction. The CLI default is verbose.',
+  },
+  {
     key: 'ignoreApiKey',
     label: 'Use grok.com subscription (ignore XAI_API_KEY)',
     type: 'checkbox',
@@ -142,7 +158,16 @@ const LAUNCH_SECTIONS = [
   {
     title: 'Runtime',
     description: 'Session restore, memory, leader, and prompt overrides.',
-    keys: ['noMemory', 'todoGate', 'restoreCode', 'noLeader', 'rules', 'systemPromptOverride'],
+    keys: [
+      'noMemory',
+      'todoGate',
+      'restoreCode',
+      'noLeader',
+      'compactionMode',
+      'compactionDetail',
+      'rules',
+      'systemPromptOverride',
+    ],
   },
 ];
 

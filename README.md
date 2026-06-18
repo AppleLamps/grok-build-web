@@ -166,8 +166,15 @@ Environment variables read at startup:
 | `GROK_WEB_AGENT_IDLE_MS` | `1800000` | Idle time before an agent process can be evicted. |
 | `GROK_WEB_AGENT_IDLE_SWEEP_MS` | `60000` | Agent idle sweep interval. |
 | `GROK_WEB_DISABLE_FS_WATCH` | unset | Set to `1` to disable filesystem watching for session changes. |
+| `GROK_OTEL_ENABLED` | unset | Passed through to spawned Grok CLI processes. Set when your Grok build uses this switch for OpenTelemetry export. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | Passed through to spawned Grok CLI processes as the OpenTelemetry collector endpoint. |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | unset | Passed through to spawned Grok CLI processes as the trace-specific OpenTelemetry collector endpoint. |
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | unset | Passed through to spawned Grok CLI processes as the metrics-specific OpenTelemetry collector endpoint. |
+| `OTEL_SERVICE_NAME` | unset | Passed through to spawned Grok CLI processes for OpenTelemetry service labeling. |
 
 By default, Grok Build Web strips `XAI_API_KEY` and `GROK_API_KEY` from spawned agent processes and one-shot CLI runs so the CLI uses the cached grok.com login from `~/.grok/auth.json`. Set `GROK_WEB_USE_API_KEY=1` to use API key billing instead.
+
+OpenTelemetry variables are inherited by the Grok child process unchanged. Tools -> Session info shows whether telemetry-related variables are present without displaying their values.
 
 ## Architecture
 
@@ -304,11 +311,12 @@ Current items to verify after updating:
 - Slash autocomplete wraps with ArrowUp and ArrowDown.
 - Session resume replays tool and subagent UI without breaking grouped tool cards.
 - Windows image paste and screenshot file input work through browser paste, drag-and-drop, and attach.
-- Windows-friendly launch flags are detected from `grok --help`, including `--permission-mode`, `--todo-gate`, `--check`, and `--best-of-n`.
+- Windows-friendly launch flags are detected from `grok --help`, including `--permission-mode`, `--todo-gate`, `--compaction-mode`, `--compaction-detail`, `--check`, and `--best-of-n`.
 - Multimodal `read_file` output continues rendering text, images, videos, PDFs, and PPTX text.
 - Image and video generation previews continue working for URLs and local Grok session media paths, with Open links when a safe URL is available.
 - `/login` and `/usage` remain reachable through the web UI or slash autocomplete.
 - `--todo-gate` is available in Settings when the installed CLI advertises it.
+- `--compaction-mode` and `--compaction-detail` are available in Settings when the installed CLI advertises them. Compaction result metadata is surfaced in the transcript and in Tools -> Session info when the agent emits it.
 - `_x.ai/ask_user_question` renders as a web elicitation card and returns `{ outcome, answers?, partial_answers? }`.
 - Active TODO state hydrates from persisted `plan.json` when loading a saved session.
 - Terminal tool cards continue to update while command output streams.

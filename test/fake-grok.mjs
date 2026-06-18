@@ -16,6 +16,8 @@ Options:
       --agent <NAME>
       --agents <JSON>
       --always-approve
+      --compaction-detail <DETAIL>
+      --compaction-mode <MODE>
       --permission-mode <MODE>
       --todo-gate
   -h, --help

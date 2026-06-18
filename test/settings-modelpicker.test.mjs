@@ -26,6 +26,8 @@ const fieldDefaults = {
   alwaysApprove: false,
   noLeader: false,
   permissionMode: null,
+  compactionMode: null,
+  compactionDetail: null,
   ignoreApiKey: false,
 };
 
@@ -36,7 +38,14 @@ installDomStubs({
     if (path === '/spawn-opts') {
       return json({
         ...fieldDefaults,
-        _capabilities: { agent: true, agents: true, permissionMode: false, todoGate: false },
+        _capabilities: {
+          agent: true,
+          agents: true,
+          permissionMode: false,
+          todoGate: false,
+          compactionMode: true,
+          compactionDetail: true,
+        },
         _env: { XAI_API_KEY_set: false },
       });
     }
@@ -192,6 +201,22 @@ test('settings exposes agent and subagent JSON launch fields', async () => {
   const respawn = requests.find((r) => r.url === '/session/respawn');
   assert.equal(respawn.body.agent, 'reviewer');
   assert.equal(respawn.body.agents, '[{"name":"fast","description":"Quick pass"}]');
+});
+
+test('settings exposes supported compaction launch fields', async () => {
+  requests.length = 0;
+  const panel = await settings.__testOpenSettings();
+  const mode = panel.querySelectorAll('[data-key]').find((el) => el.dataset.key === 'compactionMode');
+  const detail = panel.querySelectorAll('[data-key]').find((el) => el.dataset.key === 'compactionDetail');
+  mode.value = 'segments';
+  detail.value = 'balanced';
+
+  await settings.__testApplySettings();
+  await delay(0);
+
+  const respawn = requests.find((r) => r.url === '/session/respawn');
+  assert.equal(respawn.body.compactionMode, 'segments');
+  assert.equal(respawn.body.compactionDetail, 'balanced');
 });
 
 test('model picker parses CLI IDs and respawns with a custom model', async () => {

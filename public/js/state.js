@@ -22,6 +22,7 @@ export const state = {
   recentsCache: [],
   autoApprove: true,
   lastUsage: null,
+  lastCompaction: null,
   turnCount: 0,
   hiddenTurnCount: 0,
 

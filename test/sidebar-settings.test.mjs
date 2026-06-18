@@ -88,3 +88,12 @@ test('settings disables inline agents JSON when the CLI does not support it', as
   assert.equal(textarea.dataset.unsupported, '1');
   assert.ok(el.querySelectorAll('.setting-hint').some((h) => /Unsupported/.test(h.textContent)));
 });
+
+test('settings disables compaction controls when the CLI does not support them', async () => {
+  const field = settings.__testFields.find((f) => f.key === 'compactionMode');
+  const el = settings.__testFieldEl(field, null, { _capabilities: { compactionMode: false } });
+  const select = el.querySelector('select');
+  assert.equal(select.disabled, true);
+  assert.equal(select.dataset.unsupported, '1');
+  assert.ok(el.querySelectorAll('.setting-hint').some((h) => /Unsupported/.test(h.textContent)));
+});

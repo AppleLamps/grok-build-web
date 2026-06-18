@@ -157,11 +157,16 @@ export async function showSessionInfo() {
     ['Always approve', String(settings.autoApprove ?? spawnOpts.alwaysApprove ?? false)],
     ['Permission mode', spawnOpts.permissionMode ?? '(default)'],
     ['Sandbox', spawnOpts.sandbox ?? '(none)'],
+    ['Compaction mode', spawnOpts.compactionMode ?? '(default)'],
+    ['Compaction detail', spawnOpts.compactionDetail ?? '(default)'],
     ['Memory flag', flagSummary(spawnOpts)],
+    ['Telemetry active', telemetrySummary(spawnOpts._env)],
+    ['Telemetry config', telemetryConfigSummary(spawnOpts._env)],
     ['Turns this tab', String(state.turnCount)],
     ['Last total tokens', usage ? formatTokens(usage.totalTokens) : '(none yet)'],
     ['Context window', usage ? formatTokens(usage.contextTokens) : '(unknown)'],
     ['Context usage', usage ? `${usage.percent.toFixed(1)}%` : '(none yet)'],
+    ['Last compaction', compactionSummary(state.lastCompaction)],
     ['Messages in session', titleRecord?.numMessages != null ? String(titleRecord.numMessages) : '(unknown)'],
     ['Last activity', titleRecord?.lastActive ? new Date(titleRecord.lastActive).toLocaleString() : '(unknown)'],
   ];
@@ -186,6 +191,44 @@ function flagSummary(opts) {
   if (opts.noSubagents) flags.push('no-subagents');
   if (opts.restoreCode) flags.push('restore-code');
   return flags.length ? flags.join(', ') : '(none)';
+}
+
+function telemetrySummary(env = {}) {
+  return hasTelemetryEnv(env) ? 'yes' : 'no';
+}
+
+function telemetryConfigSummary(env = {}) {
+  const names = [];
+  if (env?.GROK_OTEL_ENABLED_set) names.push('GROK_OTEL_ENABLED');
+  if (env?.OTEL_EXPORTER_OTLP_ENDPOINT_set) names.push('OTEL_EXPORTER_OTLP_ENDPOINT');
+  if (env?.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT_set) names.push('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT');
+  if (env?.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT_set) names.push('OTEL_EXPORTER_OTLP_METRICS_ENDPOINT');
+  if (env?.OTEL_SERVICE_NAME_set) names.push('OTEL_SERVICE_NAME');
+  return names.length ? names.join(', ') : '(none)';
+}
+
+function hasTelemetryEnv(env = {}) {
+  return !!(
+    env?.GROK_OTEL_ENABLED_set ||
+    env?.OTEL_EXPORTER_OTLP_ENDPOINT_set ||
+    env?.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT_set ||
+    env?.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT_set
+  );
+}
+
+function compactionSummary(meta) {
+  if (!meta) return '(none yet)';
+  const parts = [];
+  if (meta.status) parts.push(meta.status);
+  if (meta.beforeTokens != null && meta.afterTokens != null) {
+    parts.push(`${formatTokens(meta.beforeTokens)} -> ${formatTokens(meta.afterTokens)}`);
+  }
+  if (meta.reductionPercent != null) parts.push(`${Number(meta.reductionPercent).toFixed(1).replace(/\.0$/, '')}%`);
+  if (meta.transcriptPath) parts.push(`transcript: ${meta.transcriptPath}`);
+  if (meta.segmentsPath) parts.push(`segments: ${meta.segmentsPath}`);
+  if (meta.summaryQuality != null) parts.push(`quality: ${meta.summaryQuality}`);
+  if (meta.error) parts.push(`error: ${meta.error}`);
+  return parts.join(' | ') || 'metadata received';
 }
 
 function textField(label, name, placeholder = '', hint = '') {

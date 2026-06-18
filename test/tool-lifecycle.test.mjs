@@ -6,6 +6,11 @@ installDomStubs();
 const { state, dom } = await importPublic('public/js/state.js');
 const { paintTool } = await importPublic('public/js/tools.js');
 const { setBackgroundTask, setCurrentTodos, resetAllToolState } = await importPublic('public/js/tool-state.js');
+const {
+  buildBackgroundTaskPrompt,
+  getBackgroundTask,
+  handleBackgroundTaskAction,
+} = await importPublic('public/js/background-tasks.js');
 const { parseTodoSummary } = await importPublic('public/js/tools/render-todos.mjs');
 const { clearLog } = await importPublic('public/js/chat.js');
 
@@ -92,7 +97,7 @@ test('background and subagent statuses include cancelled and failed states', asy
     rawOutput: { status: 'cancelled' },
   });
   assert.equal(dom.bgPanel.hidden, false);
-  assert.equal(dom.bgList.querySelector('.todo-item').title, 'cancelled');
+  assert.equal(dom.bgList.querySelector('.bg-task-card').title, 'cancelled');
 
   paintTool({
     sessionUpdate: 'tool_call',
@@ -206,21 +211,175 @@ test('background task updates preserve keyed DOM nodes', async () => {
   resetDomState();
 
   setBackgroundTask('a', { id: 'a', command: 'sleep 1', status: 'in_progress' });
-  const first = dom.bgList.children[0];
+  const first = dom.bgList.querySelector('[data-task-id="a"]');
   assert.equal(dom.bgPanel.hidden, false);
-  assert.equal(first.textContent, 'sleep 1');
+  assert.match(first.innerHTML, /sleep 1/);
 
   setBackgroundTask('a', { id: 'a', command: 'sleep 1', status: 'completed' });
-  assert.equal(dom.bgList.children[0], first);
+  assert.equal(dom.bgList.querySelector('[data-task-id="a"]'), first);
   assert.equal(first.title, 'completed');
   assert.equal(first.classList.contains('completed'), true);
 
   setBackgroundTask('b', { id: 'b', command: 'sleep 2', status: 'in_progress' });
-  assert.deepEqual([...dom.bgList.children].map(el => el.textContent), ['sleep 1', 'sleep 2']);
+  assert.match(dom.bgList.querySelector('[data-task-id="a"]').innerHTML, /sleep 1/);
+  assert.match(dom.bgList.querySelector('[data-task-id="b"]').innerHTML, /sleep 2/);
 
   resetAllToolState();
   assert.equal(dom.bgPanel.hidden, true);
   assert.equal(dom.bgList.children.length, 0);
+});
+
+test('background panel groups command, monitor, subagent, wait, kill, and resumed updates', async () => {
+  resetDomState();
+
+  paintTool({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'cmd-call',
+    title: 'run_terminal_command',
+    kind: 'execute',
+    status: 'in_progress',
+    rawInput: { command: 'npm test', is_background: true },
+    rawOutput: { task_id: 'cmd-1', status: 'running' },
+  });
+  paintTool({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'mon-call',
+    title: 'monitor',
+    kind: 'execute',
+    status: 'in_progress',
+    rawInput: { id: 'mon-1', description: 'watch logs' },
+    rawOutput: { output: 'loop 1\nall good', iteration: 1 },
+  });
+  paintTool({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'sub-call',
+    title: 'get_subagent_output',
+    kind: 'execute',
+    status: 'completed',
+    rawInput: { task_id: 'sub-1', prompt: 'check docs' },
+    rawOutput: { task_status: 'running', output: 'still running' },
+  });
+  paintTool({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'wait-call',
+    title: 'wait_commands_or_subagents',
+    kind: 'execute',
+    status: 'completed',
+    rawInput: { task_id: 'loop-1' },
+    rawOutput: { task_status: 'running', output: 'iteration output', iteration: 3 },
+  });
+  paintTool({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'resume-call',
+    title: 'background_task_resumed',
+    kind: 'execute',
+    status: 'in_progress',
+    rawOutput: { task_id: 'resumed-1', status: 'running', output: 'resumed output' },
+  });
+  paintTool({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'kill-call',
+    title: 'kill_command_or_subagent',
+    kind: 'execute',
+    status: 'completed',
+    rawInput: { task_id: 'cmd-1' },
+  });
+
+  assert.equal(getBackgroundTask('cmd-1').status, 'killed');
+  assert.equal(getBackgroundTask('mon-1').group, 'monitors');
+  assert.equal(getBackgroundTask('sub-1').group, 'subagents');
+  assert.equal(getBackgroundTask('loop-1').group, 'loops');
+  assert.equal(getBackgroundTask('resumed-1').group, 'other');
+  assert.match(dom.bgList.textContent, /Commands/);
+  assert.match(dom.bgList.textContent, /Monitors/);
+  assert.match(dom.bgList.textContent, /Subagents/);
+  assert.match(dom.bgList.textContent, /Loops \/ waits/);
+  assert.match(dom.bgList.textContent, /Other background tasks/);
+  assert.match(dom.bgList.querySelector('[data-task-id="mon-1"]').innerHTML, /loop 1/);
+  assert.match(dom.bgList.querySelector('[data-task-id="loop-1"]').innerHTML, /iteration 3/);
+});
+
+test('background output fetch preserves prior command and updates preview', async () => {
+  resetDomState();
+
+  paintTool({
+    sessionUpdate: 'tool_call',
+    toolCallId: 'cmd-preview',
+    title: 'run_terminal_command',
+    kind: 'execute',
+    status: 'in_progress',
+    rawInput: { command: 'tail -f app.log', is_background: true },
+    rawOutput: { task_id: 'preview-1', status: 'running' },
+  });
+  paintTool({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'cmd-preview-output',
+    title: 'get_command_or_subagent_output',
+    kind: 'execute',
+    status: 'completed',
+    rawInput: { task_id: 'preview-1' },
+    rawOutput: { output: '\u001b[32mok\u001b[0m\nready' },
+  });
+
+  const task = getBackgroundTask('preview-1');
+  assert.equal(task.command, 'tail -f app.log');
+  assert.equal(task.status, 'in_progress');
+  assert.match(task.outputPreview, /ok/);
+  assert.match(dom.bgList.querySelector('[data-task-id="preview-1"]').innerHTML, /ready/);
+});
+
+test('background panel escapes hostile task values', async () => {
+  resetDomState();
+
+  setBackgroundTask('x" onclick="alert(1)', {
+    command: '<img src=x onerror=alert(1)>',
+    status: 'in_progress',
+    outputPreview: '<script>alert(1)</script>',
+  });
+
+  const card = dom.bgList.querySelector('.bg-task-card');
+  assert.doesNotMatch(card.innerHTML, /<img /);
+  assert.doesNotMatch(card.innerHTML, /<script>/);
+  assert.doesNotMatch(card.innerHTML, /\sonclick="/);
+  assert.doesNotMatch(card.innerHTML, /<[^>]+\sonerror=/);
+  assert.match(card.innerHTML, /&lt;img/);
+  assert.match(card.innerHTML, /&lt;script/);
+});
+
+test('background task actions open inline tools and post output or kill prompts', async () => {
+  resetDomState();
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, opts = {}) => {
+    requests.push({ path: String(path), body: opts.body ? JSON.parse(opts.body) : null });
+    return new Response(JSON.stringify({ ok: true }), { status: 202 });
+  };
+  try {
+    paintTool({
+      sessionUpdate: 'tool_call',
+      toolCallId: 'action-call',
+      title: 'run_terminal_command',
+      kind: 'execute',
+      status: 'in_progress',
+      rawInput: { command: 'sleep 60', is_background: true },
+      rawOutput: { task_id: 'action-1', status: 'running' },
+    });
+
+    const card = dom.bgList.querySelector('[data-task-id="action-1"]');
+    await handleBackgroundTaskAction({ target: card.querySelector('[data-bg-action="open"]'), preventDefault() {}, stopPropagation() {} });
+    const tool = state.toolEls.get('action-call');
+    assert.equal(tool.classList.contains('open'), true);
+    assert.equal(tool.closest('.tool-group').classList.contains('open'), true);
+
+    await handleBackgroundTaskAction({ target: card.querySelector('[data-bg-action="output"]'), preventDefault() {}, stopPropagation() {} });
+    await handleBackgroundTaskAction({ target: card.querySelector('[data-bg-action="kill"]'), preventDefault() {}, stopPropagation() {} });
+
+    assert.equal(requests[0].path, '/prompt');
+    assert.equal(requests[0].body.text, buildBackgroundTaskPrompt('output', 'action-1'));
+    assert.equal(requests[1].body.text, buildBackgroundTaskPrompt('kill', 'action-1'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('todo sidebar merges partial updates without losing task text', async () => {

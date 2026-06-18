@@ -1,17 +1,21 @@
 import { dom } from './state.js';
+import {
+  getBackgroundTask,
+  renderBackgroundTaskPanel,
+  resetBackgroundTasks,
+  setBackgroundTask,
+} from './background-tasks.js';
+
+export { getBackgroundTask, setBackgroundTask };
 
 let subagentDepth = 0;
-const bgTasks = new Map();
-const bgTaskEls = new Map();
 const todosById = new Map();
 const idlessTodos = [];
 const SAFE_STATUS_CLASSES = new Set(['pending', 'in_progress', 'completed', 'failed', 'cancelled', 'killed']);
 
 export function resetTransientToolState() {
   subagentDepth = 0;
-  bgTasks.clear();
-  bgTaskEls.clear();
-  renderBgPanel();
+  resetBackgroundTasks();
 }
 
 export function resetAllToolState() {
@@ -31,16 +35,6 @@ export function enterSubagent() {
 
 export function exitSubagent() {
   subagentDepth = Math.max(0, subagentDepth - 1);
-}
-
-export function getBackgroundTask(id) {
-  return bgTasks.get(id);
-}
-
-export function setBackgroundTask(id, task) {
-  bgTasks.set(id, task);
-  renderBgTask(id, task);
-  if (dom.bgPanel) dom.bgPanel.hidden = bgTasks.size === 0;
 }
 
 export function getCurrentTodos() {
@@ -72,26 +66,7 @@ export function setCurrentTodos(todos, { merge = false } = {}) {
 }
 
 export function renderBgPanel() {
-  if (!dom.bgPanel || !dom.bgList) return;
-  dom.bgPanel.hidden = bgTasks.size === 0;
-  dom.bgList.replaceChildren();
-  bgTaskEls.clear();
-  for (const [id, task] of bgTasks) renderBgTask(id, task);
-}
-
-function renderBgTask(id, task) {
-  if (!dom.bgPanel || !dom.bgList) return;
-  let item = bgTaskEls.get(id);
-  if (!item) {
-    item = document.createElement('div');
-    bgTaskEls.set(id, item);
-    dom.bgList.appendChild(item);
-  }
-  const status = safeStatusClass(task.status ?? 'running');
-  const label = String(task.command ?? task.id ?? '').slice(0, 60);
-  item.className = `todo-item ${status}`;
-  item.title = status;
-  item.textContent = label;
+  renderBackgroundTaskPanel();
 }
 
 function renderTodoPanel() {

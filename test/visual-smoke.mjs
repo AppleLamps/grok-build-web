@@ -38,6 +38,8 @@ try {
   await assertVisibleWithinViewport(page, '.recent.active', 'active sidebar session');
   await assertWelcomeSubtitle(page);
   await assertMermaidPreviewAndExport(page);
+  await injectBackgroundTasks(page);
+  await assertBackgroundPanelFits(page);
   await page.screenshot({ path: join(screenshotsDir, 'visual-desktop-1280x720.png'), fullPage: false });
 
   await page.setViewportSize({ width: 900, height: 920 });
@@ -67,6 +69,9 @@ try {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto(sessionUrl);
     await waitForReady(page);
+    await injectBackgroundTasks(page);
+    await page.click('#mobile-sidebar-toggle');
+    await assertBackgroundPanelFits(page);
     await page.fill('#input', `visual smoke ${viewport.name}`);
     await assertVisibleWithinViewport(page, '#send', `mobile send button ${viewport.name}`);
     await assertWelcomeSubtitle(page);
@@ -240,6 +245,62 @@ async function assertMermaidPreviewAndExport(page) {
     page.off('pageerror', onPageError);
     await page.keyboard.press('Escape').catch(() => {});
   }
+}
+
+async function injectBackgroundTasks(page) {
+  await page.evaluate(async () => {
+    const { setBackgroundTask } = await import('/static/js/tool-state.js');
+    setBackgroundTask('cmd-visual', {
+      group: 'commands',
+      command: 'npm run dev -- --watch',
+      status: 'in_progress',
+      outputPreview: 'compiled successfully\nwatching for changes',
+    });
+    setBackgroundTask('monitor-visual', {
+      group: 'monitors',
+      command: 'Monitor deployment logs',
+      status: 'in_progress',
+      outputPreview: 'loop 4: no errors',
+      iteration: 4,
+    });
+    setBackgroundTask('subagent-visual', {
+      group: 'subagents',
+      command: 'Investigate failing workflow',
+      status: 'failed',
+      outputPreview: 'subagent returned a failing check',
+    });
+    setBackgroundTask('loop-visual', {
+      group: 'loops',
+      command: 'wait_commands_or_subagents',
+      status: 'pending',
+      outputPreview: 'waiting for 2 tasks',
+      iteration: 2,
+    });
+  });
+}
+
+async function assertBackgroundPanelFits(page) {
+  await page.locator('#bg-panel').waitFor({ state: 'visible', timeout: 10000 });
+  await page.locator('.bg-task-card').first().waitFor({ state: 'visible', timeout: 10000 });
+  await assertVisibleWithinViewport(page, '#bg-panel', 'background tasks panel');
+  const result = await page.evaluate(() => {
+    const panel = document.querySelector('#bg-panel');
+    const cards = [...document.querySelectorAll('.bg-task-card')];
+    return {
+      text: panel?.textContent ?? '',
+      panelScrollWidth: panel?.scrollWidth ?? 0,
+      panelClientWidth: panel?.clientWidth ?? 0,
+      cards: cards.length,
+      clipped: cards.some((card) => card.scrollWidth > card.clientWidth + 1),
+    };
+  });
+  assert.match(result.text, /Commands/);
+  assert.match(result.text, /Monitors/);
+  assert.match(result.text, /Subagents/);
+  assert.match(result.text, /Loops \/ waits/);
+  assert.ok(result.cards >= 4, 'seeded background task cards render');
+  assert.ok(result.panelScrollWidth <= result.panelClientWidth + 1, 'background panel has no horizontal overflow');
+  assert.equal(result.clipped, false, 'background task cards do not clip horizontally');
 }
 
 async function assertComposerWrap(page) {

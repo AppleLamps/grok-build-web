@@ -7,7 +7,8 @@ import { summarizeTool } from './summarize.mjs';
 import { getToolEl, getToolRefs, setToolOpenHandler } from './dom.mjs';
 import { renderToolDetails } from './details-registry.mjs';
 import { renderMultimodalDetails } from './render-multimodal.mjs';
-import { isTodoUpdate, normalizedToolStatus, updateBackgroundTask } from './render-todos.mjs';
+import { updateBackgroundTask } from '../background-tasks.js';
+import { isTodoUpdate, normalizedToolStatus } from './render-todos.mjs';
 
 setToolOpenHandler(renderLatestToolDetails);
 
@@ -20,9 +21,8 @@ export function paintTool(update) {
     exitSubagent();
   }
 
-  updateBackgroundTask(update, titleLc);
-
   const el = getToolEl(update.toolCallId);
+  updateBackgroundTask(update, titleLc);
   const refs = getToolRefs(el);
   const summary = summarizeTool(update);
   if (isInformativeSummary(summary) || !refs.displaySummary) refs.displaySummary = summary;

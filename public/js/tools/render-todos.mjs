@@ -1,8 +1,5 @@
-import {
-  getBackgroundTask,
-  setBackgroundTask,
-  setCurrentTodos,
-} from '../tool-state.js';
+import { updateBackgroundTask } from '../background-tasks.js';
+import { setCurrentTodos } from '../tool-state.js';
 import { escapeHTML, safeStatusClass, toolTitle } from './shared.mjs';
 
 export function isTodoUpdate(update, title) {
@@ -49,33 +46,7 @@ export function normalizedToolStatus(update) {
   return update.sessionUpdate === 'tool_call' ? 'in_progress' : raw;
 }
 
-function backgroundTargetId(update, titleLc) {
-  if (/kill[_ -]?(command|subagent)/.test(titleLc)) {
-    return update.rawInput?.task_id ?? update.rawInput?.id ?? update.rawInput?.pid ?? update.rawOutput?.task_id ?? update.rawOutput?.id ?? update.toolCallId;
-  }
-  return update.rawOutput?.task_id ?? update.rawOutput?.id ?? update.rawInput?.task_id ?? update.rawInput?.id ?? update.toolCallId;
-}
-
-export function updateBackgroundTask(update, titleLc) {
-  const isBg = update.rawInput?.is_background === true
-    || update.rawOutput?.type === 'BackgroundTaskStarted'
-    || /^(kill|get|wait)[_ -]?(command|commands|subagent|subagents)/.test(titleLc);
-  if (!isBg) return;
-  const id = backgroundTargetId(update, titleLc);
-  const command = update.rawInput?.command
-    ?? update.rawInput?.prompt
-    ?? update.rawInput?.description
-    ?? update.rawOutput?.command
-    ?? update.title
-    ?? id;
-  const status = /kill[_ -]?(command|subagent)/.test(titleLc)
-    ? 'killed'
-    : update.rawOutput?.status === 'running'
-      ? 'in_progress'
-    : normalizedToolStatus(update) || 'running';
-  const prior = getBackgroundTask(id) ?? { id, command, status: 'running' };
-  setBackgroundTask(id, { ...prior, command: prior.command ?? command, status });
-}
+export { updateBackgroundTask };
 
 export function renderTodos(update) {
   const extracted = extractTodoUpdate(update);

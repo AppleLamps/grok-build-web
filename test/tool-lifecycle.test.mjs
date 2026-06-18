@@ -207,6 +207,38 @@ test('open tool updates refresh rendered details', async () => {
   assert.match(details.innerHTML, /Updated/);
 });
 
+test('web_fetch failure details preserve GitHub gh CLI guidance', async () => {
+  resetDomState();
+
+  const guidance = [
+    'GitHub-hosted web_fetch failed because internal access is blocked.',
+    'Use the gh CLI for GitHub content instead, for example:',
+    'gh api repos/xai-org/example/contents/README.md --jq .content',
+    'END_OF_GUIDANCE_SENTINEL',
+  ].join('\n');
+
+  paintTool({
+    sessionUpdate: 'tool_call_update',
+    toolCallId: 'fetch-github-guidance',
+    title: 'web_fetch',
+    kind: 'fetch',
+    status: 'failed',
+    rawInput: { url: 'https://github.com/xai-org/example/blob/main/README.md' },
+    rawOutput: { output_for_prompt: guidance },
+  });
+
+  const tool = state.turnEl.querySelector('.tool');
+  const details = tool.querySelector('.details');
+  assert.equal(details.innerHTML, '');
+
+  tool.querySelector('.summary').click();
+
+  const output = details.querySelectorAll('pre')[1]?.textContent ?? '';
+  assert.equal(output, guidance);
+  assert.match(output, /gh api repos\/xai-org\/example\/contents\/README\.md/);
+  assert.match(output, /END_OF_GUIDANCE_SENTINEL$/);
+});
+
 test('background task updates preserve keyed DOM nodes', async () => {
   resetDomState();
 

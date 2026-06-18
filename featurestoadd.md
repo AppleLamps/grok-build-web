@@ -126,8 +126,15 @@ Source: `x.ai_build_changelog.2026-06-18T06_03_22.310Z.md`, covering public Grok
   so the bridge now injects a date-rollover system notice into the next user
   prompt after the local date changes and emits `date_rollover_notice` metadata,
   with regression coverage.
-- **[todo] Web-fetch GitHub error guidance** — `[tool web_fetch]` Changelog says GitHub-host `web_fetch` failures recommend `gh` CLI when internal access is blocked. Verify web renderer preserves that guidance and does not truncate it.
-- **[todo] MCP resilience regression coverage** — `[plumbing]` Add tests or manual checklist items for reconnect flood prevention and undecodable stdio lines, especially for plugin/managed MCP servers.
+- **[DONE] Web-fetch GitHub error guidance** — `[tool web_fetch]`
+  GitHub-hosted `web_fetch` failure guidance falls through the generic tool
+  detail renderer as raw output, preserving the full `gh` CLI recommendation
+  without truncation; regression coverage asserts the exact expanded output.
+- **[DONE] MCP resilience regression coverage** — `[plumbing]`
+  Added account-free regression coverage for undecodable/non-JSON stdio lines
+  and concurrent session-load coalescing so plugin/managed MCP server reconnects
+  do not fan out into duplicate agent connections. The live checklist also keeps
+  plugin MCP reconnect and bad-stdio checks for real-account validation.
 - **[todo] Windows path cleanliness regression coverage** — `[plumbing]` Verify external tool prompts and rendered paths do not expose `\\?\` prefixes or cross-cwd resume path confusion on Windows.
 - **[todo] Large session replay / fork regression coverage** — `[plumbing]` Changelog mentions oversized replay logs and forked sessions retaining full pre-compaction transcripts. Add live/manual checks if the relevant session artifacts are accessible.
 

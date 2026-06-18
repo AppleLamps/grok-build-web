@@ -19,6 +19,11 @@ Keep these visual/account checks manual when needed:
 - Run a subagent task, cancel during execution, and confirm failed/cancelled status renders.
 - Open Settings and confirm unsupported launch flags are disabled for the installed CLI.
 - Run `grok mcp list` and test a plugin-provided MCP server that requires auth when available.
+- With a plugin-provided MCP server enabled, restart or reconnect the same saved
+  session repeatedly and confirm the bridge does not spawn duplicate agent
+  connections or flood reconnect attempts.
+- If a local stdio MCP fixture is available, emit non-JSON or invalid UTF-8
+  lines before valid JSON-RPC output and confirm the session keeps streaming.
 
 ## Grok 0.2.14 Compatibility Status
 

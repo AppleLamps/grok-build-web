@@ -41,3 +41,53 @@ test('user prompts include a local date rollover notice after midnight', async (
     },
   );
 });
+
+test('stdout parser ignores undecodable stdio lines and handles later JSON messages', async () => {
+  const events = [];
+  const agent = new AgentConnection({
+    emit: (event) => events.push(event),
+    spawnOpts: {},
+    autoApproveFor: () => true,
+  });
+  agent.bindSession('session-stdio', process.cwd());
+
+  let resolved;
+  agent.pending.set(42, {
+    resolve: (value) => {
+      resolved = value;
+    },
+    reject: (error) => {
+      throw error;
+    },
+    timeout: null,
+  });
+
+  agent.onStdout(Buffer.from([0xff, 0xfe, 0x0a]));
+  agent.onStdout(Buffer.from('not json from managed MCP stdio\n'));
+  agent.onStdout(Buffer.from('{"jsonrpc":"2.0","id":42,"result":{"ok":true}}\n'));
+  agent.onStdout(
+    Buffer.from(
+      `${JSON.stringify({
+        method: 'session/update',
+        params: {
+          sessionId: 'agent-session',
+          update: {
+            sessionUpdate: 'tool_call_update',
+            toolCallId: 'plugin-mcp',
+            title: 'managed MCP server',
+            status: 'completed',
+          },
+        },
+      })}\n`,
+    ),
+  );
+
+  assert.deepEqual(resolved, { ok: true });
+  assert.equal(agent.pending.has(42), false);
+  assert.ok(
+    events.some(
+      (event) =>
+        event.kind === 'update' && event.sessionId === 'session-stdio' && event.update?.toolCallId === 'plugin-mcp',
+    ),
+  );
+});

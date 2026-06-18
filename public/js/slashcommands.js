@@ -12,6 +12,7 @@ let filtered = [];
 const COMPAT_COMMANDS = [
   { name: 'export', description: 'Export a session transcript as Markdown' },
   { name: 'config-agents', description: 'Configure agents' },
+  { name: 'code-review', description: 'Review the current changes' },
 ];
 
 export function setCommands(list) {
@@ -25,7 +26,9 @@ export function setCommands(list) {
   };
   if (Array.isArray(list)) {
     for (const entry of list) {
-      try { add(entry); } catch {}
+      try {
+        add(entry);
+      } catch {}
     }
   }
   for (const command of COMPAT_COMMANDS) add(command);
@@ -34,9 +37,7 @@ export function setCommands(list) {
 
 function normalizeCommand(entry) {
   const source = entry && typeof entry === 'object' ? entry : null;
-  const rawName = typeof entry === 'string'
-    ? entry
-    : source?.name ?? source?.command ?? source?.id ?? source?.title;
+  const rawName = typeof entry === 'string' ? entry : (source?.name ?? source?.command ?? source?.id ?? source?.title);
   if (rawName == null) return null;
   const name = String(rawName).trim().replace(/^\/+/, '').trim();
   if (!name) return null;
@@ -63,7 +64,10 @@ function ensurePopup() {
 
 function render() {
   ensurePopup();
-  if (!filtered.length) { popup.style.display = 'none'; return; }
+  if (!filtered.length) {
+    popup.style.display = 'none';
+    return;
+  }
   popup.style.display = '';
   popup.innerHTML = '';
   filtered.forEach((c, i) => {
@@ -107,21 +111,34 @@ export function initSlash() {
   ensurePopup();
   dom.input.addEventListener('input', () => {
     const v = dom.input.value;
-    if (!v.startsWith('/')) { hide(); return; }
+    if (!v.startsWith('/')) {
+      hide();
+      return;
+    }
     const q = v.slice(1).replace(/^\/+/, '').toLowerCase();
     filtered = commands
-      .filter(c => c.name.toLowerCase().startsWith(q) || c.name.toLowerCase().includes(q))
+      .filter((c) => c.name.toLowerCase().startsWith(q) || c.name.toLowerCase().includes(q))
       .slice(0, 12);
     selectedIdx = 0;
     render();
   });
   dom.input.addEventListener('keydown', (e) => {
     if (!filtered.length) return;
-    if (e.key === 'ArrowDown') { e.preventDefault(); selectedIdx = (selectedIdx + 1) % filtered.length; render(); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); selectedIdx = (selectedIdx - 1 + filtered.length) % filtered.length; render(); }
-    else if (e.key === 'Tab') { e.preventDefault(); pick(); }
-    else if (e.key === 'Escape') { e.preventDefault(); hide(); }
-    else if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIdx = (selectedIdx + 1) % filtered.length;
+      render();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIdx = (selectedIdx - 1 + filtered.length) % filtered.length;
+      render();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      pick();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      hide();
+    } else if (e.key === 'Enter' && !e.shiftKey) {
       // If a slash command is highlighted, complete it instead of submitting.
       e.preventDefault();
       pick();

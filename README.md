@@ -133,9 +133,17 @@ The Tools section exposes common Grok CLI and local session actions:
 - Routines
 - Hooks
 - Plugins
+- Session info
 - Export trace
 - Import sessions
 - Headless prompt runner
+
+### Use Slash Commands
+
+Type `/` in the composer to open slash-command autocomplete. Commands streamed
+by the installed Grok CLI are normalized before display, and compatibility
+fallbacks keep native commands such as `/export`, `/config-agents`, and
+`/code-review` reachable when older or partial command streams omit them.
 
 ### Rename Projects Locally
 
@@ -309,7 +317,13 @@ The local stable updater may target a newer Grok CLI than the public xAI Build c
 Current items to verify after updating:
 
 - Slash autocomplete wraps with ArrowUp and ArrowDown.
+- `/code-review` appears in slash autocomplete from streamed command updates or
+  compatibility fallback.
 - Session resume replays tool and subagent UI without breaking grouped tool cards.
+- The sidebar continues to expose local disk-backed sessions from
+  `~/.grok/sessions`, including zero-message or idle sessions when the Show
+  empty sessions toggle is enabled. The CLI `grok dashboard` command remains a
+  terminal startup view rather than a separate web panel.
 - Windows image paste and screenshot file input work through browser paste, drag-and-drop, and attach.
 - Windows-friendly launch flags are detected from `grok --help`, including `--permission-mode`, `--todo-gate`, `--compaction-mode`, `--compaction-detail`, `--check`, and `--best-of-n`.
 - Multimodal `read_file` output continues rendering text, images, videos, PDFs, and PPTX text.

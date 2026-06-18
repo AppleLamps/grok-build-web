@@ -22,7 +22,13 @@ test('slash command popup filters, completes, and hides from keyboard controls',
   assert.match(popup.textContent, /\/model/);
   assert.doesNotMatch(popup.textContent, /\/usage/);
 
-  dom.input.dispatchEvent({ type: 'keydown', key: 'Tab', preventDefault() { this.defaultPrevented = true; } });
+  dom.input.dispatchEvent({
+    type: 'keydown',
+    key: 'Tab',
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+  });
   assert.equal(dom.input.value, '/model');
   assert.equal(popup.style.display, 'none');
 
@@ -43,6 +49,7 @@ test('slash command normalization accepts 0.1.217 command shapes', async () => {
     { name: '/usage', description: 'Show usage' },
     '/export',
     { command: '/config-agents', description: 'Configure agents' },
+    { name: '/code-review', description: 'Review changes' },
     { id: 'model' },
     { title: 'fallback-title' },
     { name: 'usage', description: 'duplicate should be ignored' },
@@ -68,9 +75,13 @@ test('slash command normalization accepts 0.1.217 command shapes', async () => {
   dom.input.value = '/config';
   dom.input.dispatchEvent({ type: 'input' });
   assert.match(popup.textContent, /\/config-agents/);
+
+  dom.input.value = '/code';
+  dom.input.dispatchEvent({ type: 'input' });
+  assert.match(popup.textContent, /\/code-review/);
 });
 
-test('slash command compatibility fallback includes native 0.1.217 commands', async () => {
+test('slash command compatibility fallback includes native commands that may be absent from old streams', async () => {
   slash.setCommands([{ name: 'usage' }]);
 
   dom.input.value = '/config';
@@ -81,6 +92,10 @@ test('slash command compatibility fallback includes native 0.1.217 commands', as
   dom.input.value = '/export';
   dom.input.dispatchEvent({ type: 'input' });
   assert.match(popup.textContent, /\/export/);
+
+  dom.input.value = '/code';
+  dom.input.dispatchEvent({ type: 'input' });
+  assert.match(popup.textContent, /\/code-review/);
 });
 
 test('dispatch accepts snake_case available command updates', async () => {

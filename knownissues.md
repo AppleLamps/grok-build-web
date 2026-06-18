@@ -9,7 +9,11 @@ Live list. Items that get fixed are removed; items get added as they're discover
 ## Changelog tracking
 
 - **Public changelog can lag the installed updater.** The downloaded x.ai changelog currently documents through Grok Build v0.2.52, while the local stable updater reported and installed v0.2.56. Treat the changelog as backlog input, not the sole source of truth for latest CLI behavior.
-- **Changelog-derived candidates need CLI/ACP validation.** Items such as Mermaid preview/export, OpenTelemetry usage export, compaction controls, dashboard parity, and `/code-review` need inspection of the installed CLI help, streamed slash commands, ACP events, or tool payloads before implementation.
+- **Changelog-derived candidates need CLI/ACP validation.** Items such as manual
+  fold stability, calendar date rollover notices, web-fetch GitHub error
+  guidance, MCP resilience, Windows path cleanliness, and large-session
+  replay/fork behavior need inspection of the installed CLI help, streamed
+  slash commands, ACP events, or tool payloads before implementation.
 
 ## Regression gaps from changelog review
 

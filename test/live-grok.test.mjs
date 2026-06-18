@@ -23,8 +23,6 @@ test('live bridge bootstraps auth, SSE, sessions, settings, models, and MCP', {
   timeout: LONG_TIMEOUT,
 }, async () => {
   await withLiveServer(async ({ base, cookie, events, stderr }) => {
-    await waitForEvent(events, (e) => e.kind === 'agent_ready' || e.kind === 'session_ready', 'tab agent ready');
-
     const home = await fetch(new URL('/', base), { headers: { cookie } });
     assert.equal(home.status, 200);
     assert.match(await home.text(), /grok web/i);
@@ -169,8 +167,10 @@ async function withLiveServer(fn, { cwd = null } = {}) {
   const server = await startLiveServer({ cwd });
   const abort = new AbortController();
   const events = [];
+  const streamUrl = sessionUrl(server.base, '/stream', server.sessionId);
+  streamUrl.searchParams.set('replay', 'all');
   const stream = readEvents(
-    sessionUrl(server.base, '/stream', server.sessionId),
+    streamUrl,
     server.cookie,
     events,
     abort.signal,
@@ -178,6 +178,11 @@ async function withLiveServer(fn, { cwd = null } = {}) {
     if (!abort.signal.aborted) throw e;
   });
   try {
+    await waitForEvent(
+      events,
+      (e) => (e.kind === 'agent_ready' || e.kind === 'session_ready') && e.sessionId === server.sessionId,
+      'tab agent ready',
+    );
     await fn({ ...server, events });
   } finally {
     abort.abort();

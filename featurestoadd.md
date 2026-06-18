@@ -107,6 +107,23 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 - **[done] Update notifications** — `[cli update --check]` Yellow banner on page load if `grok update --check --json` reports a newer version.
 - **[done] Inspect view** — `[cli inspect --json]` Sidebar Tools → "Inspect config" shows the discovered config as JSON.
 
+## Changelog-derived backlog candidates
+
+Source: `x.ai_build_changelog.2026-06-18T06_03_22.310Z.md`, covering public Grok Build changelog entries through v0.2.52. These are not implementation specs yet; each item needs CLI/ACP payload inspection before coding.
+
+- **[todo] Mermaid code-block rendering / export** — `[tool read_file?]` `[plumbing]` The TUI now renders Mermaid flowcharts, sequence diagrams, state diagrams, class diagrams, and ER diagrams, plus PNG export. Web could add a safe Mermaid preview for assistant/code-block content with an "Open/export PNG" action.
+- **[todo] Background tasks / monitors panel** — `[tool run_terminal_command]` `[tool monitor]` The changelog repeatedly improves monitor visibility, killability, background task grouping, loop styling, and resumed-task state. Upgrade the existing partial background tracking into a dedicated live panel with grouped tasks, monitors, loops, status, output, and kill/open actions.
+- **[todo] Compaction visibility and controls** — `[slash /compact]` `[slash /context]` `[flag --compaction-mode]` `[flag --compaction-detail]` The changelog calls out transcript paths, before/after token reduction, prompt-prefix reuse, summary quality, and failure handling. Web should expose any supported compaction flags in Settings and surface compaction result metadata when the agent emits it.
+- **[todo] OpenTelemetry/exported usage observability** — `[plumbing]` Grok can export usage metrics and events to an OpenTelemetry collector when enabled. Web should document/pass through relevant env/config and consider a session diagnostics panel that shows whether telemetry is active.
+- **[todo] `/code-review` command validation** — `[slash /code-review]` The CLI now ships `/code-review` as an always-available slash command. Ensure streamed command updates and fallback slash-command compatibility include it, with tests.
+- **[todo] Agent Dashboard parity audit** — `[cli dashboard]` The changelog includes dashboard behavior outside leader mode and local idle sessions from disk. Decide whether web should link to `grok dashboard`, expose equivalent idle-session state, or mark this TUI-only.
+- **[todo] Manual fold stability for streaming blocks** — `[plumbing]` The TUI added "Respect manual folds" so hand-expanded blocks stay stable while content streams. Audit web tool/thinking/group collapse behavior for the same UX and add persistence where gaps exist.
+- **[todo] Calendar date rollover notice** — `[plumbing]` Long-running sessions now tell the model when the local calendar date changes past midnight. Confirm whether the CLI handles this internally for ACP sessions; if not, add a bridge-level date-rollover prompt/event.
+- **[todo] Web-fetch GitHub error guidance** — `[tool web_fetch]` Changelog says GitHub-host `web_fetch` failures recommend `gh` CLI when internal access is blocked. Verify web renderer preserves that guidance and does not truncate it.
+- **[todo] MCP resilience regression coverage** — `[plumbing]` Add tests or manual checklist items for reconnect flood prevention and undecodable stdio lines, especially for plugin/managed MCP servers.
+- **[todo] Windows path cleanliness regression coverage** — `[plumbing]` Verify external tool prompts and rendered paths do not expose `\\?\` prefixes or cross-cwd resume path confusion on Windows.
+- **[todo] Large session replay / fork regression coverage** — `[plumbing]` Changelog mentions oversized replay logs and forked sessions retaining full pre-compaction transcripts. Add live/manual checks if the relevant session artifacts are accessible.
+
 ## Cut from the previous version (out of scope for parity)
 
 Dark-mode toggle, per-cwd pinned sessions, themes-per-project, generic toasts (now used as a primitive, not a "feature"), remote/hosted mode.
@@ -130,3 +147,4 @@ These weren't features in the original list but unlock most of the rest:
 
 All items in this document have been shipped to at least `[done]` or `[done, partial]` status.
 - `[done, partial]` entries (subagent nesting, scheduler) have backend recognition and minimal UI; richer dedicated panels are nice-to-have refinements but the underlying data flow works today.
+- New `[todo]` items in "Changelog-derived backlog candidates" are triage candidates from the public Grok Build changelog. Promote them into scoped implementation tasks only after confirming the installed CLI exposes the required flags, slash commands, tool payloads, or session metadata.

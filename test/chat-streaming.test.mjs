@@ -14,7 +14,7 @@ function requestFrame(cb) {
 }
 
 function cancelFrame(id) {
-  const item = rafQueue.find(entry => entry.id === id);
+  const item = rafQueue.find((entry) => entry.id === id);
   if (item) item.cancelled = true;
 }
 
@@ -29,6 +29,7 @@ const {
   appendMessage,
   appendThought,
   clearLog,
+  collapseLastThinking,
   finishStreaming,
   newTurn,
   __test,
@@ -164,6 +165,20 @@ test('finishStreaming renders pending thinking without assistant output', () => 
   assert.equal(state.assistantEl, null);
 });
 
+test('collapseLastThinking respects manually expanded thinking trace', () => {
+  resetDomState();
+
+  appendThought('keep this visible');
+  flushFrames();
+  state.thinkingEl.querySelector('.label').click();
+
+  collapseLastThinking();
+
+  assert.equal(state.thinkingEl.classList.contains('collapsed'), false);
+  assert.equal(state.thinkingEl.querySelector('.label').getAttribute('aria-expanded'), 'true');
+  assert.equal(state.thinkingEl.querySelector('.label-state').textContent, 'done');
+});
+
 test('clearLog prevents stale scheduled assistant renders', () => {
   resetDomState();
 
@@ -187,7 +202,10 @@ test('newTurn prunes completed turns and keeps active turn', () => {
   assert.equal(turns.length, 3);
   assert.equal(turns.at(-1), state.turnEl);
   assert.equal(state.hiddenTurnCount, 1);
-  assert.equal(dom.logInner.querySelector('.truncated-seam').textContent, '1 earlier turn hidden to keep the chat responsive.');
+  assert.equal(
+    dom.logInner.querySelector('.truncated-seam').textContent,
+    '1 earlier turn hidden to keep the chat responsive.',
+  );
 });
 
 function resetDomState() {
@@ -210,7 +228,7 @@ function resetDomState() {
 }
 
 function activeFrameCount() {
-  return rafQueue.filter(entry => !entry.cancelled).length;
+  return rafQueue.filter((entry) => !entry.cancelled).length;
 }
 
 function flushFrames({ includeCancelled = false } = {}) {

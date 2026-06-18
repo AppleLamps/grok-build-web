@@ -117,8 +117,15 @@ Source: `x.ai_build_changelog.2026-06-18T06_03_22.310Z.md`, covering public Grok
 - **[DONE] OpenTelemetry/exported usage observability** — `[plumbing]` Grok can export usage metrics and events to an OpenTelemetry collector when enabled. Web documents pass-through OTEL env/config and Tools -> Session info shows whether telemetry-related env is active without exposing values.
 - **[DONE] `/code-review` command validation** — `[slash /code-review]` Streamed slash-command updates normalize `/code-review`, and the compatibility fallback includes it for older or partial command streams, with regression tests.
 - **[DONE] Agent Dashboard parity audit** — `[cli dashboard]` Audited against `grok dashboard --help`: the dashboard is a terminal startup view, while web already exposes local disk-backed sessions in the sidebar with an empty-session toggle for idle/zero-message sessions. No separate terminal launch link is needed.
-- **[todo] Manual fold stability for streaming blocks** — `[plumbing]` The TUI added "Respect manual folds" so hand-expanded blocks stay stable while content streams. Audit web tool/thinking/group collapse behavior for the same UX and add persistence where gaps exist.
-- **[todo] Calendar date rollover notice** — `[plumbing]` Long-running sessions now tell the model when the local calendar date changes past midnight. Confirm whether the CLI handles this internally for ACP sessions; if not, add a bridge-level date-rollover prompt/event.
+- **[DONE] Manual fold stability for streaming blocks** — `[plumbing]` Tool
+  details already defer updates while collapsed, grouped tool cards already
+  preserve manual group toggles during streaming, and thinking traces now keep a
+  manual expansion open when the turn completes, with regression coverage.
+- **[DONE] Calendar date rollover notice** — `[plumbing]`
+  `grok agent stdio --help` exposes no ACP rollover option in the installed CLI,
+  so the bridge now injects a date-rollover system notice into the next user
+  prompt after the local date changes and emits `date_rollover_notice` metadata,
+  with regression coverage.
 - **[todo] Web-fetch GitHub error guidance** — `[tool web_fetch]` Changelog says GitHub-host `web_fetch` failures recommend `gh` CLI when internal access is blocked. Verify web renderer preserves that guidance and does not truncate it.
 - **[todo] MCP resilience regression coverage** — `[plumbing]` Add tests or manual checklist items for reconnect flood prevention and undecodable stdio lines, especially for plugin/managed MCP servers.
 - **[todo] Windows path cleanliness regression coverage** — `[plumbing]` Verify external tool prompts and rendered paths do not expose `\\?\` prefixes or cross-cwd resume path confusion on Windows.

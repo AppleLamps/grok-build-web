@@ -134,6 +134,7 @@ export function appendThought(text) {
     `;
     const label = state.thinkingEl.querySelector('.label');
     label.addEventListener('click', () => {
+      state.thinkingEl.dataset.userToggled = '1';
       const collapsed = state.thinkingEl.classList.toggle('collapsed');
       label.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     });
@@ -149,8 +150,10 @@ export function collapseLastThinking() {
   finishThinkingRender();
   const t = state.turnEl.querySelector('.thinking');
   if (t) {
-    t.classList.add('collapsed');
-    t.querySelector('.label')?.setAttribute('aria-expanded', 'false');
+    if (!t.dataset.userToggled) {
+      t.classList.add('collapsed');
+      t.querySelector('.label')?.setAttribute('aria-expanded', 'false');
+    }
     const stateLabel = t.querySelector('.label-state');
     if (stateLabel) stateLabel.textContent = 'done';
   }
@@ -261,7 +264,9 @@ function cancelPendingAssistantRender() {
   if (!assistantRenderPending) return;
   assistantRenderPending = false;
   if (assistantRenderHandle != null && assistantRenderCancel) {
-    try { assistantRenderCancel(assistantRenderHandle); } catch {}
+    try {
+      assistantRenderCancel(assistantRenderHandle);
+    } catch {}
   }
   assistantRenderHandle = null;
   assistantRenderCancel = null;
@@ -275,7 +280,9 @@ function cancelPendingThinkingRender() {
   if (!thinkingRenderPending) return;
   thinkingRenderPending = false;
   if (thinkingRenderHandle != null && thinkingRenderCancel) {
-    try { thinkingRenderCancel(thinkingRenderHandle); } catch {}
+    try {
+      thinkingRenderCancel(thinkingRenderHandle);
+    } catch {}
   }
   thinkingRenderHandle = null;
   thinkingRenderCancel = null;
@@ -299,7 +306,7 @@ function invalidateThinkingRender() {
 
 // Replay marker (loaded sessions emit user_message_chunk to delimit turns).
 export function appendUserChunk(text) {
-  if (!state.turnEl || (state.assistantEl || state.thinkingEl || state.toolEls.size > 0)) newTurn();
+  if (!state.turnEl || state.assistantEl || state.thinkingEl || state.toolEls.size > 0) newTurn();
   const row = ensureUserMessageRow(state.turnEl);
   let userEl = row.querySelector('.user-msg');
   if (!userEl) {
@@ -415,8 +422,10 @@ export function setStatus(text, cls = '') {
 }
 
 // Token-usage strip in the topbar. Called from dispatch on turn_complete.
-const COPY_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-const CHECK_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+const COPY_ICON =
+  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const CHECK_ICON =
+  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
 
 export function updateUsage(meta) {
   if (!meta || !dom.usage) return;
@@ -477,9 +486,12 @@ export async function handleMermaidOpenClick(e) {
 }
 
 const HOOK_ICONS = {
-  success: '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
-  failed:  '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
-  other:   '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="1.5"/></svg>',
+  success:
+    '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  failed:
+    '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  other:
+    '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="1.5"/></svg>',
 };
 
 export function addHookLine(eventName, hookName, status, elapsedMs) {

@@ -111,8 +111,8 @@ Each entry tags its source: `[cli <subcommand>]`, `[flag <name>]`, `[slash /<nam
 
 Source: `x.ai_build_changelog.2026-06-18T06_03_22.310Z.md`, covering public Grok Build changelog entries through v0.2.52. These are not implementation specs yet; each item needs CLI/ACP payload inspection before coding.
 
-- **[todo] Mermaid code-block rendering / export** — `[tool read_file?]` `[plumbing]` The TUI now renders Mermaid flowcharts, sequence diagrams, state diagrams, class diagrams, and ER diagrams, plus PNG export. Web could add a safe Mermaid preview for assistant/code-block content with an "Open/export PNG" action.
-- **[todo] Background tasks / monitors panel** — `[tool run_terminal_command]` `[tool monitor]` The changelog repeatedly improves monitor visibility, killability, background task grouping, loop styling, and resumed-task state. Upgrade the existing partial background tracking into a dedicated live panel with grouped tasks, monitors, loops, status, output, and kill/open actions.
+- **[DONE] Mermaid code-block rendering / export** — `[tool read_file?]` `[plumbing]` The TUI now renders Mermaid flowcharts, sequence diagrams, state diagrams, class diagrams, and ER diagrams, plus PNG export. Web could add a safe Mermaid preview for assistant/code-block content with an "Open/export PNG" action.
+- **[DONE] Background tasks / monitors panel** — `[tool run_terminal_command]` `[tool monitor]` The changelog repeatedly improves monitor visibility, killability, background task grouping, loop styling, and resumed-task state. Upgrade the existing partial background tracking into a dedicated live panel with grouped tasks, monitors, loops, status, output, and kill/open actions.
 - **[todo] Compaction visibility and controls** — `[slash /compact]` `[slash /context]` `[flag --compaction-mode]` `[flag --compaction-detail]` The changelog calls out transcript paths, before/after token reduction, prompt-prefix reuse, summary quality, and failure handling. Web should expose any supported compaction flags in Settings and surface compaction result metadata when the agent emits it.
 - **[todo] OpenTelemetry/exported usage observability** — `[plumbing]` Grok can export usage metrics and events to an OpenTelemetry collector when enabled. Web should document/pass through relevant env/config and consider a session diagnostics panel that shows whether telemetry is active.
 - **[todo] `/code-review` command validation** — `[slash /code-review]` The CLI now ships `/code-review` as an always-available slash command. Ensure streamed command updates and fallback slash-command compatibility include it, with tests.
@@ -146,5 +146,6 @@ These weren't features in the original list but unlock most of the rest:
 ## Remaining items
 
 All items in this document have been shipped to at least `[done]` or `[done, partial]` status.
+
 - `[done, partial]` entries (subagent nesting, scheduler) have backend recognition and minimal UI; richer dedicated panels are nice-to-have refinements but the underlying data flow works today.
 - New `[todo]` items in "Changelog-derived backlog candidates" are triage candidates from the public Grok Build changelog. Promote them into scoped implementation tasks only after confirming the installed CLI exposes the required flags, slash commands, tool payloads, or session metadata.

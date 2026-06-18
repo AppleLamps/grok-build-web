@@ -41,6 +41,14 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
       const staticJs = await fetch(makeUrl(base, '/static/js/api.js'), { headers: { cookie } });
       assert.equal(staticJs.status, 200);
       assert.match(await staticJs.text(), /export async function listSessions/);
+
+      const vendorUnauthed = await fetch(makeUrl(base, '/vendor/mermaid.min.js'));
+      assert.equal(vendorUnauthed.status, 401);
+      const mermaidVendor = await fetch(makeUrl(base, '/vendor/mermaid.min.js'), { headers: { cookie } });
+      assert.equal(mermaidVendor.status, 200);
+      assert.match(mermaidVendor.headers.get('content-type') ?? '', /javascript/);
+      assert.match(await mermaidVendor.text(), /mermaid/i);
+
       for (const path of ['/static/%5c..%5cserver.mjs', '/static/..%5cserver.mjs', '/static/%2e%2e/server.mjs']) {
         const r = await fetch(makeUrl(base, path), { headers: { cookie } });
         const text = await r.text();

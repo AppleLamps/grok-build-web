@@ -53,6 +53,31 @@ test('markdown renders expanded formatting safely', async () => {
   assert.doesNotMatch(html, /<script>/);
 });
 
+test('markdown marks Mermaid code fences for safe preview and export', async () => {
+  installDomStubs();
+  const { renderMarkdown } = await importFresh('public/js/markdown.js');
+  const html = renderMarkdown('```mermaid\ngraph TD\n  A --> B\n```');
+
+  assert.match(html, /class="code-block mermaid-code-block"/);
+  assert.match(html, /data-lang="mermaid"/);
+  assert.match(html, /data-mermaid-state="idle"/);
+  assert.match(html, /class="mermaid-preview"/);
+  assert.match(html, /class="code-block-mermaid-open"/);
+  assert.match(html, /Open\/export PNG/);
+  assert.match(html, /<pre><code class="lang-mermaid">graph TD/);
+});
+
+test('markdown leaves non-Mermaid code fences without Mermaid actions', async () => {
+  installDomStubs();
+  const { renderMarkdown } = await importFresh('public/js/markdown.js');
+  const html = renderMarkdown('```js\nconst n = 1;\n```');
+
+  assert.match(html, /class="code-block"/);
+  assert.doesNotMatch(html, /mermaid-code-block/);
+  assert.doesNotMatch(html, /code-block-mermaid-open/);
+  assert.doesNotMatch(html, /mermaid-preview/);
+});
+
 test('markdown ordered lists display sequential numbers when source repeats one', async () => {
   installDomStubs();
   const { renderMarkdown } = await importFresh('public/js/markdown.js');

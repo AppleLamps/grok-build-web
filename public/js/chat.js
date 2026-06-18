@@ -5,6 +5,7 @@
 
 import { state, dom } from './state.js';
 import { renderMarkdown, escapeHTML } from './markdown.js';
+import { enhanceMermaidBlocks, openMermaidBlock } from './mermaid-preview.js';
 import { createMarkdownStreamRenderer } from './streaming-markdown.js';
 import { resetAllToolState, resetTransientToolState } from './tool-state.js';
 
@@ -173,6 +174,7 @@ function renderAssistantNow() {
   if (!state.assistantEl) return;
   if (!assistantStreamRenderer) assistantStreamRenderer = createMarkdownStreamRenderer(state.assistantEl);
   assistantStreamRenderer.render();
+  enhanceMermaidBlocks(state.assistantEl);
   state.assistantEl.classList.add('streaming');
   lastAssistantRenderAt = Date.now();
   autoScroll();
@@ -193,6 +195,7 @@ export function finishStreaming() {
   cancelPendingAssistantRender();
   if (!assistantStreamRenderer) assistantStreamRenderer = createMarkdownStreamRenderer(state.assistantEl);
   assistantStreamRenderer.finish(state.assistantBuf);
+  enhanceMermaidBlocks(state.assistantEl);
   lastAssistantRenderAt = Date.now();
   autoScroll();
   state.assistantEl.classList.remove('streaming');
@@ -429,6 +432,7 @@ export const __test = {
 };
 
 dom.log?.addEventListener('click', handleCodeCopyClick);
+dom.log?.addEventListener('click', handleMermaidOpenClick);
 
 export async function handleCodeCopyClick(e) {
   const btn = e.target.closest?.('.code-block-copy');
@@ -448,6 +452,15 @@ export async function handleCodeCopyClick(e) {
     btn.innerHTML = `${COPY_ICON}<span>Copy</span>`;
     btn.classList.remove('copied');
   }, 2000);
+}
+
+export async function handleMermaidOpenClick(e) {
+  const btn = e.target.closest?.('.code-block-mermaid-open');
+  if (!btn) return;
+  e.stopPropagation?.();
+  const block = btn.closest('.mermaid-code-block');
+  if (!block) return;
+  await openMermaidBlock(block);
 }
 
 const HOOK_ICONS = {

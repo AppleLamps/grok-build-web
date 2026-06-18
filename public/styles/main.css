@@ -745,7 +745,15 @@ main {
   font-weight: 500;
   text-transform: lowercase;
 }
-.code-block-copy {
+.code-block-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.code-block-copy,
+.code-block-mermaid-open {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -760,15 +768,71 @@ main {
   transition: color .12s, background .12s;
 }
 .code-block-copy:hover,
-.code-block-copy:focus-visible {
+.code-block-copy:focus-visible,
+.code-block-mermaid-open:hover,
+.code-block-mermaid-open:focus-visible {
   color: var(--ink);
   background: var(--hover);
   outline: 0;
 }
 .code-block-copy.copied { color: var(--green); }
-.code-block-copy svg {
+.code-block-copy svg,
+.code-block-mermaid-open svg {
   width: 14px;
   height: 14px;
+}
+.mermaid-preview {
+  background: var(--paper);
+  border-bottom: 1px solid var(--code-border);
+  color: var(--mute);
+  font-size: 12px;
+  min-height: 34px;
+  overflow: auto;
+  padding: 12px 16px;
+}
+.mermaid-preview:empty {
+  display: none;
+}
+.mermaid-preview.error {
+  color: var(--orange);
+}
+.mermaid-preview svg {
+  display: block;
+  height: auto;
+  max-width: 100%;
+}
+.mermaid-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mermaid-modal-preview {
+  background: #FFFFFF;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  max-height: 68vh;
+  overflow: auto;
+  padding: 16px;
+}
+.mermaid-modal-preview svg {
+  display: block;
+  height: auto;
+  max-width: 100%;
+}
+.mermaid-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.mermaid-export-png {
+  background: var(--accent);
+  border: 0;
+  border-radius: 8px;
+  color: #FFFFFF;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
 }
 .assistant pre,
 .code-block pre {

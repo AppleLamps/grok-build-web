@@ -37,6 +37,7 @@ try {
   await assertVisibleWithinViewport(page, '#send', 'desktop send button');
   await assertVisibleWithinViewport(page, '.recent.active', 'active sidebar session');
   await assertWelcomeSubtitle(page);
+  await assertMermaidPreviewAndExport(page);
   await page.screenshot({ path: join(screenshotsDir, 'visual-desktop-1280x720.png'), fullPage: false });
 
   await page.setViewportSize({ width: 900, height: 920 });
@@ -207,6 +208,38 @@ async function assertWelcomeSubtitle(page) {
   assert.ok(result.right <= result.viewportWidth + 1, 'welcome subtitle right edge is visible');
   assert.ok(result.top >= 0, 'welcome subtitle top edge is visible');
   assert.ok(result.bottom <= result.viewportHeight + 1, 'welcome subtitle bottom edge is visible');
+}
+
+async function assertMermaidPreviewAndExport(page) {
+  const consoleErrors = [];
+  const onConsole = (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  };
+  const onPageError = (error) => {
+    consoleErrors.push(error.message);
+  };
+  page.on('console', onConsole);
+  page.on('pageerror', onPageError);
+  try {
+    await page.evaluate(async () => {
+      const { appendMessage, finishStreaming } = await import('/static/js/chat.js');
+      appendMessage('```mermaid\nflowchart TD\n  Plan[Plan] --> Build[Build]\n  Build --> Verify[Verify]\n```');
+      finishStreaming();
+    });
+    await page.locator('.mermaid-preview svg').waitFor({ state: 'visible', timeout: 10000 });
+    await assertVisibleWithinViewport(page, '.mermaid-preview svg', 'Mermaid inline preview');
+    await page.click('.code-block-mermaid-open');
+    await page.locator('.mermaid-modal-preview svg').waitFor({ state: 'visible', timeout: 10000 });
+    const download = page.waitForEvent('download', { timeout: 10000 });
+    await page.click('.mermaid-export-png');
+    const file = await download;
+    assert.match(file.suggestedFilename(), /\.png$/);
+    assert.deepEqual(consoleErrors, []);
+  } finally {
+    page.off('console', onConsole);
+    page.off('pageerror', onPageError);
+    await page.keyboard.press('Escape').catch(() => {});
+  }
 }
 
 async function assertComposerWrap(page) {

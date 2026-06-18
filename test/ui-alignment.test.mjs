@@ -73,6 +73,26 @@ test('code block copy button copies from the matching block', async () => {
   assert.match(btn.innerHTML, /Copied/);
 });
 
+test('Mermaid open button uses the matching rendered block', async () => {
+  const block = document.createElement('div');
+  block.className = 'code-block mermaid-code-block';
+  block.dataset.mermaidState = 'ready';
+  const btn = document.createElement('button');
+  btn.className = 'code-block-mermaid-open';
+  const preview = document.createElement('div');
+  preview.className = 'mermaid-preview';
+  const svg = document.createElement('svg');
+  preview.appendChild(svg);
+  block.appendChild(btn);
+  block.appendChild(preview);
+  body.appendChild(block);
+
+  await chat.handleMermaidOpenClick({ target: btn, stopPropagation() {} });
+
+  assert.ok(body.querySelector('.mermaid-modal'));
+  assert.ok(body.querySelector('.mermaid-export-png'));
+});
+
 test('global shortcuts focus composer and open slash entry outside inputs', () => {
   dom.input.value = '';
   composer.handleGlobalShortcut({

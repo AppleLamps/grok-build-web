@@ -92,6 +92,42 @@ function highlightedCode(code, lang) {
     .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="syntax-number">$1</span>');
 }
 
+function isMermaidLang(lang) {
+  return /^(mermaid|mmd)$/i.test(String(lang ?? '').trim());
+}
+
+function codeBlockActions(mermaid) {
+  return (
+    '<div class="code-block-actions">' +
+    (mermaid
+      ? '<button class="code-block-mermaid-open" type="button" aria-label="Open Mermaid diagram and export PNG">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>' +
+        '<span>Open/export PNG</span></button>'
+      : '') +
+    '<button class="code-block-copy" type="button" aria-label="Copy code">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
+    '<span>Copy</span></button></div>'
+  );
+}
+
+function renderCodeBlock(code, lang) {
+  const safeLang = escapeAttr(lang);
+  const label = lang ? escapeHTML(lang) : 'code';
+  const mermaid = isMermaidLang(lang);
+  const classes = mermaid ? 'code-block mermaid-code-block' : 'code-block';
+  const mermaidAttrs = mermaid ? ' data-mermaid-state="idle"' : '';
+  return (
+    `<div class="${classes}" data-lang="${safeLang}"${mermaidAttrs}>` +
+    '<div class="code-block-header">' +
+    `<span class="code-block-lang">${label}</span>` +
+    codeBlockActions(mermaid) +
+    '</div>' +
+    (mermaid ? '<div class="mermaid-preview" aria-live="polite"></div>' : '') +
+    `<pre><code class="lang-${safeLang}">${highlightedCode(code, lang)}</code></pre>` +
+    '</div>'
+  );
+}
+
 function renderList(lines, start) {
   const first = listInfo(lines[start]);
   const ordered = !!first?.ordered;
@@ -217,18 +253,7 @@ export function renderMarkdown(src) {
         i++;
       }
       i++;
-      const safeLang = escapeAttr(lang);
-      const label = lang ? escapeHTML(lang) : 'code';
-      out.push(
-        `<div class="code-block" data-lang="${safeLang}">` +
-          '<div class="code-block-header">' +
-          `<span class="code-block-lang">${label}</span>` +
-          '<button class="code-block-copy" type="button" aria-label="Copy code">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>' +
-          '<span>Copy</span></button></div>' +
-          `<pre><code class="lang-${safeLang}">${highlightedCode(code.join('\n'), lang)}</code></pre>` +
-          '</div>',
-      );
+      out.push(renderCodeBlock(code.join('\n'), lang));
       continue;
     }
     const table = renderTable(lines, i);

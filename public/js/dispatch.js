@@ -2,32 +2,31 @@
 // appropriate renderer. Adding a new event type? Add a case here and the
 // handler module.
 
-import { state, dom, TAB_SESSION_ID } from './state.js';
+import { getSessionPlan, postRespawn, postTabNew } from './api.js';
 import {
-  addUserItem,
-  appendThought,
-  appendMessage,
-  appendUserChunk,
   addError,
-  setStatus,
-  clearLog,
   addHookLine,
   addInfoLine,
+  addUserItem,
+  appendMessage,
+  appendThought,
+  appendUserChunk,
+  clearLog,
   collapseLastThinking,
-  updateUsage,
   finishStreaming,
+  setStatus,
+  updateUsage,
 } from './chat.js';
-import { paintTool, renderPlanCard } from './tools.js';
-import { addPermissionCard, resolvePermissionCard } from './permissions.js';
-import { addElicitationCard, resolveElicitationCard } from './elicitation.js';
-import { renderRecents, loadRecents } from './sidebar.js';
 import { renderModePill, setBusy, setSessionReady } from './composer.js';
-import { setCommands } from './slashcommands.js';
-import { setTabSessionId } from './state.js';
-import { getSessionPlan, postRespawn, postTabNew } from './api.js';
-import { resetAllToolState, setCurrentTodos } from './tool-state.js';
-import { reconnectSSE } from './sse.js';
+import { addElicitationCard, resolveElicitationCard } from './elicitation.js';
+import { addPermissionCard, resolvePermissionCard } from './permissions.js';
 import { hideRecoveryBanner, showRecoveryBanner } from './recovery.mjs';
+import { loadRecents, renderRecents } from './sidebar.js';
+import { setCommands } from './slashcommands.js';
+import { reconnectSSE } from './sse.js';
+import { dom, setTabSessionId, state, TAB_SESSION_ID } from './state.js';
+import { resetAllToolState, setCurrentTodos } from './tool-state.js';
+import { paintTool, renderPlanCard } from './tools.js';
 
 function ensureExportTurn() {
   if (!state._exportCurrentTurn) {

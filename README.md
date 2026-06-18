@@ -146,7 +146,7 @@ Use the pencil button on a project row in the sidebar to set a local display ali
 Environment variables read at startup:
 
 | Variable | Default | Purpose |
-|---|---:|---|
+| --- | ---: | --- |
 | `PORT` | `0` | HTTP port. `0` selects a random free port. |
 | `GROK_BIN` | `grok` | Path to the Grok CLI binary. |
 | `GROK_BIN_ARGS` | `[]` | Extra Grok CLI prefix args as a JSON array of strings. |
@@ -230,7 +230,7 @@ grok-web/
 ## HTTP Routes
 
 | Route | Method | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `/` | GET | Token-gated app shell |
 | `/static/*` | GET | Static CSS and JS |
 | `/session-media` | GET | Authenticated previews for generated media under Grok session storage |

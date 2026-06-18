@@ -5,18 +5,18 @@ import {
   cliHeadless,
   cliInspect,
   cliMcp,
-  cliWorktree,
-  cliModels,
-  cliTrace,
   cliMemoryList,
   cliMemoryRead,
-  getSpawnOpts,
+  cliModels,
+  cliTrace,
+  cliWorktree,
   getSettings,
+  getSpawnOpts,
 } from './api.js';
-import { modal } from './modal.js';
-import { toast } from './toast.js';
-import { state, TAB_SESSION_ID } from './state.js';
 import { escapeHTML } from './markdown.js';
+import { modal } from './modal.js';
+import { state, TAB_SESSION_ID } from './state.js';
+import { toast } from './toast.js';
 import { el } from './ui/dom.js';
 
 async function showJsonPanel(title, fetcher) {

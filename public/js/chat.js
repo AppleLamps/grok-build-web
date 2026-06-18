@@ -3,9 +3,9 @@
 //
 // Anything you want to ADD to the log eventually flows through here.
 
-import { state, dom } from './state.js';
-import { renderMarkdown, escapeHTML } from './markdown.js';
+import { escapeHTML, renderMarkdown } from './markdown.js';
 import { enhanceMermaidBlocks, openMermaidBlock } from './mermaid-preview.js';
+import { dom, state } from './state.js';
 import { createMarkdownStreamRenderer } from './streaming-markdown.js';
 import { resetAllToolState, resetTransientToolState } from './tool-state.js';
 

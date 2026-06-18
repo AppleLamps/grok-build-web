@@ -1,15 +1,15 @@
 // Settings panel: launch-time grok flags (effort, sandbox, rules, etc.).
 // Changing any of these respawns the agent child process.
 
-import { getSettings, setSettings, getSpawnOpts, postRespawn, cliModels } from './api.js';
+import { cliModels, getSettings, getSpawnOpts, postRespawn, setSettings } from './api.js';
+import { addError, setStatus } from './chat.js';
 import { setBusy } from './composer.js';
-import { setStatus, addError } from './chat.js';
-import { toast } from './toast.js';
 import { refreshIdentity } from './identity.js';
 import { mergeModelIds } from './model-ids.js';
-import { getString, setString } from './ui/storage.js';
-import { el, clear } from './ui/dom.js';
+import { toast } from './toast.js';
 import { createPanel } from './ui/dialog.js';
+import { clear, el } from './ui/dom.js';
+import { getString, setString } from './ui/storage.js';
 
 let panel = null;
 let panelController = null;

@@ -18,7 +18,7 @@ export function el(tag, options = {}, ...children) {
   return node;
 }
 
-export function text(value) {
+function text(value) {
   return document.createTextNode(String(value ?? ''));
 }
 
@@ -34,36 +34,4 @@ export function append(parent, ...children) {
     parent.appendChild(typeof child === 'string' ? text(child) : child);
   }
   return parent;
-}
-
-export function button(label, options = {}) {
-  const { className, title, ariaLabel, type = 'button', attrs = {}, on = {} } = options;
-  return el('button', {
-    className,
-    text: label,
-    attrs: {
-      type,
-      title,
-      'aria-label': ariaLabel,
-      ...attrs,
-    },
-    on,
-  });
-}
-
-export function iconButton(label, options = {}) {
-  return button(label, {
-    ...options,
-    attrs: {
-      ...options.attrs,
-      title: options.title ?? label,
-      'aria-label': options.ariaLabel ?? label,
-    },
-  });
-}
-
-export function trustedSvg(html) {
-  const template = document.createElement('template');
-  template.innerHTML = html.trim();
-  return template.content.firstElementChild;
 }

@@ -8,7 +8,7 @@ Live list. Items that get fixed are removed; items get added as they're discover
 
 ## Changelog tracking
 
-- **Public changelog can lag the installed updater.** The downloaded x.ai changelog currently documents through Grok Build v0.2.52, while the local stable updater reported and installed v0.2.56. Treat the changelog as backlog input, not the sole source of truth for latest CLI behavior.
+- **Public changelog can lag the installed updater.** As of the 2026-06-19 changelog review, the downloaded x.ai changelog documented through Grok Build v0.2.52, while the local stable updater reported and installed v0.2.56. This cleanup did not re-verify the latest version; treat the changelog as backlog input, not the sole source of truth for latest CLI behavior.
 - **Changelog-derived candidates need CLI/ACP validation.** New candidates need
   inspection of the installed CLI help, streamed slash commands, ACP events, or
   tool payloads before implementation.

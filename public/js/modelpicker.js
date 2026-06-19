@@ -19,7 +19,7 @@ function paintModel(model) {
   if (dom.footerModel) dom.footerModel.textContent = `${label} ▾`;
 }
 
-export async function refreshModelLabel() {
+async function refreshModelLabel() {
   try {
     const opts = await getSpawnOpts();
     paintModel(opts.model);

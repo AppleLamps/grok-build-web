@@ -1,4 +1,5 @@
 import { dom } from './state.js';
+import { escapeAttr, escapeHTML, safeStatusClass } from './tools/shared.mjs';
 import {
   getBackgroundTask,
   renderBackgroundTaskPanel,
@@ -11,7 +12,6 @@ export { getBackgroundTask, setBackgroundTask };
 let subagentDepth = 0;
 const todosById = new Map();
 const idlessTodos = [];
-const SAFE_STATUS_CLASSES = new Set(['pending', 'in_progress', 'completed', 'failed', 'cancelled', 'killed']);
 
 export function resetTransientToolState() {
   subagentDepth = 0;
@@ -65,7 +65,7 @@ export function setCurrentTodos(todos, { merge = false } = {}) {
   return getCurrentTodos();
 }
 
-export function renderBgPanel() {
+function renderBgPanel() {
   renderBackgroundTaskPanel();
 }
 
@@ -87,17 +87,4 @@ function normalizeTodo(todo) {
     text: String(todo.text ?? todo.content ?? todo.task ?? todo.title ?? todo.description ?? ''),
     status: String(todo.status ?? todo.state ?? 'pending'),
   };
-}
-
-function safeStatusClass(value) {
-  const status = String(value ?? '').toLowerCase();
-  return SAFE_STATUS_CLASSES.has(status) ? status : 'unknown';
-}
-
-function escapeHTML(value) {
-  return String(value ?? '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
-}
-
-function escapeAttr(value) {
-  return escapeHTML(value).replace(/"/g, '&quot;');
 }

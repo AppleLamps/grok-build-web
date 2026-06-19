@@ -12,6 +12,7 @@ let es = null;
 let backoffMs = 1000;
 let reconnectTimer = null;
 let lastEventId = null;
+let connecting = false;
 const BACKOFF_CAP = 15000;
 
 export function initSSE() {
@@ -27,6 +28,7 @@ export function isSSEActive() {
 }
 
 function connect() {
+  if (connecting) return es;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -35,8 +37,12 @@ function connect() {
     try {
       es.close();
     } catch {}
-  es = new EventSource(streamUrl({ since: lastEventId }));
-  es.onopen = () => {
+  connecting = true;
+  const next = new EventSource(streamUrl({ since: lastEventId }));
+  es = next;
+  next.onopen = () => {
+    if (es !== next) return;
+    connecting = false;
     backoffMs = 1000;
     if (state.currentSessionId) {
       setSessionReady(true);
@@ -53,7 +59,9 @@ function connect() {
     });
     setStatus('connected — waiting for agent…', 'busy');
   };
-  es.onerror = () => {
+  next.onerror = () => {
+    if (es !== next) return;
+    connecting = false;
     setSessionReady(false);
     showReadinessBanner({
       title: 'Reconnecting to local Grok session',
@@ -63,7 +71,7 @@ function connect() {
     });
     setStatus(`disconnected · retry in ${(backoffMs / 1000) | 0}s`, 'disconnected');
     try {
-      es.close();
+      next.close();
     } catch {}
     if (!reconnectTimer) {
       reconnectTimer = setTimeout(() => {
@@ -73,7 +81,8 @@ function connect() {
     }
     backoffMs = Math.min(BACKOFF_CAP, backoffMs * 2);
   };
-  es.onmessage = (e) => {
+  next.onmessage = (e) => {
+    if (es !== next) return;
     if (e.lastEventId) lastEventId = e.lastEventId;
     try {
       dispatch(JSON.parse(e.data));
@@ -81,7 +90,7 @@ function connect() {
       console.error('bad event', err, e.data);
     }
   };
-  return es;
+  return next;
 }
 
 export function __testConnect() {

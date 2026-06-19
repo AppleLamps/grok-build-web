@@ -11,7 +11,8 @@ const {
   getBackgroundTask,
   handleBackgroundTaskAction,
 } = await importPublic('public/js/background-tasks.js');
-const { parseTodoSummary } = await importPublic('public/js/tools/render-todos.mjs');
+const { parseTodoSummary, normalizedToolStatus } = await importPublic('public/js/tools/render-todos.mjs');
+const { normalizeStatus, safeStatusClass } = await importPublic('public/js/tools/shared.mjs');
 const { clearLog } = await importPublic('public/js/chat.js');
 
 test('tool groups expand, collapse, and keep their header', async () => {
@@ -119,6 +120,18 @@ test('background and subagent statuses include cancelled and failed states', asy
   const subTool = [...dom.logInner.children[0].querySelector('.tool-group-items').children]
     .find(el => el.querySelector('.target')?.textContent === 'subagent');
   assert.equal(subTool.classList.contains('failed'), true);
+});
+
+test('shared status normalization handles free-form task statuses consistently', async () => {
+  assert.equal(normalizeStatus('fail'), 'failed');
+  assert.equal(normalizeStatus('terminated'), 'killed');
+  assert.equal(normalizeStatus('queued'), 'pending');
+  assert.equal(normalizeStatus('active'), 'in_progress');
+  assert.equal(normalizeStatus('exit 0'), 'completed');
+  assert.equal(safeStatusClass('success'), 'completed');
+  assert.equal(safeStatusClass('unmapped'), 'unknown');
+  assert.equal(normalizedToolStatus({ status: 'terminated' }), 'killed');
+  assert.equal(normalizedToolStatus({ status: 'queued' }), 'pending');
 });
 
 test('plain terminal and subagent tools are not tracked as background tasks', async () => {

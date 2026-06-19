@@ -18,7 +18,7 @@ import { resetAllToolState, setCurrentTodos } from './tool-state.js';
 import { setStatus } from './chat.js';
 import { hideRecoveryBanner, showReadinessBanner, showRecoveryBanner } from './recovery.mjs';
 
-export async function hydrateSessionPlan(sessionId = TAB_SESSION_ID, cwd = null) {
+async function hydrateSessionPlan(sessionId = TAB_SESSION_ID, cwd = null) {
   if (!sessionId) {
     resetAllToolState();
     return;

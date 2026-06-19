@@ -209,7 +209,6 @@ export function dispatch(event) {
       hideRecoveryBanner();
       setSessionReady(false);
       setStatus('agent restarting…', 'busy');
-      setTabSessionId(null);
       postTabNew()
         .then((tab) => {
           setTabSessionId(tab.sessionId);
@@ -360,49 +359,56 @@ function normalizeCompactionMetadata(raw) {
   const marker = String(source.sessionUpdate ?? source.type ?? source.kind ?? source.event ?? source.name ?? '');
   const hasCompactionMarker = /compact/i.test(marker);
   const hasCompactionShape =
-    firstValue(source, ['beforeTokens', 'before_tokens', 'tokensBefore', 'tokens_before', 'inputTokens']) != null ||
-    firstValue(source, ['afterTokens', 'after_tokens', 'tokensAfter', 'tokens_after', 'outputTokens']) != null ||
-    firstValue(source, ['transcriptPath', 'transcript_path', 'rawTranscriptPath', 'raw_transcript_path']) != null ||
-    firstValue(source, ['summaryQuality', 'summary_quality', 'quality']) != null ||
-    firstValue(source, ['promptPrefixReused', 'prompt_prefix_reused', 'prefixReused', 'prefix_reused']) != null;
+    firstDefinedProp(source, ['beforeTokens', 'before_tokens', 'tokensBefore', 'tokens_before', 'inputTokens']) !=
+      null ||
+    firstDefinedProp(source, ['afterTokens', 'after_tokens', 'tokensAfter', 'tokens_after', 'outputTokens']) != null ||
+    firstDefinedProp(source, ['transcriptPath', 'transcript_path', 'rawTranscriptPath', 'raw_transcript_path']) !=
+      null ||
+    firstDefinedProp(source, ['summaryQuality', 'summary_quality', 'quality']) != null ||
+    firstDefinedProp(source, ['promptPrefixReused', 'prompt_prefix_reused', 'prefixReused', 'prefix_reused']) != null;
   if (!hasCompactionMarker && !hasCompactionShape) return null;
-  const statusRaw = firstValue(source, ['status', 'outcome', 'result']);
-  const error = firstValue(source, ['error', 'errorMessage', 'error_message', 'failureReason', 'failure_reason']);
+  const statusRaw = firstDefinedProp(source, ['status', 'outcome', 'result']);
+  const error = firstDefinedProp(source, ['error', 'errorMessage', 'error_message', 'failureReason', 'failure_reason']);
   const beforeTokens = toNumber(
-    firstValue(source, ['beforeTokens', 'before_tokens', 'tokensBefore', 'tokens_before', 'inputTokens']),
+    firstDefinedProp(source, ['beforeTokens', 'before_tokens', 'tokensBefore', 'tokens_before', 'inputTokens']),
   );
   const afterTokens = toNumber(
-    firstValue(source, ['afterTokens', 'after_tokens', 'tokensAfter', 'tokens_after', 'outputTokens']),
+    firstDefinedProp(source, ['afterTokens', 'after_tokens', 'tokensAfter', 'tokens_after', 'outputTokens']),
   );
   return {
     status: error ? 'failed' : String(statusRaw ?? 'completed'),
     beforeTokens,
     afterTokens,
-    reductionTokens: toNumber(firstValue(source, ['reductionTokens', 'reduction_tokens', 'tokensReduced'])),
+    reductionTokens: toNumber(firstDefinedProp(source, ['reductionTokens', 'reduction_tokens', 'tokensReduced'])),
     reductionPercent: toNumber(
-      firstValue(source, ['reductionPercent', 'reduction_percent', 'tokenReductionPercent', 'token_reduction_percent']),
+      firstDefinedProp(source, [
+        'reductionPercent',
+        'reduction_percent',
+        'tokenReductionPercent',
+        'token_reduction_percent',
+      ]),
     ),
-    transcriptPath: firstValue(source, [
+    transcriptPath: firstDefinedProp(source, [
       'transcriptPath',
       'transcript_path',
       'rawTranscriptPath',
       'raw_transcript_path',
     ]),
-    segmentsPath: firstValue(source, ['segmentsPath', 'segments_path', 'segmentPath', 'segment_path']),
-    summaryPath: firstValue(source, ['summaryPath', 'summary_path']),
-    promptPrefixReused: firstValue(source, [
+    segmentsPath: firstDefinedProp(source, ['segmentsPath', 'segments_path', 'segmentPath', 'segment_path']),
+    summaryPath: firstDefinedProp(source, ['summaryPath', 'summary_path']),
+    promptPrefixReused: firstDefinedProp(source, [
       'promptPrefixReused',
       'prompt_prefix_reused',
       'prefixReused',
       'prefix_reused',
     ]),
-    summaryQuality: firstValue(source, ['summaryQuality', 'summary_quality', 'quality']),
+    summaryQuality: firstDefinedProp(source, ['summaryQuality', 'summary_quality', 'quality']),
     error,
     raw: source,
   };
 }
 
-function firstValue(obj, keys) {
+function firstDefinedProp(obj, keys) {
   for (const key of keys) {
     if (obj?.[key] != null && obj[key] !== '') return obj[key];
   }
@@ -464,7 +470,6 @@ async function recoverAfterRespawn() {
   hideRecoveryBanner();
   setSessionReady(false);
   setStatus('agent restarting…', 'busy');
-  setTabSessionId(null);
   try {
     const tab = await postTabNew();
     setTabSessionId(tab.sessionId);

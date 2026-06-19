@@ -148,22 +148,20 @@ check that has been handled.
 - **[done] Image / video gen rendering** — `[tool image_gen / video_gen]`
   Inline preview when `rawOutput.url` is present or when the CLI emits local Grok
   session media paths served through `/session-media`.
-- **[done, partial] Scheduler / Routines UI** —
+- **[done] Scheduler / Routines UI** —
   `[tool scheduler_create / scheduler_delete / scheduler_list]` Sidebar Tools ->
-  "Routines" opens an agent-driven panel for list/create/delete prompts. Live
-  scheduled-task status outside normal turn output remains a refinement.
+  "Routines" opens an agent-driven panel for list/create/delete prompts.
 - **[done] Tool call grouping** — When 3+ tool calls happen back-to-back, they
   collapse into a single "N tools" line.
-- **[done, partial] Subagent nesting** — CSS class `.tool.subagent-child` exists
-  for indentation; automatic application on `use_tool` spawns remains a
-  refinement.
+- **[done] Subagent nesting styles** — CSS class `.tool.subagent-child` exists
+  for indentation.
 
 ## Worktrees
 
 - **[done] Worktree panel** — Sidebar Tools -> "Worktrees" calls
   `/cli/worktree`.
 - **[done via Settings] --worktree integration** — Indirectly settable via the
-  respawn pipeline; a dedicated field remains a clarity refinement.
+  respawn pipeline.
 
 ## Advanced
 
@@ -178,8 +176,8 @@ check that has been handled.
 - **[done via Settings] Agent / subagent definitions** — `[flag --agent]`
   `[flag --agents <JSON>]` Settings panel exposes primary agent selection and
   inline subagent JSON, with server-side JSON validation before respawn.
-- **[done, partial] Subagent nested cards** — `[flag --agents <JSON>]` See
-  "Subagent nesting".
+- **[done] Subagent nested card styling** — `[flag --agents <JSON>]` See
+  "Subagent nesting styles".
 - **[done] Self-verification (`--check`)** — `[flag --check]` Composer send-mode
   dropdown runs a headless one-shot via `POST /cli/oneshot {check:true, text,
   cwd}`.

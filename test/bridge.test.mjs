@@ -143,6 +143,22 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
       assert.equal(fakeResult.XAI_API_KEY_set, false);
       assert.equal(fakeResult.GROK_API_KEY_set, false);
 
+      const share = await fetch(makeUrl(base, '/cli/share'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId: tab.sessionId }),
+      });
+      assert.equal(share.status, 200);
+      assert.equal((await share.json()).url, `https://grok.example/share/${tab.sessionId}`);
+
+      const trace = await fetch(makeUrl(base, '/cli/trace'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId: tab.sessionId }),
+      });
+      assert.equal(trace.status, 200);
+      assert.equal((await trace.json()).sessionId, tab.sessionId);
+
       const headlessText = 'resume this run';
       const headless = await fetch(makeUrl(base, '/cli/headless'), {
         method: 'POST',
@@ -832,6 +848,9 @@ test('API bad requests return JSON error bodies', async () => {
       );
       await assertJsonError(base, cookie, '/session/load', {}, 400, /sessionId required/);
       await assertJsonError(base, cookie, '/session/respawn', { agents: '{' }, 400, /agents must be valid JSON/);
+      await assertJsonError(base, cookie, '/cli/share', {}, 400, /sessionId required/);
+      await assertJsonError(base, cookie, '/cli/trace', {}, 400, /sessionId required/);
+      await assertJsonError(base, cookie, '/cli/oneshot', { text: '   ' }, 400, /text required/);
       await assertJsonError(base, cookie, '/cli/oneshot', { text: 'x', bestOfN: 0 }, 400, /positive integer/);
       await assertJsonError(base, cookie, '/cli/headless', { text: 'x', outputFormat: 'xml' }, 400, /bad outputFormat/);
       await assertJsonError(base, cookie, '/cli/headless', { text: 'x', sessionMode: 'session' }, 400, /sessionId required/);

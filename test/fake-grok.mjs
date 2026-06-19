@@ -48,6 +48,16 @@ if (args[0] === 'login' && args.includes('--device-auth')) {
   process.exit(0);
 }
 
+if (args[0] === 'share' && args[1]) {
+  console.log(`https://grok.example/share/${args[1]}`);
+  process.exit(0);
+}
+
+if (args[0] === 'trace' && args[1]) {
+  console.log(JSON.stringify({ sessionId: args[1], local: args.includes('--local'), json: args.includes('--json') }));
+  process.exit(0);
+}
+
 if (args.includes('-p')) {
   const promptIndex = args.indexOf('-p');
   console.log(

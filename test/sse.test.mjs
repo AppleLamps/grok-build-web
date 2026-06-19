@@ -33,6 +33,8 @@ test('SSE reconnect keeps only one pending reconnect timer', async () => {
     sse.initSSE();
     assert.equal(sources.length, 1);
     assert.doesNotMatch(sources[0].url, /since=/);
+    sse.reconnectSSE();
+    assert.equal(sources.length, 1);
     sources[0].onmessage({ data: '{"kind":"noop"}', lastEventId: '42' });
     assert.equal(sse.__testLastEventId(), '42');
 
@@ -52,6 +54,11 @@ test('SSE reconnect keeps only one pending reconnect timer', async () => {
     assert.equal(sources.length, 3);
     assert.match(sources[2].url, /since=42/);
 
+    sse.reconnectSSE();
+    assert.equal(sources[2].closed, false);
+    assert.equal(sources.length, 3);
+
+    sources[2].onopen();
     sse.reconnectSSE();
     assert.equal(sources[2].closed, true);
     assert.equal(sources.length, 4);

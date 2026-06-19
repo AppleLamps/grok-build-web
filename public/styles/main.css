@@ -25,7 +25,6 @@
   --btn-primary-text: #FFFFFF;
   --active-session-bg: #101010;
   --active-session-ink: #FFFFFF;
-  --dot-pink:   #E54A6E;
   --dot-amber:  #D4960A;
 
   /* Themed component surfaces — overridden in dark mode below.
@@ -199,6 +198,24 @@ aside {
 .brand .icons { display: flex; gap: 6px; color: var(--faint); }
 .brand .icons button { background: none; border: 0; padding: 4px; cursor: pointer; color: inherit; border-radius: 4px; }
 .brand .icons button:hover { background: var(--paper-3); color: var(--ink); }
+@media (min-width: 761px) {
+  body.sidebar-collapsed {
+    grid-template-columns: 56px 1fr;
+  }
+  body.sidebar-collapsed .brand {
+    justify-content: center;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  body.sidebar-collapsed .brand-mark,
+  body.sidebar-collapsed .sidebar-zone,
+  body.sidebar-collapsed .sidebar-footer {
+    display: none;
+  }
+  body.sidebar-collapsed .collapse-btn svg {
+    transform: rotate(180deg);
+  }
+}
 
 .sidebar-zone {
   border-top: 1px solid var(--line-soft);

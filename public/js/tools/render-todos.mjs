@@ -1,6 +1,5 @@
-import { updateBackgroundTask } from '../background-tasks.js';
 import { setCurrentTodos } from '../tool-state.js';
-import { escapeHTML, safeStatusClass, toolTitle } from './shared.mjs';
+import { escapeHTML, normalizeStatus, safeStatusClass, toolTitle } from './shared.mjs';
 
 export function isTodoUpdate(update, title) {
   return /todo[_ -]?write/.test(title)
@@ -38,15 +37,8 @@ export function parseTodoSummary(value) {
 
 export function normalizedToolStatus(update) {
   const raw = String(update.status ?? update.rawOutput?.status ?? update.rawOutput?.state ?? '').toLowerCase();
-  if (/cancel/.test(raw)) return 'cancelled';
-  if (/kill|killed|terminated/.test(raw)) return 'killed';
-  if (/fail|error/.test(raw)) return 'failed';
-  if (/complete|success|done/.test(raw)) return 'completed';
-  if (/progress|running|pending/.test(raw)) return 'in_progress';
-  return update.sessionUpdate === 'tool_call' ? 'in_progress' : raw;
+  return normalizeStatus(raw, update.sessionUpdate === 'tool_call' ? 'in_progress' : raw);
 }
-
-export { updateBackgroundTask };
 
 export function renderTodos(update) {
   const extracted = extractTodoUpdate(update);

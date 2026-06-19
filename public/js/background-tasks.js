@@ -1,6 +1,6 @@
 import { dom, state } from './state.js';
 import { postPrompt } from './api.js';
-import { ansiToHtml, escapeAttr, escapeHTML } from './tools/shared.mjs';
+import { ansiToHtml, escapeAttr, escapeHTML, firstText, normalizeStatus, safeStatusClass } from './tools/shared.mjs';
 
 const PREVIEW_LIMIT = 220;
 const GROUP_ORDER = ['commands', 'monitors', 'subagents', 'loops', 'other'];
@@ -12,7 +12,6 @@ const GROUP_LABELS = {
   other: 'Other background tasks',
 };
 const FINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'killed']);
-const SAFE_STATUS_CLASSES = new Set(['pending', 'in_progress', 'completed', 'failed', 'cancelled', 'killed']);
 
 const bgTasks = new Map();
 const bgTaskEls = new Map();
@@ -28,7 +27,7 @@ export function getBackgroundTask(id) {
   return bgTasks.get(String(id ?? ''));
 }
 
-export function getBackgroundTasks() {
+function getBackgroundTasks() {
   return [...bgTasks.values()];
 }
 
@@ -149,7 +148,7 @@ function normalizeTaskRecord(id, task, prior = null) {
     group: normalizedGroup(task, prior),
     title: task.title || prior?.title || '',
     command: normalizedCommand(task, prior, id),
-    status: normalizeStatus(task.status || prior?.status || 'in_progress'),
+    status: normalizeStatus(task.status || prior?.status || 'in_progress', 'in_progress'),
     toolCallId: task.toolCallId || prior?.toolCallId || '',
     startedAt: task.startedAt || prior?.startedAt || now,
     updatedAt: task.updatedAt || now,
@@ -244,9 +243,9 @@ function taskStatus(update, titleLc) {
   const rawOutput = update.rawOutput ?? {};
   if (/kill[_ -]?(command|subagent)/.test(titleLc)) return 'killed';
   if (/get[_ -]?(command|subagent)/.test(titleLc)) {
-    return normalizeStatus(rawOutput.task_status ?? rawOutput.taskStatus ?? rawOutput.state ?? 'in_progress');
+    return normalizeStatus(rawOutput.task_status ?? rawOutput.taskStatus ?? rawOutput.state ?? 'in_progress', 'in_progress');
   }
-  return normalizeStatus(rawOutput.task_status ?? rawOutput.taskStatus ?? rawOutput.status ?? rawOutput.state ?? update.status ?? 'in_progress');
+  return normalizeStatus(rawOutput.task_status ?? rawOutput.taskStatus ?? rawOutput.status ?? rawOutput.state ?? update.status ?? 'in_progress', 'in_progress');
 }
 
 function taskOutput(update) {
@@ -273,22 +272,6 @@ function wireBackgroundTaskActions() {
   actionsWired = true;
 }
 
-function normalizeStatus(value) {
-  const raw = String(value ?? '').toLowerCase();
-  if (/cancel/.test(raw)) return 'cancelled';
-  if (/kill|terminated/.test(raw)) return 'killed';
-  if (/fail|error/.test(raw)) return 'failed';
-  if (/complete|success|done|exit 0/.test(raw)) return 'completed';
-  if (/pending|queued/.test(raw)) return 'pending';
-  if (/progress|running|active|started|streaming/.test(raw)) return 'in_progress';
-  return SAFE_STATUS_CLASSES.has(raw) ? raw : 'in_progress';
-}
-
-function safeStatusClass(value) {
-  const status = normalizeStatus(value);
-  return SAFE_STATUS_CLASSES.has(status) ? status : 'unknown';
-}
-
 function statusLabel(value) {
   return value.replace(/_/g, ' ');
 }
@@ -313,19 +296,10 @@ function relativeTime(value) {
   return `${Math.floor(diff / 3600000)}h ago`;
 }
 
-function firstText(...values) {
-  for (const value of values) {
-    if (value == null) continue;
-    if (typeof value === 'object') continue;
-    const text = String(value);
-    if (text) return text;
-  }
-  return '';
-}
-
 export const __test = {
   bgTasks,
   bgTaskEls,
+  getBackgroundTasks,
   isBackgroundUpdate,
   taskFromUpdate,
   normalizeStatus,

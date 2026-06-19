@@ -64,6 +64,34 @@ test('sidebar skips unchanged recents renders and repaints changed visible state
   assert.equal(dom.recentsEl.children[0].querySelector('.project-name').textContent, 'Alias After Render');
 });
 
+test('sidebar collapse button toggles the desktop collapsed state', async () => {
+  const button = document.createElement('button');
+  button.setAttribute('class', 'collapse-btn');
+  document.body.appendChild(button);
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ sessions: [], current: null }), {
+    headers: { 'content-type': 'application/json' },
+  });
+  try {
+    sidebar.__testApplySidebarCollapsed(false);
+    sidebar.initSidebar();
+    assert.equal(document.body.classList.contains('sidebar-collapsed'), false);
+
+    button.click();
+    assert.equal(document.body.classList.contains('sidebar-collapsed'), true);
+    assert.equal(button.getAttribute('aria-label'), 'Expand sidebar');
+    assert.equal(storage['grokweb.sidebarCollapsed'], '1');
+
+    button.click();
+    assert.equal(document.body.classList.contains('sidebar-collapsed'), false);
+    assert.equal(button.getAttribute('aria-label'), 'Collapse sidebar');
+    assert.equal(storage['grokweb.sidebarCollapsed'], '0');
+  } finally {
+    globalThis.fetch = priorFetch;
+    button.remove();
+  }
+});
+
 test('settings disables permissionMode when the CLI does not support it', async () => {
   const field = settings.__testFields.find((f) => f.key === 'permissionMode');
   const el = settings.__testFieldEl(field, null, { _capabilities: { permissionMode: false } });

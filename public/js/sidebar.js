@@ -37,9 +37,11 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
+const SIDEBAR_COLLAPSED_KEY = 'grokweb.sidebarCollapsed';
 let searchQuery = '';
 const MAX_PROJECT_SESSIONS = 4;
 let showEmptySessions = getBoolean('grokweb.showEmptySessions', false);
+let sidebarCollapsed = getBoolean(SIDEBAR_COLLAPSED_KEY, false);
 let savedOpenProjects = getJson('grokweb.openProjects', []);
 const openProjects = new Set(Array.isArray(savedOpenProjects) ? savedOpenProjects : []);
 let seededCurrentProject = openProjects.size > 0;
@@ -64,8 +66,26 @@ function setSidebarOpen(open) {
   }
 }
 
-export function closeSidebar() {
+function closeSidebar() {
   setSidebarOpen(false);
+}
+
+function applySidebarCollapsed(collapsed) {
+  const next = !!collapsed;
+  sidebarCollapsed = next;
+  document.body.classList.toggle('sidebar-collapsed', next);
+  const button = document.querySelector('.collapse-btn');
+  if (button) {
+    button.setAttribute('aria-expanded', String(!next));
+    button.setAttribute('aria-label', next ? 'Expand sidebar' : 'Collapse sidebar');
+    button.title = next ? 'Expand sidebar' : 'Collapse sidebar';
+  }
+}
+
+function toggleSidebarCollapsed() {
+  const next = !sidebarCollapsed;
+  setBoolean(SIDEBAR_COLLAPSED_KEY, next);
+  applySidebarCollapsed(next);
 }
 
 function initMobileSidebar() {
@@ -394,7 +414,7 @@ export async function newSessionAction(cwd = null) {
   }
 }
 
-export async function loadSessionAction(sessionId, cwd) {
+async function loadSessionAction(sessionId, cwd) {
   setBusy(true);
   setStatus('loading session…', 'busy');
   try {
@@ -408,6 +428,8 @@ export async function loadSessionAction(sessionId, cwd) {
 }
 
 export function initSidebar() {
+  applySidebarCollapsed(sidebarCollapsed);
+  document.querySelector('.collapse-btn')?.addEventListener('click', toggleSidebarCollapsed);
   initMobileSidebar();
   dom.newSessionBtn.addEventListener('click', () => newSessionAction());
   dom.refreshRecentsBtn.addEventListener('click', loadRecents);
@@ -441,6 +463,10 @@ export function __testSetShowEmptySessions(value) {
 
 export function __testGetShowEmptySessions() {
   return showEmptySessions;
+}
+
+export function __testApplySidebarCollapsed(value) {
+  applySidebarCollapsed(value);
 }
 
 export function __testSetSearchQuery(value) {

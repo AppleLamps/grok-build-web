@@ -13,7 +13,7 @@ export const SEARCH_MAX_ARRAYS = 20;
 export const MEDIA_IMAGE_EXT = /\.(png|jpe?g|gif|webp)(?:$|[?#])/i;
 export const MEDIA_VIDEO_EXT = /\.(mp4|webm|ogg)(?:$|[?#])/i;
 
-const SAFE_STATUS_CLASSES = new Set(['pending', 'in_progress', 'completed', 'failed', 'cancelled', 'killed']);
+export const SAFE_STATUS_CLASSES = new Set(['pending', 'in_progress', 'completed', 'failed', 'cancelled', 'killed']);
 
 export const STATUS_ICONS = {
   in_progress: '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/></svg>',
@@ -28,8 +28,19 @@ const ANSI_COLORS = {
   '90':'#666','91':'#e55','92':'#5d8','93':'#eb5','94':'#69e','95':'#c7c','96':'#5cc','97':'#ddd',
 };
 
+export function normalizeStatus(value, fallback = 'unknown') {
+  const raw = String(value ?? '').toLowerCase();
+  if (/cancel/.test(raw)) return 'cancelled';
+  if (/kill|killed|terminated/.test(raw)) return 'killed';
+  if (/fail|error/.test(raw)) return 'failed';
+  if (/complete|success|done|exit 0/.test(raw)) return 'completed';
+  if (/pending|queued/.test(raw)) return 'pending';
+  if (/progress|running|active|started|streaming/.test(raw)) return 'in_progress';
+  return SAFE_STATUS_CLASSES.has(raw) ? raw : fallback;
+}
+
 export function safeStatusClass(value) {
-  const status = String(value ?? '').toLowerCase();
+  const status = normalizeStatus(value);
   return SAFE_STATUS_CLASSES.has(status) ? status : 'unknown';
 }
 

@@ -1,5 +1,7 @@
 // Bootstrap and agent recovery banners with retry actions.
 
+import { escapeHTML } from './markdown.js';
+
 let activeAction = null;
 
 function slotEl() {
@@ -56,12 +58,4 @@ export function hideRecoveryBanner() {
   slot.hidden = true;
   if (typeof slot.replaceChildren === 'function') slot.replaceChildren();
   else slot.innerHTML = '';
-}
-
-function escapeHTML(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

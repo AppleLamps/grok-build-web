@@ -289,7 +289,12 @@ Run the account-free regression suite:
 npm test
 ```
 
-This uses Node's built-in test runner with fake ACP fixtures. It covers bridge auth and SSE, security headers and local request guards, per-session cwd isolation, API failures, renderer shapes, sidebar/settings behavior, permissions, elicitations, slash commands, bootstrap routing, session edge cases, large output, cancellation, and tool lifecycle state.
+This uses Node's built-in test runner with fake ACP fixtures. It covers bridge
+auth and SSE, security headers and local request guards, per-session cwd
+isolation, Windows display-path cleanup, API failures, renderer shapes,
+sidebar/settings behavior, permissions, elicitations, slash commands, bootstrap
+routing, session edge cases, oversized replay pruning, fork-session replay
+isolation, large output, cancellation, and tool lifecycle state.
 
 Run browser visual smoke checks:
 
@@ -320,6 +325,12 @@ Current items to verify after updating:
 - `/code-review` appears in slash autocomplete from streamed command updates or
   compatibility fallback.
 - Session resume replays tool and subagent UI without breaking grouped tool cards.
+- Windows paths shown to the model or rendered in attachment chips do not expose
+  `\\?\` or `\\?\UNC\` extended-length prefixes, and cross-cwd tab resumes keep
+  using the saved session's remembered cwd.
+- Large session replay stays responsive, and forked saved sessions retain the
+  expected pre-compaction transcript context when those local artifacts are
+  available for live validation.
 - The sidebar continues to expose local disk-backed sessions from
   `~/.grok/sessions`, including zero-message or idle sessions when the Show
   empty sessions toggle is enabled. The CLI `grok dashboard` command remains a
@@ -359,7 +370,14 @@ HTTP responses include a local-app security baseline: CSP with `frame-ancestors 
 
 The bridge can read and write files only through ACP requests from the agent, and those filesystem handlers are confined to the request's session workspace. Generated media previews are served only through the authenticated `/session-media` endpoint, which is confined to Grok session storage and does not expose arbitrary local files. Uploaded media previews are served only from `.grok-web-uploads` inside the active session workspace.
 
-Per-tab session APIs keep workspace cwd in per-session state so one tab cannot silently change another tab's fallback cwd. Agent restarts and session loads are serialized per agent and through a small bridge operation queue. Permission and elicitation timeout handles are cleared across respawns, and SSE reconnect replay is delivered with response backpressure and listener cleanup.
+Per-tab session APIs keep workspace cwd in per-session state so one tab cannot
+silently change another tab's fallback cwd. Windows extended-length path
+prefixes are stripped from model-facing and rendered display text while internal
+filesystem paths remain confined by workspace checks. Agent restarts and session
+loads are serialized per agent and through a small bridge operation queue.
+Permission and elicitation timeout handles are cleared across respawns, and SSE
+reconnect replay is delivered with response backpressure, history pruning, and
+listener cleanup.
 
 ## Related
 

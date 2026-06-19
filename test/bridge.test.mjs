@@ -276,7 +276,7 @@ test('ask_user_question is surfaced as elicitation and replies with outcome', as
       const answer = await fetch(makeUrl(base, '/elicitation'), {
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ rpcId: request.rpcId, action: 'accept', content: ['mobile'] }),
+        body: JSON.stringify({ rpcId: request.rpcId, action: 'accept', content: ['mobile'], sessionId: tab.sessionId }),
       });
       assert.equal(answer.status, 200);
 
@@ -487,7 +487,7 @@ test('respawn clears stale permission timers before reused RPC IDs can resolve n
       const answer = await fetch(makeUrl(base, '/permission'), {
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ rpcId: 1000, optionId: 'allow' }),
+        body: JSON.stringify({ rpcId: 1000, optionId: 'allow', sessionId: tab.sessionId }),
       });
       assert.equal(answer.status, 200);
       assert.deepEqual(await answer.json(), { ok: true });
@@ -705,6 +705,112 @@ test('auto-approve settings are scoped by tab session', async () => {
   });
 });
 
+test('permission and elicitation responses are scoped to the tab session', async () => {
+  await withTempDir('grok-web-response-session-scope-', async (temp) => {
+    const server = await startFakeServer({ sessionsRoot: join(temp, 'sessions') });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const events = [];
+      const abort = new AbortController();
+      const stream = readEvents(makeUrl(base, '/stream'), cookie, events, abort.signal).catch(() => {});
+
+      const tabA = await openTestTab(base, cookie, events);
+      const tabB = await openTestTab(base, cookie, events);
+      await postJson(base, cookie, '/settings', { sessionId: tabA.sessionId, autoApprove: false });
+      await postJson(base, cookie, '/settings', { sessionId: tabB.sessionId, autoApprove: false });
+
+      await postJson(base, cookie, '/prompt', { sessionId: tabA.sessionId, text: 'manual response A' }, 202);
+      await postJson(base, cookie, '/prompt', { sessionId: tabB.sessionId, text: 'manual response B' }, 202);
+
+      const permA = await waitForEvent(
+        events,
+        (e) => e.kind === 'permission_request' && e.sessionId === tabA.sessionId,
+        'tab A permission request',
+      );
+      const permB = await waitForEvent(
+        events,
+        (e) => e.kind === 'permission_request' && e.sessionId === tabB.sessionId,
+        'tab B permission request',
+      );
+      assert.equal(permA.rpcId, permB.rpcId);
+
+      const elicA = await waitForEvent(
+        events,
+        (e) => e.kind === 'elicitation_request' && e.sessionId === tabA.sessionId,
+        'tab A elicitation request',
+      );
+      const elicB = await waitForEvent(
+        events,
+        (e) => e.kind === 'elicitation_request' && e.sessionId === tabB.sessionId,
+        'tab B elicitation request',
+      );
+      assert.equal(elicA.rpcId, elicB.rpcId);
+
+      await assertJsonError(base, cookie, '/permission', { rpcId: permA.rpcId, optionId: 'allow' }, 400, /sessionId required/);
+      assert.equal(events.some((e) => e.kind === 'permission_resolved'), false);
+
+      await postJson(base, cookie, '/permission', { sessionId: tabB.sessionId, rpcId: permB.rpcId, optionId: 'allow' });
+      await waitForEvent(
+        events,
+        (e) => e.kind === 'permission_resolved' && e.sessionId === tabB.sessionId,
+        'tab B permission resolved',
+      );
+      assert.equal(events.some((e) => e.kind === 'permission_resolved' && e.sessionId === tabA.sessionId), false);
+
+      const wrongPermission = await fetch(makeUrl(base, '/permission'), {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId: tabB.sessionId, rpcId: permA.rpcId, optionId: 'allow' }),
+      });
+      assert.equal(wrongPermission.status, 410);
+      await postJson(base, cookie, '/permission', { sessionId: tabA.sessionId, rpcId: permA.rpcId, optionId: 'allow' });
+
+      await assertJsonError(
+        base,
+        cookie,
+        '/elicitation',
+        { rpcId: elicA.rpcId, action: 'accept', content: { name: 'missing session' } },
+        400,
+        /sessionId required/,
+      );
+      assert.equal(events.some((e) => e.kind === 'elicitation_resolved'), false);
+
+      await postJson(base, cookie, '/elicitation', {
+        sessionId: tabB.sessionId,
+        rpcId: elicB.rpcId,
+        action: 'accept',
+        content: { name: 'tab B' },
+      });
+      await waitForEvent(
+        events,
+        (e) => e.kind === 'elicitation_resolved' && e.sessionId === tabB.sessionId,
+        'tab B elicitation resolved',
+      );
+      assert.equal(events.some((e) => e.kind === 'elicitation_resolved' && e.sessionId === tabA.sessionId), false);
+
+      await assertJsonError(
+        base,
+        cookie,
+        '/elicitation',
+        { sessionId: tabB.sessionId, rpcId: elicA.rpcId, action: 'accept', content: { name: 'wrong tab' } },
+        404,
+        /not found/,
+      );
+      await postJson(base, cookie, '/elicitation', {
+        sessionId: tabA.sessionId,
+        rpcId: elicA.rpcId,
+        action: 'accept',
+        content: { name: 'tab A' },
+      });
+
+      abort.abort();
+      await stream;
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
 test('API bad requests return JSON error bodies', async () => {
   await withTempDir('grok-web-json-errors-', async (temp) => {
     const server = await startFakeServer({ sessionsRoot: join(temp, 'sessions') });
@@ -713,8 +819,17 @@ test('API bad requests return JSON error bodies', async () => {
 
       await assertJsonError(base, cookie, '/prompt', { text: '' }, 400, /empty prompt/);
       await assertJsonError(base, cookie, '/permission', {}, 400, /rpcId \+ optionId required/);
+      await assertJsonError(base, cookie, '/permission', { rpcId: 404, optionId: 'allow' }, 400, /sessionId required/);
       await assertJsonError(base, cookie, '/elicitation', {}, 400, /rpcId \+ action required/);
-      await assertJsonError(base, cookie, '/elicitation', { rpcId: 404, action: 'accept' }, 404, /not found/);
+      await assertJsonError(base, cookie, '/elicitation', { rpcId: 404, action: 'accept' }, 400, /sessionId required/);
+      await assertJsonError(
+        base,
+        cookie,
+        '/elicitation',
+        { sessionId: 'missing-session', rpcId: 404, action: 'accept' },
+        404,
+        /not found/,
+      );
       await assertJsonError(base, cookie, '/session/load', {}, 400, /sessionId required/);
       await assertJsonError(base, cookie, '/session/respawn', { agents: '{' }, 400, /agents must be valid JSON/);
       await assertJsonError(base, cookie, '/cli/oneshot', { text: 'x', bestOfN: 0 }, 400, /positive integer/);

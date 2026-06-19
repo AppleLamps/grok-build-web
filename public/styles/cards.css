@@ -2,20 +2,30 @@
    These are the visually-distinctive in-log components — the bits most
    likely to need design tweaks as features are added. */
 
-/* ─── Tool call (inline disclosure) ───────────────────────────────────── */
+/* ─── Tool call disclosure ────────────────────────────────────────────── */
 .tool {
   display: block;
-  margin: 6px 0;
+  margin: 10px 0;
+  max-width: 820px;
   color: var(--mute);
   font-size: 14px;
 }
 .tool .summary {
   cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 2px 0;
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--paper-2);
   color: var(--mute);
+  transition: background .12s, border-color .12s, color .12s;
 }
-.tool .summary:hover { color: var(--ink); }
+.tool .summary:hover {
+  background: var(--hover);
+  border-color: var(--line);
+  color: var(--ink);
+}
 .tool .summary .verb { color: var(--mute); }
 .tool .summary .target {
   font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
@@ -33,6 +43,11 @@
 }
 .tool .summary .chev { color: var(--faint); transition: transform .15s; font-size: 11px; }
 .tool.open .summary .chev { transform: rotate(90deg); }
+.tool.open .summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-color: transparent;
+}
 .tool .status-icon {
   display: inline-flex; align-items: center; justify-content: center;
   width: 12px; height: 12px;
@@ -46,9 +61,12 @@
 
 .tool .details {
   display: none;
-  margin: 6px 0 8px 14px;
-  border-left: 2px solid var(--line-soft);
-  padding: 4px 0 4px 14px;
+  margin: 0;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--line-soft);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: var(--paper-2);
 }
 .tool.open .details { display: block; }
 .tool .details .label {
@@ -175,22 +193,34 @@
 
 /* ─── Tool-call group (collapses N back-to-back tools into one line) ───── */
 .tool-group {
-  margin: 6px 0;
+  margin: 10px 0;
+  max-width: 820px;
 }
 .tool-group-summary {
   display: none;
   cursor: pointer;
   color: var(--mute); font-size: 13px;
-  padding: 2px 0;
+  align-items: center; gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--paper-2);
+  transition: background .12s, border-color .12s, color .12s;
+}
+.tool-group-summary:hover {
+  background: var(--hover);
+  border-color: var(--line);
+  color: var(--ink);
 }
 .tool-group-summary .chev {
   color: var(--faint); transition: transform .15s; font-size: 11px; margin-left: 4px;
 }
 .tool-group.open .tool-group-summary .chev { transform: rotate(90deg); }
-.tool-group-items > .tool { margin: 4px 0; }
+.tool-group-items > .tool { margin: 8px 0; }
 /* Show the group summary only when count > 2, and keep it available as
    the collapse control after the group has been opened. */
-.tool-group.is-grouped .tool-group-summary { display: inline-flex; align-items: center; }
+.tool-group.is-grouped .tool-group-summary { display: flex; }
 .tool-group.is-grouped:not(.open) .tool-group-items { display: none; }
 
 /* ─── Diff view (used by edit tool details) ─────────────────────────────── */

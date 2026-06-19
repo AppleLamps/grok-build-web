@@ -845,6 +845,45 @@ test('session plan serves authenticated persisted todos under sessions root', as
   });
 });
 
+test('memory read rejects symlink escapes from memory root', async () => {
+  await withTempDir('grok-web-memory-', async (temp) => {
+    const memoryRoot = join(temp, 'memory');
+    await mkdir(memoryRoot, { recursive: true });
+    await writeFile(join(memoryRoot, 'MEMORY.md'), 'memory content', 'utf8');
+    await writeFile(join(temp, 'outside.md'), 'outside secret', 'utf8');
+    let symlinkCreated = false;
+    try {
+      await symlink(join(temp, 'outside.md'), join(memoryRoot, 'escape.md'));
+      symlinkCreated = true;
+    } catch {
+      symlinkCreated = false;
+    }
+
+    const server = await startFakeServer({ env: { GROK_MEMORY_ROOT: memoryRoot } });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const memoryUrl = (path) => makeUrl(base, `/cli/memory/read?path=${encodeURIComponent(path)}`);
+
+      const unauth = await fetch(memoryUrl('MEMORY.md'));
+      assert.equal(unauth.status, 401);
+
+      const ok = await fetch(memoryUrl('MEMORY.md'), { headers: { cookie } });
+      assert.equal(ok.status, 200);
+      assert.equal((await ok.json()).content, 'memory content');
+
+      const traversal = await fetch(memoryUrl('../outside.md'), { headers: { cookie } });
+      assert.equal(traversal.status, 403);
+
+      if (symlinkCreated) {
+        const escaped = await fetch(memoryUrl('escape.md'), { headers: { cookie } });
+        assert.equal(escaped.status, 403);
+      }
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
 test('session-media serves only authenticated files under sessions root', async () => {
   await withTempDir('grok-web-session-media-', async (temp) => {
     const sessionsRoot = join(temp, 'sessions');

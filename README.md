@@ -205,7 +205,6 @@ grok-web/
 |-- lib/                       Bridge modules (ACP, routes, sessions, CLI)
 |   |-- grok-bridge.mjs        Multi-agent pool (one stdio child per tab session)
 |   |-- agent-connection.mjs   Single ACP stdio child + prompt queue
-|   |-- grok-session.mjs       Re-export alias for GrokBridge
 |   |-- sessions-store.mjs     Session list + plan.json reads
 |   |-- cli-runner.mjs         One-shot grok CLI shell-outs
 |   `-- http/
@@ -356,7 +355,7 @@ Feature touch points:
 - New event type: update `public/js/dispatch.js`.
 - New permission UI: update `public/js/permissions.js`.
 - New elicitation UI: update `public/js/elicitation.js`.
-- New launch flag: update `public/js/settings.js` and `lib/grok-session.mjs`.
+- New launch flag: update `public/js/settings.js` and `lib/grok-bridge.mjs`.
 - New HTTP route: add a handler in `lib/http/routes/` and register it in `lib/http/router.mjs`.
 - New CLI panel: update `lib/http/routes/cli.mjs`, `public/js/api.js`, and `public/js/panels.js`.
 - Sidebar or layout polish: update `public/styles/main.css`.

@@ -18,9 +18,13 @@ import {
 test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', async () => {
   await withTempDir('grok-web-bridge-', async (temp) => {
     const sessionsRoot = join(temp, 'sessions');
+    const workspace = join(temp, 'workspace');
+    const headlessCwd = join(workspace, 'headless-subdir');
+    await mkdir(headlessCwd, { recursive: true });
     await seedSessions(sessionsRoot);
     const server = await startFakeServer({
       sessionsRoot,
+      cwd: workspace,
       env: { XAI_API_KEY: 'fake-xai-key', GROK_API_KEY: 'fake-grok-key' },
     });
     try {
@@ -117,7 +121,7 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
       const oneshot = await fetch(makeUrl(base, '/cli/oneshot'), {
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ effort: 'future-effort', bestOfN: 3, maxTurns: '4', text: oneshotText }),
+        body: JSON.stringify({ sessionId: tab.sessionId, effort: 'future-effort', bestOfN: 3, maxTurns: '4', text: oneshotText }),
       });
       assert.equal(oneshot.status, 200);
       const oneshotData = await oneshot.json();
@@ -144,11 +148,12 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
         body: JSON.stringify({
+          sessionId: tab.sessionId,
           text: headlessText,
           outputFormat: 'streaming-json',
           sessionMode: 'resume',
           resumeId: 'resume-session',
-          cwd: temp,
+          cwd: headlessCwd,
           model: 'grok-4.3',
           effort: 'high',
           maxTurns: '2',
@@ -174,7 +179,7 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
       ]);
       assert.deepEqual(headlessResult.args, headlessData.args);
       assert.equal(headlessResult.prompt, headlessText);
-      assert.equal(headlessResult.cwd, temp);
+      assert.equal(headlessResult.cwd, headlessCwd);
 
       const apiKeyMode = await fetch(makeUrl(base, '/session/respawn'), {
         method: 'POST',
@@ -186,7 +191,7 @@ test('bridge handles auth, SSE, prompt events, cancel JSON, and capabilities', a
       const apiKeyOneshot = await fetch(makeUrl(base, '/cli/oneshot'), {
         method: 'POST',
         headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ text: 'api key mode' }),
+        body: JSON.stringify({ sessionId: tab.sessionId, text: 'api key mode' }),
       });
       assert.equal(apiKeyOneshot.status, 200);
       const apiKeyResult = JSON.parse((await apiKeyOneshot.json()).stdout);
@@ -773,6 +778,61 @@ test('request body limit rejects oversized JSON and can be disabled', async () =
       assert.equal(accepted.status, 202);
     } finally {
       await disabled.stop();
+    }
+  });
+});
+
+test('headless CLI routes restrict cwd to the tab session workspace', async () => {
+  await withTempDir('grok-web-cli-cwd-', async (temp) => {
+    const workspace = join(temp, 'workspace');
+    const child = join(workspace, 'child');
+    const outside = join(temp, 'outside');
+    await mkdir(child, { recursive: true });
+    await mkdir(outside, { recursive: true });
+    let symlinkCreated = false;
+    try {
+      await symlink(outside, join(workspace, 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
+      symlinkCreated = true;
+    } catch {
+      symlinkCreated = false;
+    }
+
+    const server = await startFakeServer({ cwd: workspace });
+    try {
+      const { base, cookie } = await bootstrap(server);
+      const tab = await openTestTab(base, cookie);
+      const postCli = (path, body) =>
+        fetch(makeUrl(base, path), {
+          method: 'POST',
+          headers: { cookie, 'content-type': 'application/json' },
+          body: JSON.stringify({ sessionId: tab.sessionId, text: 'cwd probe', ...body }),
+        });
+
+      const oneshot = await postCli('/cli/oneshot', { cwd: child });
+      assert.equal(oneshot.status, 200);
+      assert.equal(JSON.parse((await oneshot.json()).stdout).cwd, child);
+
+      const headless = await postCli('/cli/headless', { cwd: child });
+      assert.equal(headless.status, 200);
+      assert.equal(JSON.parse((await headless.json()).stdout).cwd, child);
+
+      const defaultCwd = await postCli('/cli/oneshot', {});
+      assert.equal(defaultCwd.status, 200);
+      assert.equal(JSON.parse((await defaultCwd.json()).stdout).cwd, workspace);
+
+      for (const path of ['/cli/oneshot', '/cli/headless']) {
+        const escaped = await postCli(path, { cwd: outside });
+        assert.equal(escaped.status, 403);
+        assert.match((await escaped.json()).error, /cwd outside session workspace/);
+      }
+
+      if (symlinkCreated) {
+        const escaped = await postCli('/cli/headless', { cwd: join(workspace, 'escape') });
+        assert.equal(escaped.status, 403);
+        assert.match((await escaped.json()).error, /cwd outside session workspace/);
+      }
+    } finally {
+      await server.stop();
     }
   });
 });

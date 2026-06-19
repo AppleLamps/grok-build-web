@@ -385,3 +385,4 @@ listener cleanup.
 - [AppleLamps/grokify](https://github.com/AppleLamps/grokify)
 - [Known issues](./knownissues.md)
 - [Feature backlog](./featurestoadd.md)
+- [Completed features](./completed.md)
